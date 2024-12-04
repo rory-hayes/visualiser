@@ -45,5 +45,19 @@ app.get('/callback', async (req, res) => {
     }
 });
 
+// Provide a JSON endpoint for the graph
+app.get('/graph', async (req, res) => {
+    try {
+        const graphData = await fetchWorkspaceData();
+        const parsedGraph = parseDataToGraph(graphData);
+        const workspaceScore = calculateWorkspaceScore(parsedGraph);
+
+        res.json({ score: workspaceScore, graph: parsedGraph });
+    } catch (error) {
+        console.error('Error fetching graph data:', error.message);
+        res.status(500).json({ error: 'Failed to fetch graph data.' });
+    }
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

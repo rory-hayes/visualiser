@@ -20,7 +20,7 @@ app.get('/', (req, res) => {
 // Notion OAuth Redirect
 app.get('/auth', (req, res) => {
     const CLIENT_ID = '150d872b-594c-804e-92e4-0037ffa80cff';
-    const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/';
+    const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
     const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(
         REDIRECT_URI
     )}`;
@@ -39,8 +39,8 @@ app.get('/callback', async (req, res) => {
         // Cache the graph data for the frontend
         graphCache = { score: workspaceScore, graph: graphData };
 
-        // Redirect back to the main page
-        res.redirect('/');
+        // Redirect to /redirect to display results
+        res.redirect('/redirect');
     } catch (error) {
         console.error(error);
         res.status(500).send('Error processing Notion data.');
@@ -49,14 +49,16 @@ app.get('/callback', async (req, res) => {
 
 // Provide a JSON endpoint for the graph
 app.get('/api/data', (req, res) => {
-    console.log('Fetching graph data for frontend...');
     if (graphCache) {
-        console.log('Graph data found in cache:', graphCache);
         res.json(graphCache);
     } else {
-        console.error('No graph data available in cache.');
         res.status(404).json({ error: 'No graph data available. Authenticate first.' });
     }
+});
+
+// Redirect Page
+app.get('/redirect', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'redirect.html'));
 });
 
 // Start the Server

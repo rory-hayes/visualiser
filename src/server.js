@@ -36,8 +36,11 @@ app.get('/callback', async (req, res) => {
         const graphData = parseDataToGraph(workspaceData);
         const workspaceScore = calculateWorkspaceScore(graphData);
 
-        graphCache = { score: workspaceScore, graph: graphData }; // Save data to cache
-        res.redirect('/'); // Redirect to home page after processing
+        // Cache the graph data for the frontend
+        graphCache = { score: workspaceScore, graph: graphData };
+
+        // Redirect back to the main page
+        res.redirect('/');
     } catch (error) {
         console.error(error);
         res.status(500).send('Error processing Notion data.');
@@ -46,9 +49,12 @@ app.get('/callback', async (req, res) => {
 
 // Provide a JSON endpoint for the graph
 app.get('/api/data', (req, res) => {
+    console.log('Fetching graph data for frontend...');
     if (graphCache) {
-        res.json(graphCache); // Serve cached graph data
+        console.log('Graph data found in cache:', graphCache);
+        res.json(graphCache);
     } else {
+        console.error('No graph data available in cache.');
         res.status(404).json({ error: 'No graph data available. Authenticate first.' });
     }
 });

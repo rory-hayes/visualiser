@@ -5,7 +5,9 @@ document.getElementById('getStarted').addEventListener('click', () => {
 // Fetch and render the graph
 async function renderGraph() {
     try {
-        const response = await fetch('/graph');
+        const response = await fetch('/api/data');
+        if (!response.ok) throw new Error('No data available. Authenticate first.');
+        
         const { graph, score } = await response.json();
 
         // Display workspace score
@@ -35,10 +37,10 @@ async function renderGraph() {
             .data(graph.links)
             .enter()
             .append('line')
-            .attr('x1', (d) => d.source.x)
-            .attr('y1', (d) => d.source.y)
-            .attr('x2', (d) => d.target.x)
-            .attr('y2', (d) => d.target.y)
+            .attr('x1', (d) => d.source.x || 0)
+            .attr('y1', (d) => d.source.y || 0)
+            .attr('x2', (d) => d.target.x || 0)
+            .attr('y2', (d) => d.target.y || 0)
             .attr('stroke', '#ccc');
 
         // Render nodes
@@ -46,8 +48,8 @@ async function renderGraph() {
             .data(graph.nodes)
             .enter()
             .append('circle')
-            .attr('cx', (d) => d.x)
-            .attr('cy', (d) => d.y)
+            .attr('cx', (d) => d.x || Math.random() * width)
+            .attr('cy', (d) => d.y || Math.random() * height)
             .attr('r', 10)
             .attr('fill', (d) => (d.type === 'database' ? '#4CAF50' : '#2196F3'))
             .attr('stroke', '#fff')
@@ -58,8 +60,8 @@ async function renderGraph() {
             .data(graph.nodes)
             .enter()
             .append('text')
-            .attr('x', (d) => d.x + 12)
-            .attr('y', (d) => d.y)
+            .attr('x', (d) => (d.x || Math.random() * width) + 12)
+            .attr('y', (d) => (d.y || Math.random() * height) + 4)
             .text((d) => d.name || 'Unnamed')
             .style('font-size', '12px')
             .attr('fill', '#333');

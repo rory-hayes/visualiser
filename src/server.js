@@ -20,7 +20,7 @@ app.get('/', (req, res) => {
 // Notion OAuth Redirect
 app.get('/auth', (req, res) => {
     const CLIENT_ID = '150d872b-594c-804e-92e4-0037ffa80cff';
-    const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/';
+    const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
     const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(
         REDIRECT_URI
     )}`;

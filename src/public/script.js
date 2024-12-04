@@ -1,13 +1,12 @@
-document.getElementById('getStarted').addEventListener('click', () => {
-    window.location.href = '/auth';
+document.addEventListener('DOMContentLoaded', () => {
+    renderGraph();
 });
 
-// Fetch and render the graph
 async function renderGraph() {
     try {
         const response = await fetch('/api/data');
         if (!response.ok) throw new Error('No data available. Authenticate first.');
-        
+
         const { graph, score } = await response.json();
 
         // Display workspace score
@@ -69,6 +68,3 @@ async function renderGraph() {
         console.error('Error rendering graph:', error);
     }
 }
-
-// Load the graph when the page loads
-window.onload = renderGraph;

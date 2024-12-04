@@ -47,6 +47,11 @@ app.get('/callback', async (req, res) => {
     }
 });
 
+// Redirect Page
+app.get('/redirect', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'redirect.html'));
+});
+
 // Provide a JSON endpoint for the graph
 app.get('/api/data', (req, res) => {
     if (graphCache) {
@@ -54,11 +59,6 @@ app.get('/api/data', (req, res) => {
     } else {
         res.status(404).json({ error: 'No graph data available. Authenticate first.' });
     }
-});
-
-// Redirect Page
-app.get('/redirect', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'public', 'redirect.html'));
 });
 
 // Start the Server

@@ -1,12 +1,11 @@
 import axios from 'axios';
-import fs from 'fs';
 import { D3Node } from 'd3-node';
 import express from 'express';
 
 // OAuth Configuration
 const CLIENT_ID = '150d872b-594c-804e-92e4-0037ffa80cff';
 const CLIENT_SECRET = 'secret_swa9JCDo4wE0FqJMxRxj4xcPpf00EZniVtKG2LIwc3r';
-const REDIRECT_URI = 'http://localhost:3006/callback';
+const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
 const TOKEN_URL = 'https://api.notion.com/v1/oauth/token';
 
 // Notion API Configuration
@@ -18,17 +17,32 @@ const PORT = 3006;
 
 let accessToken = ''; // Placeholder for storing the OAuth token
 
-// Step 1: Redirect to Notion OAuth URL
+// Serve the landing page with a "Get Started" button
+app.get('/', (req, res) => {
+    res.send(`
+        <html>
+            <head><title>Notion Visualizer</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+                <h1>Welcome to Notion Visualizer</h1>
+                <p>Click the button below to get started.</p>
+                <button style="padding: 10px 20px; font-size: 16px; cursor: pointer;" onclick="window.location.href='/auth'">Get Started</button>
+            </body>
+        </html>
+    `);
+});
+
+// Redirect to Notion OAuth URL
 app.get('/auth', (req, res) => {
     const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
     res.redirect(authUrl);
 });
 
-// Step 2: Handle OAuth Callback and Exchange Code for Access Token
+// Handle OAuth Callback and Generate Visualization
 app.get('/callback', async (req, res) => {
     const { code } = req.query;
 
     try {
+        // Exchange authorization code for an access token
         const tokenResponse = await axios.post(
             TOKEN_URL,
             {
@@ -47,32 +61,38 @@ app.get('/callback', async (req, res) => {
         accessToken = tokenResponse.data.access_token;
         console.log('Access Token:', accessToken);
 
-        // Step 3: Fetch Data and Generate Visualization
+        // Fetch workspace data
         console.log('Fetching Notion workspace data...');
         const data = await fetchWorkspaceData();
 
         if (data && data.length > 0) {
+            // Parse and generate SVG visualization
             console.log('Parsing data into graph structure...');
             const graphData = parseDataToGraph(data);
 
             console.log('Generating graph...');
             const svg = generateGraph(graphData);
 
-            console.log('Saving graph to output.svg...');
-            fs.writeFileSync('output.svg', svg);
-            console.log('Graph saved successfully!');
-
-            res.send('Graph generated successfully! Open output.svg to view.');
+            // Render the SVG on the page
+            res.send(`
+                <html>
+                    <head><title>Notion Workspace Visualization</title></head>
+                    <body style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
+                        <h1>Your Notion Workspace Visualization</h1>
+                        <div style="margin: auto; width: 80%; overflow: auto;">${svg}</div>
+                    </body>
+                </html>
+            `);
         } else {
-            res.send('No data fetched. Ensure pages and teamspaces are shared with the integration.');
+            res.send('<h1>No data fetched. Ensure pages and teamspaces are shared with the integration.</h1>');
         }
     } catch (error) {
-        console.error('Error exchanging token or generating visualization:', error.message);
-        res.status(500).send('Failed to authenticate with Notion or generate visualization.');
+        console.error('Error:', error.message);
+        res.status(500).send('<h1>Failed to authenticate with Notion or generate visualization.</h1>');
     }
 });
 
-// Fetch Workspace Data
+// Fetch workspace data
 async function fetchWorkspaceData() {
     try {
         const response = await axios.post(
@@ -85,7 +105,6 @@ async function fetchWorkspaceData() {
                 },
             }
         );
-        console.log('Fetched Data:', JSON.stringify(response.data.results, null, 2)); // Debug log
         return response.data.results;
     } catch (error) {
         console.error('Error fetching workspace data:', error.message);
@@ -93,17 +112,17 @@ async function fetchWorkspaceData() {
     }
 }
 
-// Parse Notion Data into Graph Format
+// Parse Notion data into graph format
 function parseDataToGraph(data) {
     const nodes = [];
     const links = [];
-    const nodeIds = new Set(); // Track existing node IDs to avoid duplicates
+    const nodeIds = new Set();
 
     const now = new Date();
 
     data.forEach((item) => {
         const lastEditedTime = new Date(item.last_edited_time);
-        const ageInDays = Math.floor((now - lastEditedTime) / (1000 * 60 * 60 * 24)); // Age in days
+        const ageInDays = Math.floor((now - lastEditedTime) / (1000 * 60 * 60 * 24));
 
         nodes.push({
             id: item.id,
@@ -158,7 +177,7 @@ function parseDataToGraph(data) {
     return { nodes, links };
 }
 
-// Generate Graph
+// Generate graph SVG
 function generateGraph(data) {
     const d3n = new D3Node();
     const d3 = d3n.d3;
@@ -203,8 +222,7 @@ function generateGraph(data) {
     return d3n.svgString();
 }
 
-// Start Server
+// Start the server
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    console.log('Visit /auth to start the OAuth flow.');
 });

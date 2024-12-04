@@ -1,5 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
-    renderGraph();
+    const getStartedButton = document.getElementById('getStarted');
+    if (getStartedButton) {
+        // Landing page logic
+        getStartedButton.addEventListener('click', () => {
+            window.location.href = '/auth';
+        });
+    } else {
+        // Graph rendering logic for /redirect
+        renderGraph();
+    }
 });
 
 async function renderGraph() {

@@ -1,6 +1,7 @@
 import axios from 'axios';
-import { D3Node } from 'd3-node';
 import express from 'express';
+import path from 'path';
+import fs from 'fs';
 
 // OAuth Configuration
 const CLIENT_ID = '150d872b-594c-804e-92e4-0037ffa80cff';
@@ -17,18 +18,12 @@ const PORT = 3006;
 
 let accessToken = ''; // Placeholder for storing the OAuth token
 
-// Serve the landing page with a "Get Started" button
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve the landing page
 app.get('/', (req, res) => {
-    res.send(`
-        <html>
-            <head><title>Notion Visualizer</title></head>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-                <h1>Welcome to Notion Visualizer</h1>
-                <p>Click the button below to get started.</p>
-                <button style="padding: 10px 20px; font-size: 16px; cursor: pointer;" onclick="window.location.href='/auth'">Get Started</button>
-            </body>
-        </html>
-    `);
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Redirect to Notion OAuth URL
@@ -37,7 +32,7 @@ app.get('/auth', (req, res) => {
     res.redirect(authUrl);
 });
 
-// Handle OAuth Callback and Generate Visualization
+// Handle OAuth Callback and Serve Visualization
 app.get('/callback', async (req, res) => {
     const { code } = req.query;
 
@@ -59,27 +54,101 @@ app.get('/callback', async (req, res) => {
         );
 
         accessToken = tokenResponse.data.access_token;
-        console.log('Access Token:', accessToken);
 
         // Fetch workspace data
-        console.log('Fetching Notion workspace data...');
         const data = await fetchWorkspaceData();
 
         if (data && data.length > 0) {
-            // Parse and generate SVG visualization
-            console.log('Parsing data into graph structure...');
+            // Parse graph data and render the visualization page
             const graphData = parseDataToGraph(data);
-
-            console.log('Generating graph...');
-            const svg = generateGraph(graphData);
-
-            // Render the SVG on the page
             res.send(`
                 <html>
-                    <head><title>Notion Workspace Visualization</title></head>
-                    <body style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
-                        <h1>Your Notion Workspace Visualization</h1>
-                        <div style="margin: auto; width: 80%; overflow: auto;">${svg}</div>
+                    <head>
+                        <title>Notion Workspace Visualization</title>
+                        <script src="https://d3js.org/d3.v7.min.js"></script>
+                        <style>
+                            body {
+                                font-family: Arial, sans-serif;
+                                margin: 0;
+                                padding: 0;
+                            }
+                            #graph {
+                                width: 100vw;
+                                height: 100vh;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <h1 style="text-align: center;">Notion Workspace Visualization</h1>
+                        <div id="graph"></div>
+                        <script>
+                            const data = ${JSON.stringify(graphData)};
+                            const width = window.innerWidth;
+                            const height = window.innerHeight;
+
+                            const svg = d3.select("#graph")
+                                .append("svg")
+                                .attr("width", width)
+                                .attr("height", height)
+                                .call(d3.zoom().on("zoom", function (event) {
+                                    svg.attr("transform", event.transform);
+                                }))
+                                .append("g");
+
+                            const tree = d3.tree().size([height, width - 200]);
+                            const root = d3.hierarchy(data, d => d.children);
+
+                            tree(root);
+
+                            const link = svg.selectAll(".link")
+                                .data(root.links())
+                                .enter()
+                                .append("path")
+                                .attr("class", "link")
+                                .attr("fill", "none")
+                                .attr("stroke", "#ccc")
+                                .attr("stroke-width", 2)
+                                .attr("d", d3.linkHorizontal()
+                                    .x(d => d.y)
+                                    .y(d => d.x));
+
+                            const node = svg.selectAll(".node")
+                                .data(root.descendants())
+                                .enter()
+                                .append("g")
+                                .attr("class", "node")
+                                .attr("transform", d => \`translate(\${d.y},\${d.x})\`);
+
+                            node.append("circle")
+                                .attr("r", 10)
+                                .attr("fill", d => d.data.type === "database" ? "#6c63ff" : "#ff6f61")
+                                .on("mouseover", function (event, d) {
+                                    d3.select(this).attr("stroke", "#000").attr("stroke-width", 2);
+                                    tooltip.transition().duration(200).style("opacity", .9);
+                                    tooltip.html(\`<strong>\${d.data.name}</strong><br>Type: \${d.data.type}<br>Last Edited: \${d.data.lastEditedTime}\`)
+                                        .style("left", (event.pageX + 5) + "px")
+                                        .style("top", (event.pageY - 28) + "px");
+                                })
+                                .on("mouseout", function (d) {
+                                    d3.select(this).attr("stroke", "none");
+                                    tooltip.transition().duration(500).style("opacity", 0);
+                                });
+
+                            node.append("text")
+                                .attr("dy", ".35em")
+                                .attr("x", d => d.children ? -15 : 15)
+                                .style("text-anchor", d => d.children ? "end" : "start")
+                                .text(d => d.data.name);
+
+                            const tooltip = d3.select("body").append("div")
+                                .attr("class", "tooltip")
+                                .style("opacity", 0)
+                                .style("position", "absolute")
+                                .style("background", "#fff")
+                                .style("border", "1px solid #ccc")
+                                .style("padding", "10px")
+                                .style("pointer-events", "none");
+                        </script>
                     </body>
                 </html>
             `);
@@ -114,112 +183,12 @@ async function fetchWorkspaceData() {
 
 // Parse Notion data into graph format
 function parseDataToGraph(data) {
-    const nodes = [];
-    const links = [];
-    const nodeIds = new Set();
-
-    const now = new Date();
-
-    data.forEach((item) => {
-        const lastEditedTime = new Date(item.last_edited_time);
-        const ageInDays = Math.floor((now - lastEditedTime) / (1000 * 60 * 60 * 24));
-
-        nodes.push({
-            id: item.id,
-            name: item.properties?.title?.[0]?.text?.content || `Unnamed ${item.object}`,
-            type: item.object,
-            childCount: 0,
-            lastEditedTime,
-            ageInDays,
-        });
-        nodeIds.add(item.id);
-    });
-
-    data.forEach((item) => {
-        if (item.parent && item.parent.database_id) {
-            const parentId = item.parent.database_id;
-
-            links.push({ source: parentId, target: item.id });
-
-            const parentNode = nodes.find((node) => node.id === parentId);
-            if (parentNode) parentNode.childCount += 1;
-
-            if (!nodeIds.has(parentId)) {
-                nodes.push({
-                    id: parentId,
-                    name: `Database ${parentId}`,
-                    type: 'database',
-                    childCount: 1,
-                });
-                nodeIds.add(parentId);
-            }
-        }
-    });
-
-    const rootNodes = nodes.filter((node) => !links.some((link) => link.target === node.id));
-    if (rootNodes.length > 1) {
-        const syntheticRootId = 'synthetic-root';
-        nodes.push({
-            id: syntheticRootId,
-            name: 'Workspace Root',
-            type: 'root',
-            childCount: rootNodes.length,
-        });
-
-        rootNodes.forEach((rootNode) => {
-            links.push({
-                source: syntheticRootId,
-                target: rootNode.id,
-            });
-        });
-    }
-
-    return { nodes, links };
-}
-
-// Generate graph SVG
-function generateGraph(data) {
-    const d3n = new D3Node();
-    const d3 = d3n.d3;
-
-    const width = 1200;
-    const height = 1000;
-
-    const svg = d3n.createSVG(width, height)
-        .attr('viewBox', `0 0 ${width} ${height}`)
-        .style('background-color', '#ffffff');
-
-    const hierarchyData = d3
-        .stratify()
-        .id((d) => d.id)
-        .parentId((d) => {
-            const link = data.links.find((l) => l.target === d.id);
-            return link ? link.source : null;
-        })(data.nodes);
-
-    const treeLayout = d3.tree().size([height - 200, width - 200]);
-    const root = treeLayout(hierarchyData);
-
-    svg.append('g')
-        .selectAll('path')
-        .data(root.links())
-        .enter()
-        .append('path')
-        .attr('d', d3.linkHorizontal()
-            .x((d) => d.y)
-            .y((d) => d.x))
-        .attr('stroke', '#ccc');
-
-    svg.append('g')
-        .selectAll('g')
-        .data(root.descendants())
-        .enter()
-        .append('g')
-        .attr('transform', (d) => `translate(${d.y},${d.x})`)
-        .append('text')
-        .text((d) => d.data.name);
-
-    return d3n.svgString();
+    const nodes = data.map(item => ({
+        name: item.properties?.title?.[0]?.text?.content || `Unnamed ${item.object}`,
+        type: item.object,
+        lastEditedTime: item.last_edited_time,
+    }));
+    return { name: "Workspace Root", children: nodes };
 }
 
 // Start the server

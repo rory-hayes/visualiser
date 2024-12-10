@@ -1,0 +1,130 @@
+generator client {
+    provider = "prisma-client-js"
+    previewFeatures = ["fullTextSearch", "metrics"]
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model Account {
+    id                String  @id @default(cuid())
+    userId            String
+    type              String
+    provider          String
+    providerAccountId String
+    refresh_token     String? @db.Text
+    access_token      String? @db.Text
+    expires_at        Int?
+    token_type        String?
+    scope             String?
+    id_token          String? @db.Text
+    session_state     String?
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([provider, providerAccountId])
+    @@index([userId])
+}
+
+model Session {
+    id           String   @id @default(cuid())
+    sessionToken String   @unique
+    userId       String
+    expires      DateTime
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
+}
+
+model User {
+    id            String    @id @default(cuid())
+    name          String?
+    email         String?   @unique
+    emailVerified DateTime?
+    password      String?
+    image         String?
+    accounts      Account[]
+    sessions      Session[]
+    settings      UserSettings?
+    workspace     Workspace?
+
+    @@index([email])
+}
+
+model UserSettings {
+    id                String  @id @default(cuid())
+    userEmail         String  @unique
+    showLabels        Boolean @default(true)
+    animateTransitions Boolean @default(true)
+    defaultLayout     String  @default("force")
+    theme            String  @default("system")
+    emailNotifications Boolean @default(true)
+    syncNotifications Boolean @default(true)
+    weeklyDigest     Boolean @default(false)
+    user             User    @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+    @@index([userEmail])
+}
+
+model VerificationToken {
+    identifier String
+    token      String   @unique
+    expires    DateTime
+
+    @@unique([identifier, token])
+    @@index([expires])
+}
+
+model Workspace {
+    id          String     @id @default(cuid())
+    userEmail   String     @unique
+    lastSynced  DateTime
+    data        Json
+    pages       Page[]
+    databases   Database[]
+    user        User       @relation(fields: [userEmail], references: [email], onDelete: Cascade)
+
+    @@index([userEmail])
+    @@index([lastSynced])
+    @@fulltext([title])
+}
+
+model Page {
+    id          String    @id @default(cuid())
+    pageId      String    @unique
+    title       String
+    type        String
+    parentId    String?
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+
+    @@index([workspaceId])
+    @@index([pageId])
+    @@index([parentId])
+    @@index([updatedAt])
+    @@index([createdAt])
+    @@fulltext([title])
+}
+
+model Database {
+    id          String    @id @default(cuid())
+    databaseId  String    @unique
+    title       String
+    parentId    String?
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+
+    @@index([workspaceId])
+    @@index([databaseId])
+    @@index([parentId])
+    @@index([updatedAt])
+    @@index([createdAt])
+    @@fulltext([title])
+} 

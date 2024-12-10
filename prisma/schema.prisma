@@ -89,7 +89,6 @@ model Workspace {
 
     @@index([userEmail])
     @@index([lastSynced])
-    @@fulltext([title])
 }
 
 model Page {
@@ -108,7 +107,6 @@ model Page {
     @@index([parentId])
     @@index([updatedAt])
     @@index([createdAt])
-    @@fulltext([title])
 }
 
 model Database {
@@ -126,5 +124,4 @@ model Database {
     @@index([parentId])
     @@index([updatedAt])
     @@index([createdAt])
-    @@fulltext([title])
 } 

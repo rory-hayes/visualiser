@@ -1,50 +1,33 @@
-import { Redis } from '@upstash/redis';
 import { logger } from '@/utils/logger';
 
-const redis = new Redis({
-    url: process.env.REDIS_URL!,
-    token: process.env.REDIS_TOKEN!,
-});
+// Simple in-memory store
+const store = new Map<string, { count: number; timestamp: number }>();
 
-interface RateLimitResult {
-    success: boolean;
-    remaining?: number;
-    retryAfter?: number;
-}
-
-export async function rateLimit(
-    req: Request,
-    limit = 100,
-    window = 60
-): Promise<RateLimitResult> {
+export async function rateLimit(ip: string) {
     try {
-        const ip = req.headers.get('x-forwarded-for') || 'anonymous';
-        const key = `rate-limit:${ip}`;
+        const now = Date.now();
+        const windowMs = 60 * 1000; // 1 minute
+        const max = 100; // max requests per windowMs
+
+        const record = store.get(ip) || { count: 0, timestamp: now };
         
-        const requests = await redis.incr(key);
+        if (now - record.timestamp > windowMs) {
+            record.count = 0;
+            record.timestamp = now;
+        }
         
-        if (requests === 1) {
-            await redis.expire(key, window);
-        }
+        record.count++;
+        store.set(ip, record);
 
-        const ttl = await redis.ttl(key);
-        const remaining = Math.max(0, limit - requests);
-
-        if (requests > limit) {
-            return {
-                success: false,
-                remaining: 0,
-                retryAfter: ttl,
-            };
-        }
-
-        return {
-            success: true,
-            remaining,
+        return { 
+            success: record.count <= max,
+            limit: max,
+            remaining: Math.max(0, max - record.count),
+            reset: record.timestamp + windowMs,
         };
     } catch (error) {
         logger.error('Rate limit error:', error);
-        // Fail open if Redis is down
-        return { success: true };
+        // Fail open if there's an error
+        return { success: true, limit: 100, remaining: 100, reset: Date.now() + 60000 };
     }
 } 

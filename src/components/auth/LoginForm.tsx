@@ -8,64 +8,49 @@ import { signIn } from 'next-auth/react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
-const schema = z.object({
+const loginSchema = z.object({
     email: z.string().email('Invalid email address'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-type FormData = z.infer<typeof schema>;
+type LoginFormData = z.infer<typeof loginSchema>;
 
-interface LoginFormProps {
-    callbackUrl?: string;
-}
-
-export function LoginForm({ callbackUrl = '/dashboard' }: LoginFormProps) {
-    const {
-        register,
-        handleSubmit,
-        formState: { errors, isSubmitting },
-    } = useForm<FormData>({
-        resolver: zodResolver(schema),
+export function LoginForm() {
+    const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<LoginFormData>({
+        resolver: zodResolver(loginSchema),
     });
 
-    const onSubmit = async (data: FormData) => {
+    const onSubmit = async (data: LoginFormData) => {
         await signIn('credentials', {
             email: data.email,
             password: data.password,
-            callbackUrl,
+            callbackUrl: '/dashboard',
         });
     };
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Email
-                </label>
                 <Input
-                    id="email"
-                    type="email"
                     {...register('email')}
+                    type="email"
+                    placeholder="Email"
                     error={errors.email?.message}
                 />
             </div>
-
             <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Password
-                </label>
                 <Input
-                    id="password"
-                    type="password"
                     {...register('password')}
+                    type="password"
+                    placeholder="Password"
                     error={errors.password?.message}
                 />
             </div>
-
             <Button
                 type="submit"
-                className="w-full"
+                disabled={isSubmitting}
                 isLoading={isSubmitting}
+                className="w-full"
             >
                 Sign in
             </Button>

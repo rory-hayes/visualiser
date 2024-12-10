@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';

@@ -1,74 +1,48 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '.prisma/client';
 import { hash } from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-    // Create test user
-    const hashedPassword = await hash('password123', 12);
+    // Create a test user
     const user = await prisma.user.upsert({
         where: { email: 'test@example.com' },
         update: {},
         create: {
             email: 'test@example.com',
             name: 'Test User',
-            password: hashedPassword,
-            settings: {
-                create: {
-                    showLabels: true,
-                    animateTransitions: true,
-                    defaultLayout: 'force',
-                    theme: 'system',
-                    emailNotifications: true,
-                    syncNotifications: true,
-                    weeklyDigest: false,
-                },
-            },
+            password: await hash('password123', 12),
         },
     });
 
-    // Create test workspace
-    const workspace = await prisma.workspace.upsert({
-        where: { userEmail: user.email },
+    // Create user settings
+    await prisma.userSettings.upsert({
+        where: { userEmail: 'test@example.com' },
         update: {},
         create: {
-            userEmail: user.email,
-            lastSynced: new Date(),
-            data: {},
-            pages: {
-                create: [
-                    {
-                        pageId: 'page1',
-                        title: 'Getting Started',
-                        type: 'page',
-                        parentId: null,
-                    },
-                    {
-                        pageId: 'page2',
-                        title: 'Project Overview',
-                        type: 'page',
-                        parentId: 'page1',
-                    },
-                ],
-            },
-            databases: {
-                create: [
-                    {
-                        databaseId: 'db1',
-                        title: 'Tasks',
-                        parentId: 'page1',
-                    },
-                    {
-                        databaseId: 'db2',
-                        title: 'Projects',
-                        parentId: null,
-                    },
-                ],
-            },
+            userEmail: 'test@example.com',
+            showLabels: true,
+            animateTransitions: true,
+            defaultLayout: 'force',
+            theme: 'system',
+            emailNotifications: true,
+            syncNotifications: true,
+            weeklyDigest: false,
         },
     });
 
-    console.log({ user, workspace });
+    // Create workspace
+    await prisma.workspace.upsert({
+        where: { userEmail: 'test@example.com' },
+        update: {},
+        create: {
+            userEmail: 'test@example.com',
+            lastSynced: new Date(),
+            data: {},
+        },
+    });
+
+    console.log('Seed data created successfully');
 }
 
 main()

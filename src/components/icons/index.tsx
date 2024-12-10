@@ -30,4 +30,5 @@ export const ArrowDownIcon = ArrowDown;
 export const CalendarIcon = Calendar;
 export const ChartIcon = BarChart2;
 export const PageIcon = File;
-export const CheckIcon = Check; 
+export const CheckIcon = Check;
+export { NotionLogo } from './NotionLogo'; 

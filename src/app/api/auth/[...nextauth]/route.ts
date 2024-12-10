@@ -1,80 +1,88 @@
 import NextAuth from 'next-auth';
+import type { AuthOptions, User, Profile } from 'next-auth';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import GoogleProvider from 'next-auth/providers/google';
-import NotionProvider from 'next-auth/providers/notion';
-import CredentialsProvider from 'next-auth/providers/credentials';
+import { Client } from '@notionhq/client';
+import type { UserObjectResponse } from '@notionhq/client/build/src/api-endpoints';
 import { prisma } from '@/lib/prisma';
-import { compare } from 'bcryptjs';
 
-const handler = NextAuth({
+type NotionOAuthProfile = {
+    id: string;
+    name: string | undefined;
+    email: string | undefined;
+    avatar_url: string | null;
+};
+
+const authOptions: AuthOptions = {
     adapter: PrismaAdapter(prisma),
     providers: [
-        GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        }),
-        NotionProvider({
-            clientId: process.env.NOTION_CLIENT_ID!,
-            clientSecret: process.env.NOTION_CLIENT_SECRET!,
-            redirectUri: `${process.env.NEXTAUTH_URL}/api/auth/callback/notion`,
-        }),
-        CredentialsProvider({
-            name: 'credentials',
-            credentials: {
-                email: { label: 'Email', type: 'email' },
-                password: { label: 'Password', type: 'password' }
+        {
+            id: 'notion',
+            name: 'Notion',
+            type: 'oauth',
+            authorization: {
+                url: 'https://api.notion.com/v1/oauth/authorize',
+                params: {
+                    client_id: process.env.NOTION_CLIENT_ID,
+                    response_type: 'code',
+                    owner: 'user',
+                    redirect_uri: process.env.NOTION_REDIRECT_URI,
+                }
             },
-            async authorize(credentials) {
-                if (!credentials?.email || !credentials?.password) {
-                    throw new Error('Invalid credentials');
-                }
+            token: 'https://api.notion.com/v1/oauth/token',
+            userinfo: {
+                url: 'https://api.notion.com/v1/users/me',
+                async request({ tokens }): Promise<Profile> {
+                    const notion = new Client({ 
+                        auth: tokens.access_token as string,
+                        notionVersion: '2022-06-28'
+                    });
+                    const response = await notion.users.retrieve({ 
+                        user_id: 'me' 
+                    });
 
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email }
-                });
+                    const email = 'type' in response && response.type === 'person' 
+                        ? response.person?.email 
+                        : undefined;
 
-                if (!user || !user.password) {
-                    throw new Error('User not found');
-                }
-
-                const isValid = await compare(credentials.password, user.password);
-
-                if (!isValid) {
-                    throw new Error('Invalid password');
-                }
-
+                    return {
+                        sub: response.id,
+                        name: response.name || undefined,
+                        email: email,
+                        image: response.avatar_url || undefined,
+                    };
+                },
+            },
+            clientId: process.env.NOTION_CLIENT_ID,
+            clientSecret: process.env.NOTION_CLIENT_SECRET,
+            profile(profile): User {
                 return {
-                    id: user.id,
-                    email: user.email,
-                    name: user.name,
+                    id: profile.sub,
+                    name: profile.name || 'Unnamed User',
+                    email: profile.email || '',
+                    image: profile.image || null,
                 };
             }
-        })
+        }
     ],
-    session: {
-        strategy: 'jwt'
-    },
     callbacks: {
-        async jwt({ token, user, account }) {
-            if (account && user) {
-                token.accessToken = account.access_token;
-                token.provider = account.provider;
-            }
-            return token;
-        },
         async session({ session, token }) {
-            if (session.user) {
-                session.user.id = token.sub!;
-                session.accessToken = token.accessToken;
-                session.provider = token.provider;
+            if (session?.user) {
+                session.accessToken = token.accessToken as string;
             }
             return session;
+        },
+        async jwt({ token, account }) {
+            if (account) {
+                token.accessToken = account.access_token;
+            }
+            return token;
         }
     },
     pages: {
         signIn: '/login',
         error: '/login',
     },
-});
+};
 
+const handler = NextAuth(authOptions);
 export { handler as GET, handler as POST }; 

@@ -2,38 +2,24 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/Card';
-import { AuthLayout } from '@/components/layouts/AuthLayout';
 import { RegisterForm } from '@/components/auth/RegisterForm';
-import Link from 'next/link';
+import { Card } from '@/components/ui/Card';
+import { NotionLogo } from '@/components/icons';
 
 export default function RegisterPage() {
     const router = useRouter();
 
     return (
-        <AuthLayout>
+        <div className="min-h-screen flex items-center justify-center">
             <Card className="w-full max-w-md">
-                <Card.Header>
-                    <h1 className="text-2xl font-bold text-center text-gray-900 dark:text-white">
-                        Create your account
-                    </h1>
-                </Card.Header>
-                <Card.Body className="space-y-6">
-                    <RegisterForm onSuccess={() => router.push('/login')} />
-
-                    <div className="text-center text-sm">
-                        <span className="text-gray-500 dark:text-gray-400">
-                            Already have an account?{' '}
-                        </span>
-                        <Link
-                            href="/login"
-                            className="text-primary-600 hover:text-primary-500 dark:text-primary-400"
-                        >
-                            Sign in
-                        </Link>
+                <Card.Body>
+                    <div className="flex flex-col items-center space-y-6">
+                        <NotionLogo className="w-12 h-12" />
+                        <h2 className="text-2xl font-bold">Create an account</h2>
+                        <RegisterForm onSuccess={() => router.push('/login')} />
                     </div>
                 </Card.Body>
             </Card>
-        </AuthLayout>
+        </div>
     );
 } 

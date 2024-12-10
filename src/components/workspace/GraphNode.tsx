@@ -1,7 +1,7 @@
 'use client';
 
 import React, { memo } from 'react';
-import { motion, SVGMotionProps } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { WorkspaceItem } from '@/types/workspace';
 import { useDrag } from '@use-gesture/react';
 
@@ -21,7 +21,7 @@ interface DragState {
     last: boolean;
 }
 
-const MotionGroup = motion.g as React.FC<SVGMotionProps<SVGGElement> & { transform?: string }>;
+const MotionGroup = motion.g as any;
 
 export const GraphNode = memo(function GraphNode({
     item,
@@ -50,7 +50,7 @@ export const GraphNode = memo(function GraphNode({
             initial={false}
             animate={{
                 scale,
-                transition: { type: "spring", stiffness: 500, damping: 30 }
+                transition: { type: "spring", stiffness: 300, damping: 25 }
             }}
             onMouseEnter={() => onHover(item)}
             onMouseLeave={() => onHover(null)}

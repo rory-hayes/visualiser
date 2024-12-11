@@ -3,16 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirect - Notion Visualizer</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Dashboard - Notion Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .dashboard-card {
+            @apply bg-white rounded-lg shadow p-6 transition-all duration-200 hover:shadow-md;
+        }
+        .metric-value {
+            @apply text-2xl font-bold text-indigo-600;
+        }
+        .metric-label {
+            @apply text-sm text-gray-500;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <h1>Notion Workspace Visualizer</h1>
-        <p>Your graph has been generated. See the visualization below:</p>
-        <div id="visualization"></div>
-        <div id="workspaceScore"></div>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex-shrink-0">
+                    <span class="text-xl font-bold text-gray-800">Notion Visualizer</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="exportBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                        Export Data
+                    </button>
+                    <button id="refreshBtn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-2xl font-bold text-gray-900">Workspace Analysis</h1>
+            <p class="mt-1 text-sm text-gray-500">Comprehensive overview of your Notion workspace structure and metrics.</p>
+        </div>
+
+        <!-- Top Row - Key Metrics -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+            <div class="dashboard-card">
+                <h3 class="metric-label">Workspace Score</h3>
+                <div id="workspaceScore" class="metric-value">--</div>
+                <div class="text-sm text-gray-500 mt-2">Overall organization score</div>
+            </div>
+            <div class="dashboard-card">
+                <h3 class="metric-label">Total Pages</h3>
+                <div id="totalPages" class="metric-value">--</div>
+                <div class="text-sm text-gray-500 mt-2">Including databases</div>
+            </div>
+            <div class="dashboard-card">
+                <h3 class="metric-label">Total Databases</h3>
+                <div id="totalDatabases" class="metric-value">--</div>
+                <div class="text-sm text-gray-500 mt-2">Across workspace</div>
+            </div>
+            <div class="dashboard-card">
+                <h3 class="metric-label">Active Pages</h3>
+                <div id="activePages" class="metric-value">--</div>
+                <div class="text-sm text-gray-500 mt-2">Updated in last 30 days</div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Main Visualization Card -->
+            <div class="dashboard-card lg:col-span-2">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-medium text-gray-900">Workspace Structure</h2>
+                    <div class="flex space-x-2">
+                        <button id="zoomIn" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                        </button>
+                        <button id="zoomOut" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                            </svg>
+                        </button>
+                        <button id="resetZoom" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="visualization" class="w-full h-[600px]"></div>
+            </div>
+
+            <!-- Right Column Cards -->
+            <div class="space-y-6">
+                <!-- Page Activity -->
+                <div class="dashboard-card">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Page Activity</h2>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">Last 30 days</span>
+                            <span id="last30Days" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">30-60 days</span>
+                            <span id="last60Days" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">60-90 days</span>
+                            <span id="last90Days" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">90+ days</span>
+                            <span id="over90Days" class="font-semibold">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Database Metrics -->
+                <div class="dashboard-card">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Database Metrics</h2>
+                    <div id="databaseMetrics" class="space-y-4">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Structure Stats -->
+                <div class="dashboard-card">
+                    <h2 class="text-lg font-medium text-gray-900 mb-4">Structure Stats</h2>
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">Max Depth</span>
+                            <span id="maxDepth" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">Avg. Pages per Level</span>
+                            <span id="avgPagesPerLevel" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-500">Total Connections</span>
+                            <span id="totalConnections" class="font-semibold">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="script.js"></script>
 </body>

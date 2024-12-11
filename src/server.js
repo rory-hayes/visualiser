@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
 import { fetchWorkspaceData } from './fetchData.js';

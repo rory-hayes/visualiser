@@ -1,6 +1,8 @@
 import * as dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
 import { calculateWorkspaceScore } from './utils.js';
@@ -20,9 +22,13 @@ const PORT = process.env.PORT || 3000;
 
 let graphCache = null; // Cache to store graph data temporarily
 
+// Get the directory name properly in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 // Serve static files (HTML, CSS, JS)
-app.use(express.static(path.join(process.cwd(), 'public')));
-app.use('/src', express.static(path.join(process.cwd(), 'src')));
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname))); // This will serve files from the src directory
 
 // Add MIME type for ES modules
 app.use((req, res, next) => {
@@ -35,13 +41,8 @@ app.use((req, res, next) => {
 // Add debug logging for file paths
 app.use((req, res, next) => {
     console.log('Requested URL:', req.url);
-    console.log('Current working directory:', process.cwd());
+    console.log('Server root directory:', __dirname);
     next();
-});
-
-// Serve the generateGraph.js file
-app.get('/generateGraph.js', (req, res) => {
-    res.sendFile(path.join(process.cwd(), 'src', 'generateGraph.js'));
 });
 
 // Landing Page

@@ -37,8 +37,9 @@ async function initializeDashboard() {
     showLoading(visualization);
 
     try {
-        // Dynamically import generateGraph only on the dashboard page
-        const { generateGraph } = await import('/generateGraph.js');
+        // Update the import path
+        const { generateGraph } = await import('./generateGraph.js');
+        console.log('Successfully loaded generateGraph');
         
         const response = await fetch('/api/data');
         if (!response.ok) {

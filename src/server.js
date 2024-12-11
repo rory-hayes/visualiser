@@ -1,8 +1,18 @@
+import dotenv from 'dotenv';
 import express from 'express';
 import path from 'path';
 import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
 import { calculateWorkspaceScore } from './utils.js';
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Verify environment variables are loaded
+console.log('Environment check:', {
+    hasNotionSecret: !!process.env.NOTION_CLIENT_SECRET,
+    nodeEnv: process.env.NODE_ENV
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,11 +43,16 @@ app.get('/callback', async (req, res) => {
 
     if (!code) {
         console.error('No code received from Notion');
-        return res.status(400).send('No authorization code received');
+        return res.redirect('/redirect?error=No authorization code received');
     }
 
     try {
+        console.log('Received auth code:', code);
+        console.log('Starting workspace data fetch...');
+        
         const workspaceData = await fetchWorkspaceData(code);
+        
+        console.log('Workspace data fetched successfully');
         
         if (!workspaceData) {
             throw new Error('No workspace data received from Notion');
@@ -46,19 +61,22 @@ app.get('/callback', async (req, res) => {
         const graphData = parseDataToGraph(workspaceData);
         const workspaceScore = calculateWorkspaceScore(graphData);
 
-        // Cache the graph data for the frontend
         graphCache = { 
             score: workspaceScore, 
             graph: graphData,
-            timestamp: Date.now() // Add timestamp for cache management
+            timestamp: Date.now()
         };
 
-        // Redirect to /redirect to display results
         res.redirect('/redirect');
     } catch (error) {
-        console.error('Callback error:', error);
-        // Redirect to error page or show error in the UI
-        res.redirect(`/redirect?error=${encodeURIComponent(error.message)}`);
+        console.error('Callback error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+        
+        const errorMessage = error.response?.data?.message || error.message;
+        res.redirect(`/redirect?error=${encodeURIComponent(errorMessage)}`);
     }
 });
 
@@ -91,6 +109,14 @@ app.get('/api/data', (req, res) => {
             error: 'Error retrieving graph data' 
         });
     }
+});
+
+// Add this endpoint temporarily for debugging
+app.get('/debug-env', (req, res) => {
+    res.json({
+        hasSecret: !!process.env.NOTION_CLIENT_SECRET,
+        secretLength: process.env.NOTION_CLIENT_SECRET?.length || 0
+    });
 });
 
 // Start the Server

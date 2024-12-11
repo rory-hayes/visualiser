@@ -1,16 +1,11 @@
 import axios from 'axios';
 
 const CLIENT_ID = '150d872b-594c-804e-92e4-0037ffa80cff';
-const CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
+const CLIENT_SECRET = 'secret_X3vWYmVdViJMEDdQsIK52M8NZUuASDYyNAbAb27veeG'; // Temporarily hardcoded
 const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
 
 export async function fetchWorkspaceData(code) {
     try {
-        // Debug environment variable
-        if (!process.env.NOTION_CLIENT_SECRET) {
-            throw new Error('NOTION_CLIENT_SECRET environment variable is not set');
-        }
-
         console.log('Attempting token exchange with code:', code);
         
         // First, exchange the authorization code for an access token
@@ -54,10 +49,6 @@ export async function fetchWorkspaceData(code) {
             status: error.response?.status,
             stack: error.stack
         });
-
-        if (!process.env.NOTION_CLIENT_SECRET) {
-            throw new Error('Missing Notion client secret. Please check environment configuration.');
-        }
 
         if (error.response?.status === 401) {
             throw new Error('Authentication failed. Please verify your Notion integration settings.');

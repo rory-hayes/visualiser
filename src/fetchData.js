@@ -36,6 +36,12 @@ export async function fetchWorkspaceData(code) {
         });
 
         console.log('Token exchange response status:', tokenResponse.status);
+        console.log('Token response data:', {
+            bot_id: tokenResponse.data.bot_id,
+            workspace_name: tokenResponse.data.workspace_name,
+            workspace_icon: tokenResponse.data.workspace_icon,
+            workspace_id: tokenResponse.data.workspace_id
+        });
 
         if (!tokenResponse.data.access_token) {
             throw new Error('Failed to obtain access token');
@@ -57,6 +63,39 @@ export async function fetchWorkspaceData(code) {
                 'Content-Type': 'application/json'
             }
         });
+
+        console.log('Workspace API Response:', {
+            status: workspaceData.status,
+            hasResults: !!workspaceData.data.results,
+            resultCount: workspaceData.data.results?.length,
+            // Log the first result as an example (with sensitive data redacted)
+            sampleResult: workspaceData.data.results?.[0] ? {
+                id: workspaceData.data.results[0].id,
+                created_time: workspaceData.data.results[0].created_time,
+                last_edited_time: workspaceData.data.results[0].last_edited_time,
+                object: workspaceData.data.results[0].object,
+                parent: workspaceData.data.results[0].parent,
+                properties: Object.keys(workspaceData.data.results[0].properties || {}),
+                url: workspaceData.data.results[0].url
+            } : null,
+            // Log all results structure (without sensitive content)
+            resultsSummary: workspaceData.data.results?.map(result => ({
+                id: result.id,
+                type: result.object,
+                parentType: result.parent?.type,
+                hasProperties: !!result.properties,
+                propertyKeys: Object.keys(result.properties || {}),
+                url: result.url
+            }))
+        });
+
+        // Log pagination info if available
+        if (workspaceData.data.has_more) {
+            console.log('Pagination info:', {
+                has_more: workspaceData.data.has_more,
+                next_cursor: workspaceData.data.next_cursor
+            });
+        }
 
         console.log('Successfully fetched workspace data');
         return workspaceData.data;

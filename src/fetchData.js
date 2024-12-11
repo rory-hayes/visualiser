@@ -15,7 +15,7 @@ export async function fetchWorkspaceData(code) {
             redirectUri: REDIRECT_URI,
             hasClientId: !!CLIENT_ID,
             hasClientSecret: !!CLIENT_SECRET,
-            code: code?.substring(0, 8) + '...' // Log partial code for debugging
+            code: code?.substring(0, 8) + '...'
         });
 
         console.log('Attempting token exchange with code:', code);
@@ -45,10 +45,16 @@ export async function fetchWorkspaceData(code) {
         console.log('Successfully obtained access token');
 
         // Now use the access token to fetch workspace data
-        const workspaceData = await axios.get('https://api.notion.com/v1/search', {
+        const workspaceData = await axios.post('https://api.notion.com/v1/search', {
+            filter: {
+                property: 'object',
+                value: 'page'
+            }
+        }, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
-                'Notion-Version': '2022-06-28'
+                'Notion-Version': '2022-06-28',
+                'Content-Type': 'application/json'
             }
         });
 

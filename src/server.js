@@ -63,6 +63,11 @@ app.get('/callback', async (req, res) => {
         const workspaceData = await fetchWorkspaceData(code);
         
         console.log('Workspace data fetched successfully');
+        console.log('Workspace data structure:', {
+            type: typeof workspaceData,
+            hasResults: !!workspaceData.results,
+            resultsCount: workspaceData.results?.length
+        });
         
         if (!workspaceData) {
             throw new Error('No workspace data received from Notion');
@@ -70,6 +75,12 @@ app.get('/callback', async (req, res) => {
 
         const graphData = parseDataToGraph(workspaceData);
         const workspaceScore = calculateWorkspaceScore(graphData);
+
+        // Log the parsed graph data
+        console.log('Graph parsing complete:', {
+            nodesCount: graphData.nodes.length,
+            linksCount: graphData.links.length
+        });
 
         graphCache = { 
             score: workspaceScore, 

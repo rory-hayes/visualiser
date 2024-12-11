@@ -1,56 +1,45 @@
 // Add at the top of the file for debugging
 console.log('Script loaded');
 
-// Remove the import for now since we'll load generateGraph only when needed
-// import { generateGraph } from '../generateGraph.js';
-
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Content Loaded');
-    const getStartedButton = document.getElementById('getStarted');
-    console.log('Get Started button found:', !!getStartedButton);
     
-    const visualizationDiv = document.getElementById('visualization');
+    // First, determine which page we're on
+    const isLandingPage = window.location.pathname === '/';
+    console.log('Current path:', window.location.pathname);
+    console.log('Is landing page:', isLandingPage);
 
-    // Check which page we're on
-    if (getStartedButton && !visualizationDiv) {
-        console.log('On landing page, setting up Get Started button');
+    if (isLandingPage) {
         // Landing page logic
-        getStartedButton.addEventListener('click', () => {
-            console.log('Get Started clicked, redirecting to auth...');
-            window.location.href = '/auth';
-        });
-    } else if (visualizationDiv) {
-        console.log('On redirect page, initializing dashboard');
-        try {
-            // Update the import path
-            const { generateGraph } = await import('/generateGraph.js');
-            window.generateGraph = generateGraph;
+        const getStartedButton = document.getElementById('getStarted');
+        console.log('Get Started button found:', !!getStartedButton);
 
-            // Check for error parameter in URL
-            const urlParams = new URLSearchParams(window.location.search);
-            const error = urlParams.get('error');
-            
-            if (error) {
-                showError(error);
-            } else {
-                initializeDashboard();
-            }
-        } catch (error) {
-            console.error('Error loading generateGraph:', error);
-            showError('Failed to load visualization components');
+        if (getStartedButton) {
+            getStartedButton.addEventListener('click', () => {
+                console.log('Get Started clicked, redirecting to auth...');
+                window.location.href = '/auth';
+            });
         }
     } else {
-        console.error('Unable to determine current page');
+        // Dashboard page logic
+        initializeDashboard();
     }
 });
 
 async function initializeDashboard() {
     const visualization = document.getElementById('visualization');
-    
+    if (!visualization) {
+        console.error('Visualization container not found');
+        return;
+    }
+
     // Show loading state
     showLoading(visualization);
 
     try {
+        // Dynamically import generateGraph only on the dashboard page
+        const { generateGraph } = await import('/generateGraph.js');
+        
         const response = await fetch('/api/data');
         if (!response.ok) {
             const errorText = await response.text();

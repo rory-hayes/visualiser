@@ -22,12 +22,20 @@ let graphCache = null; // Cache to store graph data temporarily
 
 // Serve static files (HTML, CSS, JS)
 app.use(express.static(path.join(process.cwd(), 'public')));
+app.use('/src', express.static(path.join(process.cwd(), 'src')));
 
 // Add MIME type for ES modules
 app.use((req, res, next) => {
     if (req.url.endsWith('.js')) {
         res.type('application/javascript');
     }
+    next();
+});
+
+// Add debug logging for file paths
+app.use((req, res, next) => {
+    console.log('Requested URL:', req.url);
+    console.log('Current working directory:', process.cwd());
     next();
 });
 

@@ -1,8 +1,14 @@
+// Add at the top of the file for debugging
+console.log('Script loaded');
+
 // Remove the import for now since we'll load generateGraph only when needed
 // import { generateGraph } from '../generateGraph.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM Content Loaded');
     const getStartedButton = document.getElementById('getStarted');
+    console.log('Get Started button found:', !!getStartedButton);
+    
     const visualizationDiv = document.getElementById('visualization');
 
     // Check which page we're on
@@ -15,18 +21,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     } else if (visualizationDiv) {
         console.log('On redirect page, initializing dashboard');
-        // Load the generateGraph function dynamically when needed
-        const { generateGraph } = await import('../generateGraph.js');
-        window.generateGraph = generateGraph; // Make it available globally if needed
+        try {
+            // Update the import path
+            const { generateGraph } = await import('/generateGraph.js');
+            window.generateGraph = generateGraph;
 
-        // Check for error parameter in URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const error = urlParams.get('error');
-        
-        if (error) {
-            showError(error);
-        } else {
-            initializeDashboard();
+            // Check for error parameter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            
+            if (error) {
+                showError(error);
+            } else {
+                initializeDashboard();
+            }
+        } catch (error) {
+            console.error('Error loading generateGraph:', error);
+            showError('Failed to load visualization components');
         }
     } else {
         console.error('Unable to determine current page');

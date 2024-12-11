@@ -6,27 +6,77 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = '/auth';
         });
     } else {
-        // Dashboard logic for /redirect
-        initializeDashboard();
+        // Check for error parameter in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const error = urlParams.get('error');
+        
+        if (error) {
+            const visualization = document.getElementById('visualization');
+            if (visualization) {
+                visualization.innerHTML = `
+                    <div class="p-4 text-red-600 bg-red-100 rounded-lg">
+                        <h3 class="font-bold">Error During Authentication</h3>
+                        <p>${decodeURIComponent(error)}</p>
+                        <button onclick="window.location.href='/'" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                            Try Again
+                        </button>
+                    </div>
+                `;
+            }
+        } else {
+            // Initialize dashboard if no error
+            initializeDashboard();
+        }
     }
 });
 
 async function initializeDashboard() {
+    const visualization = document.getElementById('visualization');
+    
+    // Show loading state
+    if (visualization) {
+        visualization.innerHTML = `
+            <div class="flex items-center justify-center h-full">
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+                    <p class="text-gray-600">Loading workspace data...</p>
+                </div>
+            </div>
+        `;
+    }
+
     try {
         const response = await fetch('/api/data');
-        if (!response.ok) throw new Error('No data available. Authenticate first.');
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`API Error (${response.status}): ${errorText}`);
+        }
 
-        const { graph, score } = await response.json();
+        const data = await response.json();
+        if (!data.graph || !data.score) {
+            throw new Error('Invalid data format received from server');
+        }
 
         // Update all metrics
-        updateDashboardMetrics(graph, score);
+        updateDashboardMetrics(data.graph, data.score);
         // Render the graph
-        renderGraph(graph);
+        renderGraph(data.graph);
         // Setup event listeners
         setupEventListeners();
 
     } catch (error) {
         console.error('Error initializing dashboard:', error);
+        if (visualization) {
+            visualization.innerHTML = `
+                <div class="p-4 text-red-600 bg-red-100 rounded-lg">
+                    <h3 class="font-bold">Error Loading Dashboard</h3>
+                    <p>${error.message}</p>
+                    <button onclick="window.location.href='/'" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                        Start Over
+                    </button>
+                </div>
+            `;
+        }
     }
 }
 

@@ -31,19 +31,34 @@ app.get('/auth', (req, res) => {
 app.get('/callback', async (req, res) => {
     const { code } = req.query;
 
+    if (!code) {
+        console.error('No code received from Notion');
+        return res.status(400).send('No authorization code received');
+    }
+
     try {
         const workspaceData = await fetchWorkspaceData(code);
+        
+        if (!workspaceData) {
+            throw new Error('No workspace data received from Notion');
+        }
+
         const graphData = parseDataToGraph(workspaceData);
         const workspaceScore = calculateWorkspaceScore(graphData);
 
         // Cache the graph data for the frontend
-        graphCache = { score: workspaceScore, graph: graphData };
+        graphCache = { 
+            score: workspaceScore, 
+            graph: graphData,
+            timestamp: Date.now() // Add timestamp for cache management
+        };
 
         // Redirect to /redirect to display results
         res.redirect('/redirect');
     } catch (error) {
-        console.error(error);
-        res.status(500).send('Error processing Notion data.');
+        console.error('Callback error:', error);
+        // Redirect to error page or show error in the UI
+        res.redirect(`/redirect?error=${encodeURIComponent(error.message)}`);
     }
 });
 
@@ -52,12 +67,29 @@ app.get('/redirect', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'redirect.html'));
 });
 
-// Provide a JSON endpoint for the graph
+// API endpoint with better error handling
 app.get('/api/data', (req, res) => {
-    if (graphCache) {
+    try {
+        if (!graphCache) {
+            return res.status(404).json({ 
+                error: 'No graph data available. Please authenticate first.' 
+            });
+        }
+
+        // Check if cache is too old (optional)
+        const cacheAge = Date.now() - graphCache.timestamp;
+        if (cacheAge > 3600000) { // 1 hour
+            return res.status(404).json({ 
+                error: 'Cache expired. Please authenticate again.' 
+            });
+        }
+
         res.json(graphCache);
-    } else {
-        res.status(404).json({ error: 'No graph data available. Authenticate first.' });
+    } catch (error) {
+        console.error('API error:', error);
+        res.status(500).json({ 
+            error: 'Error retrieving graph data' 
+        });
     }
 });
 

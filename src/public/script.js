@@ -1,3 +1,5 @@
+import { generateGraph } from '../generateGraph.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     const getStartedButton = document.getElementById('getStarted');
     if (getStartedButton) {
@@ -11,20 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const error = urlParams.get('error');
         
         if (error) {
-            const visualization = document.getElementById('visualization');
-            if (visualization) {
-                visualization.innerHTML = `
-                    <div class="p-4 text-red-600 bg-red-100 rounded-lg">
-                        <h3 class="font-bold">Error During Authentication</h3>
-                        <p>${decodeURIComponent(error)}</p>
-                        <button onclick="window.location.href='/'" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-                            Try Again
-                        </button>
-                    </div>
-                `;
-            }
+            showError(error);
         } else {
-            // Initialize dashboard if no error
             initializeDashboard();
         }
     }
@@ -34,16 +24,7 @@ async function initializeDashboard() {
     const visualization = document.getElementById('visualization');
     
     // Show loading state
-    if (visualization) {
-        visualization.innerHTML = `
-            <div class="flex items-center justify-center h-full">
-                <div class="text-center">
-                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-                    <p class="text-gray-600">Loading workspace data...</p>
-                </div>
-            </div>
-        `;
-    }
+    showLoading(visualization);
 
     try {
         const response = await fetch('/api/data');
@@ -57,109 +38,97 @@ async function initializeDashboard() {
             throw new Error('Invalid data format received from server');
         }
 
+        // Clear loading state
+        visualization.innerHTML = '';
+
+        // Initialize the graph
+        const graph = generateGraph(visualization, data.graph);
+
         // Update all metrics
         updateDashboardMetrics(data.graph, data.score);
-        // Render the graph
-        renderGraph(data.graph);
+
+        // Setup zoom control buttons
+        setupZoomControls(graph);
+
         // Setup event listeners
-        setupEventListeners();
+        setupEventListeners(graph);
 
     } catch (error) {
         console.error('Error initializing dashboard:', error);
-        if (visualization) {
-            visualization.innerHTML = `
-                <div class="p-4 text-red-600 bg-red-100 rounded-lg">
-                    <h3 class="font-bold">Error Loading Dashboard</h3>
-                    <p>${error.message}</p>
-                    <button onclick="window.location.href='/'" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-                        Start Over
-                    </button>
-                </div>
-            `;
-        }
+        showError(error.message);
     }
 }
 
-function updateDashboardMetrics(graph, score) {
-    // Update workspace score (remove the "Workspace Score: " prefix as it's now in the label)
-    document.getElementById('workspaceScore').innerText = score;
-
-    // Calculate and update basic metrics
-    const totalPages = graph.nodes.length;
-    const databases = graph.nodes.filter(node => node.type === 'database');
-    
-    document.getElementById('totalPages').innerText = totalPages;
-    document.getElementById('totalDatabases').innerText = databases.length;
-    
-    // For now, set other metrics to placeholder values
-    // These will be updated when we implement the full metrics calculation
-    document.getElementById('activePages').innerText = '0';
-    document.getElementById('last30Days').innerText = '0';
-    document.getElementById('last60Days').innerText = '0';
-    document.getElementById('last90Days').innerText = '0';
-    document.getElementById('over90Days').innerText = '0';
-    document.getElementById('maxDepth').innerText = '0';
-    document.getElementById('avgPagesPerLevel').innerText = '0';
-    document.getElementById('totalConnections').innerText = graph.links.length;
+function showLoading(container) {
+    container.innerHTML = `
+        <div class="flex items-center justify-center h-full">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+                <p class="text-gray-600">Loading workspace data...</p>
+            </div>
+        </div>
+    `;
 }
 
-function renderGraph(graph) {
-    const container = document.getElementById('visualization');
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-
-    // Setup SVG for D3
-    const svg = d3
-        .select('#visualization')
-        .append('svg')
-        .attr('width', '100%')
-        .attr('height', '100%')
-        .attr('viewBox', `0 0 ${width} ${height}`)
-        .call(
-            d3.zoom()
-                .scaleExtent([0.5, 2])
-                .on('zoom', (event) => {
-                    svg.attr('transform', event.transform);
-                })
-        )
-        .append('g');
-
-    // Render links
-    svg.selectAll('line')
-        .data(graph.links)
-        .enter()
-        .append('line')
-        .attr('x1', (d) => d.source.x || 0)
-        .attr('y1', (d) => d.source.y || 0)
-        .attr('x2', (d) => d.target.x || 0)
-        .attr('y2', (d) => d.target.y || 0)
-        .attr('stroke', '#ccc');
-
-    // Render nodes
-    svg.selectAll('circle')
-        .data(graph.nodes)
-        .enter()
-        .append('circle')
-        .attr('cx', (d) => d.x || Math.random() * width)
-        .attr('cy', (d) => d.y || Math.random() * height)
-        .attr('r', 10)
-        .attr('fill', (d) => (d.type === 'database' ? '#4CAF50' : '#2196F3'))
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 2);
-
-    // Add labels
-    svg.selectAll('text')
-        .data(graph.nodes)
-        .enter()
-        .append('text')
-        .attr('x', (d) => (d.x || Math.random() * width) + 12)
-        .attr('y', (d) => (d.y || Math.random() * height) + 4)
-        .text((d) => d.name || 'Unnamed')
-        .style('font-size', '12px')
-        .attr('fill', '#333');
+function showError(message) {
+    const visualization = document.getElementById('visualization');
+    if (visualization) {
+        visualization.innerHTML = `
+            <div class="p-4 text-red-600 bg-red-100 rounded-lg">
+                <h3 class="font-bold">Error Loading Dashboard</h3>
+                <p>${message}</p>
+                <button onclick="window.location.href='/'" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                    Start Over
+                </button>
+            </div>
+        `;
+    }
 }
 
-function setupEventListeners() {
+function setupZoomControls(graph) {
+    // Zoom in button
+    document.getElementById('zoomIn').addEventListener('click', () => {
+        const svg = d3.select('#visualization svg');
+        const zoom = d3.zoom().on('zoom', (event) => {
+            svg.select('g').attr('transform', event.transform);
+        });
+        
+        const currentTransform = d3.zoomTransform(svg.node());
+        svg.transition().duration(300).call(
+            zoom.transform,
+            currentTransform.scale(currentTransform.k * 1.2)
+        );
+    });
+
+    // Zoom out button
+    document.getElementById('zoomOut').addEventListener('click', () => {
+        const svg = d3.select('#visualization svg');
+        const zoom = d3.zoom().on('zoom', (event) => {
+            svg.select('g').attr('transform', event.transform);
+        });
+        
+        const currentTransform = d3.zoomTransform(svg.node());
+        svg.transition().duration(300).call(
+            zoom.transform,
+            currentTransform.scale(currentTransform.k / 1.2)
+        );
+    });
+
+    // Reset zoom button
+    document.getElementById('resetZoom').addEventListener('click', () => {
+        const svg = d3.select('#visualization svg');
+        const zoom = d3.zoom().on('zoom', (event) => {
+            svg.select('g').attr('transform', event.transform);
+        });
+        
+        svg.transition().duration(300).call(
+            zoom.transform,
+            d3.zoomIdentity
+        );
+    });
+}
+
+function setupEventListeners(graph) {
     // Export button
     document.getElementById('exportBtn').addEventListener('click', () => {
         // TODO: Implement export functionality
@@ -170,17 +139,59 @@ function setupEventListeners() {
     document.getElementById('refreshBtn').addEventListener('click', async () => {
         await initializeDashboard();
     });
+}
 
-    // Zoom controls
-    document.getElementById('zoomIn').addEventListener('click', () => {
-        // TODO: Implement zoom in
-    });
+function updateDashboardMetrics(graph, score) {
+    // Update workspace score
+    document.getElementById('workspaceScore').innerText = score;
 
-    document.getElementById('zoomOut').addEventListener('click', () => {
-        // TODO: Implement zoom out
-    });
+    // Calculate and update basic metrics
+    const totalPages = graph.nodes.length;
+    const databases = graph.nodes.filter(node => node.type === 'database');
+    
+    document.getElementById('totalPages').innerText = totalPages;
+    document.getElementById('totalDatabases').innerText = databases.length;
+    
+    // Update activity metrics
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const sixtyDaysAgo = new Date(now - 60 * 24 * 60 * 60 * 1000);
+    const ninetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000);
 
-    document.getElementById('resetZoom').addEventListener('click', () => {
-        // TODO: Implement reset zoom
-    });
+    const activePages = graph.nodes.filter(node => {
+        const lastEdited = new Date(node.last_edited_time);
+        return lastEdited > thirtyDaysAgo;
+    }).length;
+
+    document.getElementById('activePages').innerText = activePages;
+    document.getElementById('last30Days').innerText = activePages;
+    document.getElementById('last60Days').innerText = graph.nodes.filter(node => {
+        const lastEdited = new Date(node.last_edited_time);
+        return lastEdited > sixtyDaysAgo;
+    }).length;
+    document.getElementById('last90Days').innerText = graph.nodes.filter(node => {
+        const lastEdited = new Date(node.last_edited_time);
+        return lastEdited > ninetyDaysAgo;
+    }).length;
+    document.getElementById('over90Days').innerText = graph.nodes.filter(node => {
+        const lastEdited = new Date(node.last_edited_time);
+        return lastEdited <= ninetyDaysAgo;
+    }).length;
+
+    // Update structure metrics
+    document.getElementById('maxDepth').innerText = calculateMaxDepth(graph);
+    document.getElementById('avgPagesPerLevel').innerText = calculateAvgPagesPerLevel(graph);
+    document.getElementById('totalConnections').innerText = graph.links.length;
+}
+
+function calculateMaxDepth(graph) {
+    // Implementation of depth calculation
+    // This is a placeholder - we'll need to implement the actual depth calculation
+    return '0';
+}
+
+function calculateAvgPagesPerLevel(graph) {
+    // Implementation of average pages per level calculation
+    // This is a placeholder - we'll need to implement the actual calculation
+    return '0';
 }

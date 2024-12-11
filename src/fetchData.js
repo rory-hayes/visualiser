@@ -1,11 +1,23 @@
 import axios from 'axios';
 
-const CLIENT_ID = '150d872b-594c-804e-92e4-0037ffa80cff';
-const CLIENT_SECRET = 'secret_X3vWYmVdViJMEDdQsIK52M8NZUuASDYyNAbAb27veeG'; // Temporarily hardcoded
+const CLIENT_ID = process.env.NOTION_CLIENT_ID;
+const CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
 const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
 
 export async function fetchWorkspaceData(code) {
     try {
+        // Verify required environment variables
+        if (!CLIENT_ID || !CLIENT_SECRET) {
+            throw new Error('Missing required Notion credentials');
+        }
+
+        console.log('OAuth exchange parameters:', {
+            redirectUri: REDIRECT_URI,
+            hasClientId: !!CLIENT_ID,
+            hasClientSecret: !!CLIENT_SECRET,
+            code: code?.substring(0, 8) + '...' // Log partial code for debugging
+        });
+
         console.log('Attempting token exchange with code:', code);
         
         // First, exchange the authorization code for an access token

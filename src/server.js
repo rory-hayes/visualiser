@@ -10,6 +10,7 @@ dotenv.config();
 
 // Verify environment variables are loaded
 console.log('Environment check:', {
+    hasNotionId: !!process.env.NOTION_CLIENT_ID,
     hasNotionSecret: !!process.env.NOTION_CLIENT_SECRET,
     nodeEnv: process.env.NODE_ENV
 });
@@ -29,11 +30,20 @@ app.get('/', (req, res) => {
 
 // Notion OAuth Redirect
 app.get('/auth', (req, res) => {
-    const CLIENT_ID = '150d872b-594c-804e-92e4-0037ffa80cff';
+    const CLIENT_ID = process.env.NOTION_CLIENT_ID;
     const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
-    const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(
-        REDIRECT_URI
-    )}`;
+    
+    if (!CLIENT_ID) {
+        console.error('Missing NOTION_CLIENT_ID environment variable');
+        return res.status(500).send('Server configuration error');
+    }
+
+    console.log('Initiating OAuth with:', {
+        clientId: CLIENT_ID,
+        redirectUri: REDIRECT_URI
+    });
+
+    const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
     res.redirect(authUrl);
 });
 

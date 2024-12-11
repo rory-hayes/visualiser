@@ -1,13 +1,24 @@
-import { generateGraph } from '../generateGraph.js';
+// Remove the import for now since we'll load generateGraph only when needed
+// import { generateGraph } from '../generateGraph.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const getStartedButton = document.getElementById('getStarted');
-    if (getStartedButton) {
+    const visualizationDiv = document.getElementById('visualization');
+
+    // Check which page we're on
+    if (getStartedButton && !visualizationDiv) {
+        console.log('On landing page, setting up Get Started button');
         // Landing page logic
         getStartedButton.addEventListener('click', () => {
+            console.log('Get Started clicked, redirecting to auth...');
             window.location.href = '/auth';
         });
-    } else {
+    } else if (visualizationDiv) {
+        console.log('On redirect page, initializing dashboard');
+        // Load the generateGraph function dynamically when needed
+        const { generateGraph } = await import('../generateGraph.js');
+        window.generateGraph = generateGraph; // Make it available globally if needed
+
         // Check for error parameter in URL
         const urlParams = new URLSearchParams(window.location.search);
         const error = urlParams.get('error');
@@ -17,6 +28,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             initializeDashboard();
         }
+    } else {
+        console.error('Unable to determine current page');
     }
 });
 

@@ -23,6 +23,19 @@ let graphCache = null; // Cache to store graph data temporarily
 // Serve static files (HTML, CSS, JS)
 app.use(express.static(path.join(process.cwd(), 'public')));
 
+// Add MIME type for ES modules
+app.use((req, res, next) => {
+    if (req.url.endsWith('.js')) {
+        res.type('application/javascript');
+    }
+    next();
+});
+
+// Serve the generateGraph.js file
+app.get('/generateGraph.js', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'src', 'generateGraph.js'));
+});
+
 // Landing Page
 app.get('/', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
@@ -33,17 +46,18 @@ app.get('/auth', (req, res) => {
     const CLIENT_ID = process.env.NOTION_CLIENT_ID;
     const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
     
+    console.log('Auth endpoint hit, redirecting to Notion OAuth with:', {
+        clientId: CLIENT_ID,
+        redirectUri: REDIRECT_URI
+    });
+
     if (!CLIENT_ID) {
         console.error('Missing NOTION_CLIENT_ID environment variable');
         return res.status(500).send('Server configuration error');
     }
 
-    console.log('Initiating OAuth with:', {
-        clientId: CLIENT_ID,
-        redirectUri: REDIRECT_URI
-    });
-
     const authUrl = `https://api.notion.com/v1/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&owner=user&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+    console.log('Redirecting to:', authUrl);
     res.redirect(authUrl);
 });
 

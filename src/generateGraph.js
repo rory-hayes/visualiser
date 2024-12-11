@@ -1,14 +1,39 @@
-import * as d3 from 'd3';
-
 export function generateGraph(container, data) {
+    // Add error checking at the start
+    if (!window.d3) {
+        console.error('D3 not found! Make sure d3 is loaded before calling generateGraph');
+        return null;
+    }
+
+    // Use the globally available d3 object
+    const d3Instance = window.d3;
+    
+    // Validate input parameters
+    if (!container || !data) {
+        console.error('Container or data is missing:', { hasContainer: !!container, hasData: !!data });
+        return null;
+    }
+
+    // Log initialization
+    console.log('Initializing graph with:', {
+        containerSize: {
+            width: container.clientWidth,
+            height: container.clientHeight
+        },
+        dataSize: {
+            nodes: data.nodes.length,
+            links: data.links.length
+        }
+    });
+
     // Clear any existing content
-    d3.select(container).selectAll("*").remove();
+    d3Instance.select(container).selectAll("*").remove();
 
     const width = container.clientWidth;
     const height = container.clientHeight;
 
     // Create the SVG container
-    const svg = d3.select(container)
+    const svg = d3Instance.select(container)
         .append('svg')
         .attr('width', '100%')
         .attr('height', '100%')
@@ -17,7 +42,7 @@ export function generateGraph(container, data) {
 
     // Add zoom functionality
     const g = svg.append('g');
-    svg.call(d3.zoom()
+    svg.call(d3Instance.zoom()
         .extent([[0, 0], [width, height]])
         .scaleExtent([0.1, 4])
         .on('zoom', (event) => {
@@ -40,14 +65,14 @@ export function generateGraph(container, data) {
     };
 
     // Create force simulation
-    const simulation = d3.forceSimulation(data.nodes)
-        .force('link', d3.forceLink(data.links)
+    const simulation = d3Instance.forceSimulation(data.nodes)
+        .force('link', d3Instance.forceLink(data.links)
             .id(d => d.id)
             .distance(100))
-        .force('charge', d3.forceManyBody()
+        .force('charge', d3Instance.forceManyBody()
             .strength(-400))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(50));
+        .force('center', d3Instance.forceCenter(width / 2, height / 2))
+        .force('collision', d3Instance.forceCollide().radius(50));
 
     // Create arrow marker for links
     svg.append('defs').append('marker')
@@ -99,7 +124,7 @@ export function generateGraph(container, data) {
 
     // Add hover effects
     node.on('mouseover', function(event, d) {
-        d3.select(this).select('circle')
+        d3Instance.select(this).select('circle')
             .transition()
             .duration(200)
             .attr('r', r => nodeSize[d.type] * 1.2);
@@ -119,7 +144,7 @@ export function generateGraph(container, data) {
             .style('top', (event.pageY - 28) + 'px');
     })
     .on('mouseout', function(event, d) {
-        d3.select(this).select('circle')
+        d3Instance.select(this).select('circle')
             .transition()
             .duration(200)
             .attr('r', nodeSize[d.type]);
@@ -135,7 +160,7 @@ export function generateGraph(container, data) {
     });
 
     // Create tooltip
-    const tooltip = d3.select(container)
+    const tooltip = d3Instance.select(container)
         .append('div')
         .attr('class', 'tooltip')
         .style('opacity', 0)
@@ -178,18 +203,30 @@ export function generateGraph(container, data) {
             event.subject.fy = null;
         }
 
-        return d3.drag()
+        return d3Instance.drag()
             .on('start', dragstarted)
             .on('drag', dragged)
             .on('end', dragended);
     }
 
+    // Add some logging for the simulation
+    simulation.on('end', () => {
+        console.log('Force simulation completed');
+    });
+
     return {
         update: (newData) => {
-            // Update simulation with new data
+            if (!newData || !newData.nodes || !newData.links) {
+                console.error('Invalid data provided to update');
+                return;
+            }
             simulation.nodes(newData.nodes);
             simulation.force('link').links(newData.links);
             simulation.alpha(1).restart();
+            console.log('Graph updated with new data:', {
+                nodes: newData.nodes.length,
+                links: newData.links.length
+            });
         }
     };
 }

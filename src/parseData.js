@@ -9,22 +9,24 @@ export function parseDataToGraph(workspaceData) {
         const nodes = [];
         const links = [];
         const processedIds = new Set();
+        const nodeMap = new Map();
 
         // Add workspace as root node
-        nodes.push({
+        const workspaceNode = {
             id: workspaceData.workspace.id,
             name: workspaceData.workspace.name,
             type: 'workspace',
             icon: workspaceData.workspace.icon
-        });
+        };
+        nodes.push(workspaceNode);
         processedIds.add(workspaceData.workspace.id);
+        nodeMap.set(workspaceData.workspace.id, workspaceNode);
 
-        // Process each item
+        // First pass: Create all nodes
         workspaceData.results.forEach(item => {
             if (processedIds.has(item.id)) return;
 
-            // Add node
-            nodes.push({
+            const node = {
                 id: item.id,
                 name: item.title || `Untitled ${item.object}`,
                 type: item.object,
@@ -32,10 +34,15 @@ export function parseDataToGraph(workspaceData) {
                 last_edited_time: item.last_edited_time,
                 created_time: item.created_time,
                 parent_type: item.parent?.type
-            });
-            processedIds.add(item.id);
+            };
 
-            // Create links based on parent relationship
+            nodes.push(node);
+            processedIds.add(item.id);
+            nodeMap.set(item.id, node);
+        });
+
+        // Second pass: Create links only between existing nodes
+        workspaceData.results.forEach(item => {
             if (item.parent) {
                 let parentId;
                 switch (item.parent.type) {
@@ -50,10 +57,18 @@ export function parseDataToGraph(workspaceData) {
                         break;
                 }
 
-                if (parentId) {
+                // Only create link if both nodes exist
+                if (parentId && nodeMap.has(parentId) && nodeMap.has(item.id)) {
                     links.push({
                         source: parentId,
                         target: item.id
+                    });
+                } else {
+                    console.log('Skipping link creation - missing node:', {
+                        parentId,
+                        itemId: item.id,
+                        parentExists: nodeMap.has(parentId),
+                        targetExists: nodeMap.has(item.id)
                     });
                 }
             }
@@ -65,7 +80,10 @@ export function parseDataToGraph(workspaceData) {
             nodeTypes: nodes.reduce((acc, node) => {
                 acc[node.type] = (acc[node.type] || 0) + 1;
                 return acc;
-            }, {})
+            }, {}),
+            missingNodes: links.filter(link => 
+                !nodeMap.has(link.source) || !nodeMap.has(link.target)
+            ).length
         });
 
         return {

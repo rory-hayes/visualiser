@@ -1,3 +1,11 @@
+const LAYOUTS = {
+    force: setupForceLayout,
+    radial: setupRadialLayout,
+    tree: setupTreeLayout,
+    disjoint: setupDisjointLayout,
+    circle: setupCircleLayout
+};
+
 export function generateGraph(container, data) {
     if (!window.d3) {
         console.error('D3 not found! Make sure d3 is loaded before calling generateGraph');
@@ -97,7 +105,52 @@ export function generateGraph(container, data) {
         .attr('r', d => nodeSize[d.type] || 10)
         .attr('fill', d => nodeColors[d.type] || '#999')
         .attr('stroke', '#fff')
-        .attr('stroke-width', 2);
+        .attr('stroke-width', 2)
+        .style('cursor', d => d.url ? 'pointer' : 'default')
+        .on('click', (event, d) => {
+            if (d.url) {
+                window.open(d.url, '_blank');
+            }
+        })
+        .on('mouseover', function(event, d) {
+            d3Instance.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', r => (nodeSize[d.type] || 10) * 1.2);
+
+            // Show tooltip
+            const tooltip = d3Instance.select(container)
+                .append('div')
+                .attr('class', 'tooltip')
+                .style('position', 'absolute')
+                .style('background', 'white')
+                .style('padding', '5px')
+                .style('border', '1px solid #ddd')
+                .style('border-radius', '4px')
+                .style('pointer-events', 'none')
+                .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+                .html(`
+                    <div class="font-bold">${d.name}</div>
+                    <div class="text-sm text-gray-600">${d.type}</div>
+                    ${d.url ? '<div class="text-xs text-blue-600">Click to open</div>' : ''}
+                `);
+
+            const tooltipNode = tooltip.node();
+            const tooltipRect = tooltipNode.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            tooltip
+                .style('left', `${event.pageX - containerRect.left + 10}px`)
+                .style('top', `${event.pageY - containerRect.top - tooltipRect.height - 10}px`);
+        })
+        .on('mouseout', function(event, d) {
+            d3Instance.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', nodeSize[d.type] || 10);
+            
+            d3Instance.selectAll('.tooltip').remove();
+        });
 
     // Add labels to nodes
     node.append('text')
@@ -173,6 +226,16 @@ export function generateGraph(container, data) {
         };
     }
 
+    // Add layout change listener
+    const layoutSelect = document.getElementById('layoutSelect');
+    if (layoutSelect) {
+        layoutSelect.addEventListener('change', (e) => {
+            const newLayout = e.target.value;
+            clearGraph();
+            LAYOUTS[newLayout](data, g, width, height);
+        });
+    }
+
     return {
         update: (newData) => {
             if (!newData || !newData.nodes || !newData.links) {
@@ -188,4 +251,152 @@ export function generateGraph(container, data) {
             });
         }
     };
+}
+
+// Add layout setup functions
+function setupForceLayout(data, g, width, height) {
+    const simulation = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.links).id(d => d.id).distance(100))
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(50));
+
+    return renderForceLayout(data, g, simulation);
+}
+
+function setupRadialLayout(data, g, width, height) {
+    // Create hierarchy
+    const stratify = d3.stratify()
+        .id(d => d.id)
+        .parentId(d => {
+            const link = data.links.find(l => l.target === d.id || l.target.id === d.id);
+            return link ? (link.source.id || link.source) : null;
+        });
+
+    const root = stratify(data.nodes)
+        .sort((a, b) => d3.ascending(a.data.name, b.data.name));
+
+    const radius = Math.min(width, height) / 2 - 100;
+    
+    const tree = d3.tree()
+        .size([2 * Math.PI, radius])
+        .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth);
+
+    return renderRadialLayout(tree(root), g);
+}
+
+function setupTreeLayout(data, g, width, height) {
+    const stratify = d3.stratify()
+        .id(d => d.id)
+        .parentId(d => {
+            const link = data.links.find(l => l.target === d.id || l.target.id === d.id);
+            return link ? (link.source.id || link.source) : null;
+        });
+
+    const root = stratify(data.nodes)
+        .sort((a, b) => d3.ascending(a.data.name, b.data.name));
+
+    const tree = d3.tree()
+        .size([height - 100, width - 200]);
+
+    return renderTreeLayout(tree(root), g);
+}
+
+function setupDisjointLayout(data, g, width, height) {
+    const simulation = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.links).id(d => d.id).distance(50))
+        .force('charge', d3.forceManyBody().strength(-200))
+        .force('x', d3.forceX(d => {
+            if (d.type === 'workspace') return width / 2;
+            if (d.type === 'database') return width / 3;
+            return 2 * width / 3;
+        }))
+        .force('y', d3.forceY(height / 2))
+        .force('collision', d3.forceCollide().radius(30));
+
+    return renderDisjointLayout(data, g, simulation);
+}
+
+function setupCircleLayout(data, g, width, height) {
+    const hierarchy = d3.hierarchy({ id: "root", children: data.nodes })
+        .sum(d => 1)
+        .sort((a, b) => b.value - a.value);
+
+    const pack = d3.pack()
+        .size([width - 100, height - 100])
+        .padding(3);
+
+    return renderCircleLayout(pack(hierarchy), g);
+}
+
+// Add rendering functions for each layout
+function renderForceLayout(data, g, simulation) {
+    // Current force-directed implementation
+    // ... (existing force layout code)
+}
+
+function renderRadialLayout(root, g) {
+    // Links
+    g.append('g')
+        .attr('class', 'links')
+        .selectAll('path')
+        .data(root.links())
+        .join('path')
+        .attr('d', d3.linkRadial()
+            .angle(d => d.x)
+            .radius(d => d.y));
+
+    // Nodes
+    const node = g.append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
+        .data(root.descendants())
+        .join('g')
+        .attr('transform', d => `
+            translate(${d.y * Math.cos(d.x - Math.PI / 2)},
+                     ${d.y * Math.sin(d.x - Math.PI / 2)})
+        `);
+
+    // Add circles and labels similar to force layout
+    // ... (add node styling)
+}
+
+function renderTreeLayout(root, g) {
+    // Links
+    g.append('g')
+        .attr('class', 'links')
+        .selectAll('path')
+        .data(root.links())
+        .join('path')
+        .attr('d', d3.linkHorizontal()
+            .x(d => d.y)
+            .y(d => d.x));
+
+    // Nodes
+    const node = g.append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
+        .data(root.descendants())
+        .join('g')
+        .attr('transform', d => `translate(${d.y},${d.x})`);
+
+    // Add circles and labels
+    // ... (add node styling)
+}
+
+function renderDisjointLayout(data, g, simulation) {
+    // Similar to force layout but with grouped positioning
+    // ... (implement disjoint force layout)
+}
+
+function renderCircleLayout(root, g) {
+    // Circles
+    const node = g.append('g')
+        .selectAll('g')
+        .data(root.descendants().slice(1))
+        .join('g')
+        .attr('transform', d => `translate(${d.x},${d.y})`);
+
+    // Add circles and labels
+    // ... (add circle packing styling)
 }

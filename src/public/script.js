@@ -182,10 +182,27 @@ function updateDashboardMetrics(graph, score) {
     document.getElementById('last90Days').innerText = lastEditTimes.filter(date => date > ninetyDaysAgo).length;
     document.getElementById('over90Days').innerText = lastEditTimes.filter(date => date <= ninetyDaysAgo).length;
 
-    // Structure metrics
-    document.getElementById('maxDepth').innerText = calculateMaxDepth(graph);
-    document.getElementById('avgPagesPerLevel').innerText = calculateAvgPagesPerLevel(graph);
+    // Structure metrics with additional detail
+    const maxDepth = calculateMaxDepth(graph);
+    const avgPagesPerLevel = calculateAvgPagesPerLevel(graph);
+    
+    document.getElementById('maxDepth').innerText = maxDepth;
+    document.getElementById('avgPagesPerLevel').innerHTML = `
+        <span class="font-semibold">${avgPagesPerLevel}</span>
+        <span class="text-xs text-gray-500 ml-1">pages/level</span>
+    `;
     document.getElementById('totalConnections').innerText = graph.links.length;
+
+    // Add hover tooltip for structure stats
+    const structureStats = document.querySelector('.dashboard-card:last-child');
+    if (structureStats) {
+        structureStats.setAttribute('title', 
+            `Workspace Structure Details:\n` +
+            `• Maximum depth: ${maxDepth} levels\n` +
+            `• Average pages per level: ${avgPagesPerLevel}\n` +
+            `• Total connections: ${graph.links.length}`
+        );
+    }
 
     // Update database metrics
     updateDatabaseMetrics(graph);
@@ -195,24 +212,98 @@ function updateDatabaseMetrics(graph) {
     const databaseMetrics = document.getElementById('databaseMetrics');
     const databases = graph.nodes.filter(n => n.type === 'database');
     
-    databaseMetrics.innerHTML = databases.map(db => `
-        <div class="flex justify-between items-center">
-            <span class="text-sm text-gray-500">${db.name}</span>
-            <span class="font-semibold">${
-                graph.links.filter(l => l.source === db.id).length
-            } pages</span>
-        </div>
-    `).join('');
+    const databaseStats = databases.map(db => {
+        const childPages = graph.links.filter(link => link.source.id === db.id || link.source === db.id).length;
+        return {
+            name: db.name,
+            pageCount: childPages
+        };
+    });
+
+    databaseMetrics.innerHTML = databaseStats
+        .sort((a, b) => b.pageCount - a.pageCount) // Sort by page count
+        .map(db => `
+            <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-500">${db.name}</span>
+                <span class="font-semibold">${db.pageCount} pages</span>
+            </div>
+        `).join('');
 }
 
 function calculateMaxDepth(graph) {
-    // Implementation of depth calculation
-    // This is a placeholder - we'll need to implement the actual depth calculation
-    return '0';
+    const getNodeDepth = (nodeId, visited = new Set()) => {
+        if (visited.has(nodeId)) return 0;
+        visited.add(nodeId);
+        
+        const childLinks = graph.links.filter(link => 
+            (link.source.id === nodeId || link.source === nodeId)
+        );
+        
+        if (childLinks.length === 0) return 1;
+        
+        const childDepths = childLinks.map(link => 
+            getNodeDepth(link.target.id || link.target, visited)
+        );
+        
+        return 1 + Math.max(...childDepths);
+    };
+
+    const rootNodes = graph.nodes.filter(node => 
+        node.type === 'workspace' || 
+        !graph.links.some(link => link.target.id === node.id || link.target === node.id)
+    );
+
+    const depths = rootNodes.map(node => getNodeDepth(node.id));
+    return Math.max(...depths);
 }
 
 function calculateAvgPagesPerLevel(graph) {
-    // Implementation of average pages per level calculation
-    // This is a placeholder - we'll need to implement the actual calculation
-    return '0';
+    const levelCounts = new Map();
+    const nodeDepths = new Map();
+    
+    // Helper function to get node depth
+    const getNodeDepth = (nodeId, visited = new Set()) => {
+        if (nodeDepths.has(nodeId)) return nodeDepths.get(nodeId);
+        if (visited.has(nodeId)) return 0;
+        visited.add(nodeId);
+
+        // Find parent link
+        const parentLink = graph.links.find(link => link.target === nodeId || link.target.id === nodeId);
+        if (!parentLink) return 0;
+
+        const parentId = parentLink.source.id || parentLink.source;
+        const parentDepth = getNodeDepth(parentId, visited);
+        const depth = parentDepth + 1;
+        nodeDepths.set(nodeId, depth);
+        return depth;
+    };
+
+    // Calculate depth for each node
+    graph.nodes.forEach(node => {
+        if (node.type === 'workspace') {
+            nodeDepths.set(node.id, 0); // Root level
+            return;
+        }
+
+        const depth = getNodeDepth(node.id);
+        levelCounts.set(depth, (levelCounts.get(depth) || 0) + 1);
+    });
+
+    // Calculate average
+    const levels = Array.from(levelCounts.entries())
+        .sort(([a], [b]) => a - b); // Sort by depth
+
+    console.log('Level distribution:', levels.map(([depth, count]) => ({
+        depth,
+        count,
+        nodes: graph.nodes.filter(n => nodeDepths.get(n.id) === depth)
+            .map(n => n.name)
+    })));
+
+    if (levels.length === 0) return '0';
+
+    const totalNodes = levels.reduce((sum, [_, count]) => sum + count, 0);
+    const avgNodesPerLevel = totalNodes / levels.length;
+
+    return avgNodesPerLevel.toFixed(1);
 }

@@ -53,27 +53,17 @@ export async function fetchWorkspaceData(code) {
 
         console.log('Successfully obtained access token');
 
-        // First, get all workspaces/teamspaces
-        const workspaceData = await axios.post('https://api.notion.com/v1/search', {
+        // First, get all pages and databases
+        const searchResponse = await axios.post('https://api.notion.com/v1/search', {
             filter: {
-                property: 'object',
-                value: 'workspace'
-            }
-        }, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Notion-Version': '2022-06-28',
-                'Content-Type': 'application/json'
-            }
-        });
-
-        // Then get all pages and databases with their metadata
-        const pagesData = await axios.post('https://api.notion.com/v1/search', {
-            sort: {
-                direction: 'descending',
-                timestamp: 'last_edited_time'
+                value: "page",
+                property: "object"
             },
-            page_size: 100 // Increase if needed
+            page_size: 100,
+            sort: {
+                direction: "ascending",
+                timestamp: "last_edited_time"
+            }
         }, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -82,38 +72,62 @@ export async function fetchWorkspaceData(code) {
             }
         });
 
-        // Get database details
-        const databasePromises = pagesData.data.results
-            .filter(item => item.object === 'database')
-            .map(db => axios.get(`https://api.notion.com/v1/databases/${db.id}`, {
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Notion-Version': '2022-06-28'
-                }
-            }));
+        // Then get databases separately
+        const databaseResponse = await axios.post('https://api.notion.com/v1/search', {
+            filter: {
+                value: "database",
+                property: "object"
+            },
+            page_size: 100
+        }, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Notion-Version': '2022-06-28',
+                'Content-Type': 'application/json'
+            }
+        });
 
-        const databaseDetails = await Promise.all(databasePromises);
+        // Combine all results
+        const allResults = [
+            // Add workspace as root node
+            {
+                id: workspaceId,
+                type: 'workspace',
+                name: workspaceName,
+                icon: tokenResponse.data.workspace_icon,
+                parent: null
+            },
+            // Add pages and databases
+            ...searchResponse.data.results,
+            ...databaseResponse.data.results
+        ];
 
-        // Combine all data
+        console.log('Data fetched successfully:', {
+            pagesCount: searchResponse.data.results.length,
+            databasesCount: databaseResponse.data.results.length,
+            totalCount: allResults.length
+        });
+
         return {
             workspace: {
                 id: workspaceId,
                 name: workspaceName,
                 icon: tokenResponse.data.workspace_icon
             },
-            results: pagesData.data.results.map(item => ({
+            results: allResults.map(item => ({
                 ...item,
                 workspace_id: workspaceId,
                 last_edited_time: item.last_edited_time,
                 created_time: item.created_time,
                 // Get proper title based on object type
-                title: item.object === 'database' 
-                    ? item.title?.[0]?.plain_text 
-                    : item.properties?.title?.title?.[0]?.plain_text || 
-                      item.properties?.Name?.title?.[0]?.plain_text ||
-                      `Untitled ${item.object}`
+                title: item.type === 'workspace' ? item.name :
+                    item.object === 'database' ? 
+                        item.title?.[0]?.plain_text :
+                        item.properties?.title?.title?.[0]?.plain_text || 
+                        item.properties?.Name?.title?.[0]?.plain_text ||
+                        `Untitled ${item.object}`
             })),
-            databases: databaseDetails.map(db => db.data)
+            has_more: searchResponse.data.has_more || databaseResponse.data.has_more
         };
 
     } catch (error) {
@@ -123,10 +137,6 @@ export async function fetchWorkspaceData(code) {
             status: error.response?.status,
             stack: error.stack
         });
-
-        if (error.response?.status === 401) {
-            throw new Error('Authentication failed. Please verify your Notion integration settings.');
-        }
 
         throw new Error(
             error.response?.data?.message || 

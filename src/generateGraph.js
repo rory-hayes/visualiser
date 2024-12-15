@@ -352,6 +352,75 @@ function setupCircleLayout(data, g, width, height) {
     return { node };
 }
 
+function setupDisjointLayout(data, g, width, height) {
+    // Group nodes by their parent type
+    const groups = new Map();
+    data.nodes.forEach(node => {
+        const parentLink = data.links.find(l => l.target === node.id || l.target.id === node.id);
+        const parentType = parentLink ? 
+            (data.nodes.find(n => n.id === (parentLink.source.id || parentLink.source))?.type || 'other') 
+            : 'root';
+        
+        if (!groups.has(parentType)) {
+            groups.set(parentType, []);
+        }
+        groups.get(parentType).push(node);
+    });
+
+    // Assign x-positions based on group
+    const groupPositions = new Map();
+    Array.from(groups.keys()).forEach((group, i) => {
+        groupPositions.set(group, (i + 1) * width / (groups.size + 1));
+    });
+
+    // Create force simulation with group forces
+    const simulation = d3.forceSimulation(data.nodes)
+        .force('link', d3.forceLink(data.links)
+            .id(d => d.id)
+            .distance(50))
+        .force('charge', d3.forceManyBody()
+            .strength(-200))
+        .force('x', d3.forceX(d => {
+            const parentLink = data.links.find(l => l.target === d.id || l.target.id === d.id);
+            const parentType = parentLink ? 
+                (data.nodes.find(n => n.id === (parentLink.source.id || parentLink.source))?.type || 'other') 
+                : 'root';
+            return groupPositions.get(parentType) || width / 2;
+        }).strength(0.5))
+        .force('y', d3.forceY(height / 2).strength(0.1))
+        .force('collision', d3.forceCollide().radius(30));
+
+    const { link, node } = renderBaseGraph(data, g);
+
+    // Add group labels
+    g.append('g')
+        .attr('class', 'group-labels')
+        .selectAll('text')
+        .data(Array.from(groups.entries()))
+        .join('text')
+        .attr('x', ([type]) => groupPositions.get(type))
+        .attr('y', 20)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '14px')
+        .style('font-weight', 'bold')
+        .style('fill', '#666')
+        .text(([type, nodes]) => `${type} (${nodes.length})`);
+
+    // Update positions on tick
+    simulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        node
+            .attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    return simulation;
+}
+
 // Helper functions
 function createHierarchy(data) {
     const stratify = d3.stratify()
@@ -452,6 +521,9 @@ function switchLayout(layoutName, data, g, width, height) {
                 break;
             case 'circle':
                 setupCircleLayout(data, g, width, height);
+                break;
+            case 'disjoint':
+                setupDisjointLayout(data, g, width, height);
                 break;
             default:
                 setupForceLayout(data, g, width, height);

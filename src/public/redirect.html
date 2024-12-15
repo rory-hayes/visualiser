@@ -79,22 +79,33 @@
             <div class="dashboard-card lg:col-span-2">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-lg font-medium text-gray-900">Workspace Structure</h2>
-                    <div class="flex space-x-2">
-                        <button id="zoomIn" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                            </svg>
-                        </button>
-                        <button id="zoomOut" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                            </svg>
-                        </button>
-                        <button id="resetZoom" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                        </button>
+                    <div class="flex items-center space-x-4">
+                        <!-- Layout selector -->
+                        <select id="layoutSelect" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <option value="force">Force-directed Graph</option>
+                            <option value="radial">Radial Tree</option>
+                            <option value="tree">Tree of Life</option>
+                            <option value="disjoint">Disjoint Force-directed</option>
+                            <option value="circle">Circle Packing</option>
+                        </select>
+                        <!-- Zoom controls -->
+                        <div class="flex space-x-2">
+                            <button id="zoomIn" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                </svg>
+                            </button>
+                            <button id="zoomOut" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                                </svg>
+                            </button>
+                            <button id="resetZoom" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div id="visualization" class="w-full h-[600px]"></div>

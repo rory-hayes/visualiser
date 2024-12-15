@@ -1,90 +1,59 @@
 export function parseDataToGraph(workspaceData) {
     try {
-        // Log the structure of incoming data
         console.log('Parsing workspace data structure:', {
-            hasResults: !!workspaceData.results,
-            resultsLength: workspaceData.results?.length,
-            objectType: workspaceData.object,
-            // Log a sample result if available
-            sampleResult: workspaceData.results?.[0] ? {
-                id: workspaceData.results[0].id,
-                object: workspaceData.results[0].object,
-                parentType: workspaceData.results[0].parent?.type,
-                hasProperties: !!workspaceData.results[0].properties
-            } : null
+            workspace: workspaceData.workspace,
+            resultsCount: workspaceData.results?.length,
+            databasesCount: workspaceData.databases?.length
         });
-
-        if (!workspaceData.results || !Array.isArray(workspaceData.results)) {
-            throw new Error('Invalid workspace data structure');
-        }
 
         const nodes = [];
         const links = [];
-        const pageMap = new Map();
         const processedIds = new Set();
 
-        // Process each page from the results array
-        workspaceData.results.forEach(page => {
-            if (processedIds.has(page.id)) {
-                return; // Skip if already processed
-            }
+        // Add workspace as root node
+        nodes.push({
+            id: workspaceData.workspace.id,
+            name: workspaceData.workspace.name,
+            type: 'workspace',
+            icon: workspaceData.workspace.icon
+        });
+        processedIds.add(workspaceData.workspace.id);
 
-            // Extract title from various possible locations
-            let title;
-            if (page.properties?.title?.title?.[0]?.plain_text) {
-                title = page.properties.title.title[0].plain_text;
-            } else if (page.properties?.Name?.title?.[0]?.plain_text) {
-                title = page.properties.Name.title[0].plain_text;
-            } else if (page.properties?.name?.title?.[0]?.plain_text) {
-                title = page.properties.name.title[0].plain_text;
-            } else {
-                title = `Untitled ${page.object}`;
-            }
+        // Process each item
+        workspaceData.results.forEach(item => {
+            if (processedIds.has(item.id)) return;
 
-            // Add node for the current page
+            // Add node
             nodes.push({
-                id: page.id,
-                name: title,
-                type: page.object,
-                url: page.url
+                id: item.id,
+                name: item.title || `Untitled ${item.object}`,
+                type: item.object,
+                url: item.url,
+                last_edited_time: item.last_edited_time,
+                created_time: item.created_time,
+                parent_type: item.parent?.type
             });
+            processedIds.add(item.id);
 
-            processedIds.add(page.id);
-            pageMap.set(page.id, nodes.length - 1);
-
-            // Handle parent relationships
-            if (page.parent) {
+            // Create links based on parent relationship
+            if (item.parent) {
                 let parentId;
-                switch (page.parent.type) {
-                    case 'page_id':
-                        parentId = page.parent.page_id;
+                switch (item.parent.type) {
+                    case 'workspace':
+                        parentId = workspaceData.workspace.id;
                         break;
                     case 'database_id':
-                        parentId = page.parent.database_id;
+                        parentId = item.parent.database_id;
                         break;
-                    case 'workspace':
-                        // Root level page, no parent link needed
+                    case 'page_id':
+                        parentId = item.parent.page_id;
                         break;
-                    default:
-                        console.log(`Unknown parent type: ${page.parent.type} for page ${page.id}`);
                 }
 
                 if (parentId) {
-                    // Add parent node if it doesn't exist
-                    if (!processedIds.has(parentId)) {
-                        nodes.push({
-                            id: parentId,
-                            name: `Parent ${page.parent.type}`,
-                            type: page.parent.type === 'database_id' ? 'database' : 'page',
-                            url: null
-                        });
-                        processedIds.add(parentId);
-                        pageMap.set(parentId, nodes.length - 1);
-                    }
-
                     links.push({
                         source: parentId,
-                        target: page.id
+                        target: item.id
                     });
                 }
             }
@@ -93,22 +62,24 @@ export function parseDataToGraph(workspaceData) {
         console.log('Graph parsing complete:', {
             nodesCount: nodes.length,
             linksCount: links.length,
-            uniqueIds: processedIds.size,
-            sampleNode: nodes[0],
-            sampleLink: links[0]
+            nodeTypes: nodes.reduce((acc, node) => {
+                acc[node.type] = (acc[node.type] || 0) + 1;
+                return acc;
+            }, {})
         });
 
         return {
             nodes,
-            links
+            links,
+            metadata: {
+                totalPages: nodes.filter(n => n.type === 'page').length,
+                totalDatabases: nodes.filter(n => n.type === 'database').length,
+                lastEditTimes: nodes.map(n => n.last_edited_time).filter(Boolean),
+                createTimes: nodes.map(n => n.created_time).filter(Boolean)
+            }
         };
     } catch (error) {
-        console.error('Error parsing workspace data:', {
-            error: error.message,
-            stack: error.stack,
-            workspaceDataType: typeof workspaceData,
-            hasResults: !!workspaceData?.results
-        });
-        throw new Error(`Failed to parse workspace data: ${error.message}`);
+        console.error('Error parsing workspace data:', error);
+        throw error;
     }
 }

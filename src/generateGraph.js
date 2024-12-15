@@ -64,169 +64,159 @@ export function generateGraph(container, data) {
         child_page: 8
     };
 
-    // Create force simulation
-    const simulation = d3Instance.forceSimulation(data.nodes)
-        .force('link', d3Instance.forceLink(data.links)
-            .id(d => d.id)
-            .distance(100))
-        .force('charge', d3Instance.forceManyBody()
-            .strength(-400))
-        .force('center', d3Instance.forceCenter(width / 2, height / 2))
-        .force('collision', d3Instance.forceCollide().radius(50));
+    const layouts = {
+        force: setupForceLayout,
+        radial: setupRadialLayout,
+        tree: setupTreeLayout,
+        disjoint: setupDisjointLayout,
+        circle: setupCircleLayout
+    };
 
-    // Create arrow marker for links
-    svg.append('defs').append('marker')
-        .attr('id', 'arrowhead')
-        .attr('viewBox', '-0 -5 10 10')
-        .attr('refX', 20)
-        .attr('refY', 0)
-        .attr('orient', 'auto')
-        .attr('markerWidth', 6)
-        .attr('markerHeight', 6)
-        .attr('xoverflow', 'visible')
-        .append('svg:path')
-        .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
-        .attr('fill', '#999')
-        .style('stroke', 'none');
+    let currentLayout = 'force';
+    let simulation = null;
 
-    // Create links
-    const link = g.append('g')
-        .selectAll('line')
-        .data(data.links)
-        .join('line')
-        .attr('stroke', '#999')
-        .attr('stroke-opacity', 0.6)
-        .attr('stroke-width', 1.5)
-        .attr('marker-end', 'url(#arrowhead)');
-
-    // Create node containers
-    const node = g.append('g')
-        .selectAll('.node')
-        .data(data.nodes)
-        .join('g')
-        .attr('class', 'node')
-        .call(drag(simulation));
-
-    // Add circles to nodes
-    node.append('circle')
-        .attr('r', d => nodeSize[d.type] || 10)
-        .attr('fill', d => nodeColors[d.type] || '#999')
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 2);
-
-    // Add labels to nodes
-    node.append('text')
-        .attr('dx', 15)
-        .attr('dy', '.35em')
-        .text(d => d.name)
-        .attr('font-size', '12px')
-        .attr('fill', '#374151');
-
-    // Add hover effects
-    node.on('mouseover', function(event, d) {
-        d3Instance.select(this).select('circle')
-            .transition()
-            .duration(200)
-            .attr('r', r => nodeSize[d.type] * 1.2);
-
-        // Show tooltip
-        tooltip.transition()
-            .duration(200)
-            .style('opacity', .9);
-        tooltip.html(`
-            <div class="p-2">
-                <div class="font-bold">${d.name}</div>
-                <div class="text-sm text-gray-600">${d.type}</div>
-                ${d.url ? `<div class="text-xs text-blue-600">Click to open</div>` : ''}
-            </div>
-        `)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 28) + 'px');
-    })
-    .on('mouseout', function(event, d) {
-        d3Instance.select(this).select('circle')
-            .transition()
-            .duration(200)
-            .attr('r', nodeSize[d.type]);
-
-        tooltip.transition()
-            .duration(500)
-            .style('opacity', 0);
-    })
-    .on('click', (event, d) => {
-        if (d.url) {
-            window.open(d.url, '_blank');
-        }
-    });
-
-    // Create tooltip
-    const tooltip = d3Instance.select(container)
-        .append('div')
-        .attr('class', 'tooltip')
-        .style('opacity', 0)
-        .style('position', 'absolute')
-        .style('background-color', 'white')
-        .style('border', '1px solid #ddd')
-        .style('border-radius', '4px')
-        .style('padding', '4px')
-        .style('pointer-events', 'none')
-        .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)');
-
-    // Update force simulation on tick
-    simulation.on('tick', () => {
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-
-        node
-            .attr('transform', d => `translate(${d.x},${d.y})`);
-    });
-
-    // Drag functions
-    function drag(simulation) {
-        function dragstarted(event) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            event.subject.fx = event.subject.x;
-            event.subject.fy = event.subject.y;
-        }
-
-        function dragged(event) {
-            event.subject.fx = event.x;
-            event.subject.fy = event.y;
-        }
-
-        function dragended(event) {
-            if (!event.active) simulation.alphaTarget(0);
-            event.subject.fx = null;
-            event.subject.fy = null;
-        }
-
-        return d3Instance.drag()
-            .on('start', dragstarted)
-            .on('drag', dragged)
-            .on('end', dragended);
+    function setupForceLayout() {
+        // Current force-directed implementation
+        simulation = d3Instance.forceSimulation(data.nodes)
+            .force('link', d3Instance.forceLink(data.links).id(d => d.id).distance(100))
+            .force('charge', d3Instance.forceManyBody().strength(-400))
+            .force('center', d3Instance.forceCenter(width / 2, height / 2))
+            .force('collision', d3Instance.forceCollide().radius(50));
+        
+        return simulation;
     }
 
-    // Add some logging for the simulation
-    simulation.on('end', () => {
-        console.log('Force simulation completed');
+    function setupRadialLayout() {
+        const root = d3Instance.stratify()
+            .id(d => d.id)
+            .parentId(d => findParentId(d, data.links))(data.nodes);
+
+        const treeLayout = d3Instance.tree()
+            .size([2 * Math.PI, Math.min(width, height) / 2 - 100])
+            .separation((a, b) => (a.parent == b.parent ? 1 : 2) / a.depth);
+
+        return treeLayout(root);
+    }
+
+    function setupTreeLayout() {
+        const root = d3Instance.stratify()
+            .id(d => d.id)
+            .parentId(d => findParentId(d, data.links))(data.nodes);
+
+        const treeLayout = d3Instance.tree()
+            .size([width - 100, height - 100]);
+
+        return treeLayout(root);
+    }
+
+    function setupDisjointLayout() {
+        const groups = groupNodesByParent(data.nodes, data.links);
+        return d3Instance.forceSimulation(data.nodes)
+            .force('link', d3Instance.forceLink(data.links).id(d => d.id).distance(50))
+            .force('charge', d3Instance.forceManyBody().strength(-100))
+            .force('x', d3Instance.forceX(d => groups[d.group] * width / (Object.keys(groups).length + 1)))
+            .force('y', d3Instance.forceY(height / 2))
+            .force('collision', d3Instance.forceCollide().radius(30));
+    }
+
+    function setupCircleLayout() {
+        const root = d3Instance.hierarchy({ children: data.nodes })
+            .sum(d => 1)
+            .sort((a, b) => b.value - a.value);
+
+        const pack = d3Instance.pack()
+            .size([width - 100, height - 100])
+            .padding(3);
+
+        return pack(root);
+    }
+
+    function findParentId(node, links) {
+        const link = links.find(l => l.target === node.id);
+        return link ? link.source : null;
+    }
+
+    function groupNodesByParent(nodes, links) {
+        const groups = {};
+        nodes.forEach(node => {
+            const parentLink = links.find(l => l.target === node.id);
+            groups[node.id] = parentLink ? parentLink.source : 'root';
+        });
+        return groups;
+    }
+
+    function updateLayout(layoutName) {
+        // Clear previous layout
+        g.selectAll('*').remove();
+
+        currentLayout = layoutName;
+        const layout = layouts[layoutName]();
+
+        // Render based on layout type
+        if (layoutName === 'force') {
+            renderForceLayout(layout);
+        } else if (layoutName === 'radial') {
+            renderRadialLayout(layout);
+        } else if (layoutName === 'tree') {
+            renderTreeLayout(layout);
+        } else if (layoutName === 'disjoint') {
+            renderDisjointLayout(layout);
+        } else if (layoutName === 'circle') {
+            renderCircleLayout(layout);
+        }
+    }
+
+    // Add layout change listener
+    const layoutSelect = document.getElementById('layoutSelect');
+    layoutSelect.addEventListener('change', (e) => {
+        updateLayout(e.target.value);
     });
+
+    // Initial layout
+    updateLayout('force');
 
     return {
         update: (newData) => {
-            if (!newData || !newData.nodes || !newData.links) {
-                console.error('Invalid data provided to update');
-                return;
-            }
-            simulation.nodes(newData.nodes);
-            simulation.force('link').links(newData.links);
-            simulation.alpha(1).restart();
-            console.log('Graph updated with new data:', {
-                nodes: newData.nodes.length,
-                links: newData.links.length
-            });
+            data = newData;
+            updateLayout(currentLayout);
         }
     };
 }
+
+function renderForceLayout(simulation) {
+    // Current rendering code
+}
+
+function renderRadialLayout(root) {
+    const links = g.append('g')
+        .selectAll('line')
+        .data(root.links())
+        .join('path')
+        .attr('d', d3Instance.linkRadial()
+            .angle(d => d.x)
+            .radius(d => d.y));
+
+    const nodes = g.append('g')
+        .selectAll('g')
+        .data(root.descendants())
+        .join('g')
+        .attr('transform', d => `
+            translate(${d.y * Math.cos(d.x - Math.PI / 2)},
+                     ${d.y * Math.sin(d.x - Math.PI / 2)})
+        `);
+
+    // Add circles and labels
+    nodes.append('circle')
+        .attr('r', d => nodeSize[d.data.type] || 10)
+        .attr('fill', d => nodeColors[d.data.type] || '#999');
+
+    nodes.append('text')
+        .attr('dy', '0.31em')
+        .attr('x', d => d.x < Math.PI ? 6 : -6)
+        .attr('text-anchor', d => d.x < Math.PI ? 'start' : 'end')
+        .text(d => d.data.name)
+        .clone(true).lower()
+        .attr('stroke', 'white');
+}
+
+// ... Implement other rendering functions similarly

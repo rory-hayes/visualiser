@@ -159,43 +159,50 @@ function updateDashboardMetrics(graph, score) {
     // Update workspace score
     document.getElementById('workspaceScore').innerText = score;
 
-    // Calculate and update basic metrics
-    const totalPages = graph.nodes.length;
-    const databases = graph.nodes.filter(node => node.type === 'database');
+    // Basic metrics
+    const totalPages = graph.metadata.totalPages;
+    const totalDatabases = graph.metadata.totalDatabases;
     
     document.getElementById('totalPages').innerText = totalPages;
-    document.getElementById('totalDatabases').innerText = databases.length;
+    document.getElementById('totalDatabases').innerText = totalDatabases;
     
-    // Update activity metrics
+    // Activity metrics
     const now = new Date();
+    const lastEditTimes = graph.metadata.lastEditTimes.map(t => new Date(t));
+    
     const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
     const sixtyDaysAgo = new Date(now - 60 * 24 * 60 * 60 * 1000);
     const ninetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000);
 
-    const activePages = graph.nodes.filter(node => {
-        const lastEdited = new Date(node.last_edited_time);
-        return lastEdited > thirtyDaysAgo;
-    }).length;
-
+    const activePages = lastEditTimes.filter(date => date > thirtyDaysAgo).length;
+    
     document.getElementById('activePages').innerText = activePages;
     document.getElementById('last30Days').innerText = activePages;
-    document.getElementById('last60Days').innerText = graph.nodes.filter(node => {
-        const lastEdited = new Date(node.last_edited_time);
-        return lastEdited > sixtyDaysAgo;
-    }).length;
-    document.getElementById('last90Days').innerText = graph.nodes.filter(node => {
-        const lastEdited = new Date(node.last_edited_time);
-        return lastEdited > ninetyDaysAgo;
-    }).length;
-    document.getElementById('over90Days').innerText = graph.nodes.filter(node => {
-        const lastEdited = new Date(node.last_edited_time);
-        return lastEdited <= ninetyDaysAgo;
-    }).length;
+    document.getElementById('last60Days').innerText = lastEditTimes.filter(date => date > sixtyDaysAgo).length;
+    document.getElementById('last90Days').innerText = lastEditTimes.filter(date => date > ninetyDaysAgo).length;
+    document.getElementById('over90Days').innerText = lastEditTimes.filter(date => date <= ninetyDaysAgo).length;
 
-    // Update structure metrics
+    // Structure metrics
     document.getElementById('maxDepth').innerText = calculateMaxDepth(graph);
     document.getElementById('avgPagesPerLevel').innerText = calculateAvgPagesPerLevel(graph);
     document.getElementById('totalConnections').innerText = graph.links.length;
+
+    // Update database metrics
+    updateDatabaseMetrics(graph);
+}
+
+function updateDatabaseMetrics(graph) {
+    const databaseMetrics = document.getElementById('databaseMetrics');
+    const databases = graph.nodes.filter(n => n.type === 'database');
+    
+    databaseMetrics.innerHTML = databases.map(db => `
+        <div class="flex justify-between items-center">
+            <span class="text-sm text-gray-500">${db.name}</span>
+            <span class="font-semibold">${
+                graph.links.filter(l => l.source === db.id).length
+            } pages</span>
+        </div>
+    `).join('');
 }
 
 function calculateMaxDepth(graph) {

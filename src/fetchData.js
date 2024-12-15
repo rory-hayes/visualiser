@@ -48,13 +48,16 @@ export async function fetchWorkspaceData(code) {
         }
 
         const accessToken = tokenResponse.data.access_token;
+        const workspaceId = tokenResponse.data.workspace_id;
+        const workspaceName = tokenResponse.data.workspace_name;
+
         console.log('Successfully obtained access token');
 
-        // Now use the access token to fetch workspace data
+        // First, get all workspaces/teamspaces
         const workspaceData = await axios.post('https://api.notion.com/v1/search', {
             filter: {
                 property: 'object',
-                value: 'page'
+                value: 'workspace'
             }
         }, {
             headers: {
@@ -64,41 +67,55 @@ export async function fetchWorkspaceData(code) {
             }
         });
 
-        console.log('Workspace API Response:', {
-            status: workspaceData.status,
-            hasResults: !!workspaceData.data.results,
-            resultCount: workspaceData.data.results?.length,
-            // Log the first result as an example (with sensitive data redacted)
-            sampleResult: workspaceData.data.results?.[0] ? {
-                id: workspaceData.data.results[0].id,
-                created_time: workspaceData.data.results[0].created_time,
-                last_edited_time: workspaceData.data.results[0].last_edited_time,
-                object: workspaceData.data.results[0].object,
-                parent: workspaceData.data.results[0].parent,
-                properties: Object.keys(workspaceData.data.results[0].properties || {}),
-                url: workspaceData.data.results[0].url
-            } : null,
-            // Log all results structure (without sensitive content)
-            resultsSummary: workspaceData.data.results?.map(result => ({
-                id: result.id,
-                type: result.object,
-                parentType: result.parent?.type,
-                hasProperties: !!result.properties,
-                propertyKeys: Object.keys(result.properties || {}),
-                url: result.url
-            }))
+        // Then get all pages and databases with their metadata
+        const pagesData = await axios.post('https://api.notion.com/v1/search', {
+            sort: {
+                direction: 'descending',
+                timestamp: 'last_edited_time'
+            },
+            page_size: 100 // Increase if needed
+        }, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Notion-Version': '2022-06-28',
+                'Content-Type': 'application/json'
+            }
         });
 
-        // Log pagination info if available
-        if (workspaceData.data.has_more) {
-            console.log('Pagination info:', {
-                has_more: workspaceData.data.has_more,
-                next_cursor: workspaceData.data.next_cursor
-            });
-        }
+        // Get database details
+        const databasePromises = pagesData.data.results
+            .filter(item => item.object === 'database')
+            .map(db => axios.get(`https://api.notion.com/v1/databases/${db.id}`, {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Notion-Version': '2022-06-28'
+                }
+            }));
 
-        console.log('Successfully fetched workspace data');
-        return workspaceData.data;
+        const databaseDetails = await Promise.all(databasePromises);
+
+        // Combine all data
+        return {
+            workspace: {
+                id: workspaceId,
+                name: workspaceName,
+                icon: tokenResponse.data.workspace_icon
+            },
+            results: pagesData.data.results.map(item => ({
+                ...item,
+                workspace_id: workspaceId,
+                last_edited_time: item.last_edited_time,
+                created_time: item.created_time,
+                // Get proper title based on object type
+                title: item.object === 'database' 
+                    ? item.title?.[0]?.plain_text 
+                    : item.properties?.title?.title?.[0]?.plain_text || 
+                      item.properties?.Name?.title?.[0]?.plain_text ||
+                      `Untitled ${item.object}`
+            })),
+            databases: databaseDetails.map(db => db.data)
+        };
+
     } catch (error) {
         console.error('Fetch workspace data error details:', {
             message: error.message,

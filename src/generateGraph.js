@@ -331,17 +331,56 @@ function setupCircleLayout(data, g, width, height) {
 
 // Add rendering functions for each layout
 function renderForceLayout(data, g, simulation) {
-    // Current force-directed implementation
-    // ... (existing force layout code)
+    // Links
+    const link = g.append('g')
+        .attr('class', 'links')
+        .selectAll('line')
+        .data(data.links)
+        .join('line')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', 1);
+
+    // Nodes
+    const node = g.append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
+        .data(data.nodes)
+        .join('g')
+        .call(d3.drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended));
+
+    // Apply styling
+    applyNodeStyling(node, g.node().parentNode.parentNode, d3, nodeColors, nodeSize);
+
+    // Update positions on tick
+    simulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        node
+            .attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+
+    return simulation;
 }
 
 function renderRadialLayout(root, g) {
     // Links
-    g.append('g')
+    const link = g.append('g')
         .attr('class', 'links')
         .selectAll('path')
         .data(root.links())
         .join('path')
+        .attr('fill', 'none')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', 1)
         .attr('d', d3.linkRadial()
             .angle(d => d.x)
             .radius(d => d.y));
@@ -357,8 +396,10 @@ function renderRadialLayout(root, g) {
                      ${d.y * Math.sin(d.x - Math.PI / 2)})
         `);
 
-    // Add circles and labels similar to force layout
-    // ... (add node styling)
+    // Apply styling
+    applyNodeStyling(node, g.node().parentNode.parentNode, d3, nodeColors, nodeSize);
+
+    return { link, node };
 }
 
 function renderTreeLayout(root, g) {
@@ -399,4 +440,90 @@ function renderCircleLayout(root, g) {
 
     // Add circles and labels
     // ... (add circle packing styling)
+}
+
+function applyNodeStyling(node, container, d3Instance, nodeColors, nodeSize) {
+    // Add circles
+    node.append('circle')
+        .attr('r', d => nodeSize[d.data?.type || d.type] || 10)
+        .attr('fill', d => nodeColors[d.data?.type || d.type] || '#999')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2)
+        .style('cursor', d => (d.data?.url || d.url) ? 'pointer' : 'default')
+        .on('click', (event, d) => {
+            if (d.data?.url || d.url) {
+                window.open(d.data?.url || d.url, '_blank');
+            }
+        })
+        .on('mouseover', function(event, d) {
+            d3Instance.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', r => (nodeSize[d.data?.type || d.type] || 10) * 1.2);
+
+            // Show tooltip
+            const tooltip = d3Instance.select(container)
+                .append('div')
+                .attr('class', 'tooltip')
+                .style('position', 'fixed')
+                .style('background', 'white')
+                .style('padding', '8px')
+                .style('border', '1px solid #ddd')
+                .style('border-radius', '4px')
+                .style('pointer-events', 'none')
+                .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+                .style('z-index', 1000)
+                .html(`
+                    <div class="font-bold">${d.data?.name || d.name}</div>
+                    <div class="text-sm text-gray-600">${d.data?.type || d.type}</div>
+                    ${(d.data?.url || d.url) ? '<div class="text-xs text-blue-600">Click to open</div>' : ''}
+                    ${d.children ? `<div class="text-xs text-gray-500">${d.descendants().length - 1} descendants</div>` : ''}
+                `);
+
+            // Get mouse position relative to the viewport
+            const mouseX = event.clientX;
+            const mouseY = event.clientY;
+
+            // Get tooltip dimensions
+            const tooltipNode = tooltip.node();
+            const tooltipRect = tooltipNode.getBoundingClientRect();
+
+            // Position tooltip relative to mouse cursor
+            tooltip
+                .style('left', `${mouseX + 10}px`)
+                .style('top', `${mouseY - tooltipRect.height - 10}px`);
+
+            // Adjust if tooltip goes off screen
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            // Check right edge
+            if (mouseX + 10 + tooltipRect.width > viewportWidth) {
+                tooltip.style('left', `${mouseX - tooltipRect.width - 10}px`);
+            }
+
+            // Check top edge
+            if (mouseY - tooltipRect.height - 10 < 0) {
+                tooltip.style('top', `${mouseY + 10}px`);
+            }
+        })
+        .on('mouseout', function(event, d) {
+            d3Instance.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', nodeSize[d.data?.type || d.type] || 10);
+            
+            d3Instance.selectAll('.tooltip').remove();
+        });
+
+    // Add labels
+    node.append('text')
+        .attr('dx', d => nodeSize[d.data?.type || d.type] + 5)
+        .attr('dy', '.35em')
+        .text(d => d.data?.name || d.name)
+        .style('font-size', '12px')
+        .style('fill', '#374151')
+        .style('text-anchor', 'start');
+
+    return node;
 }

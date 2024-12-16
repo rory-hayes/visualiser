@@ -577,3 +577,90 @@ document.getElementById('refreshBtn')?.addEventListener('click', () => {
         currentGraph = switchLayout(currentLayout, data, g, width, height);
     }
 });
+
+function applyNodeStyling(node, container, d3Instance, nodeColors, nodeSize) {
+    // Add circles
+    node.append('circle')
+        .attr('r', d => nodeSize[d.data?.type || d.type] || 10)
+        .attr('fill', d => nodeColors[d.data?.type || d.type] || '#999')
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2)
+        .style('cursor', d => (d.data?.url || d.url) ? 'pointer' : 'default')
+        .on('click', (event, d) => {
+            const url = d.data?.url || d.url;
+            if (url) {
+                window.open(url, '_blank');
+            }
+        })
+        .on('mouseover', function(event, d) {
+            // Enlarge the circle
+            d3Instance.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', r => (nodeSize[d.data?.type || d.type] || 10) * 1.2);
+
+            // Show tooltip
+            const tooltip = d3Instance.select('body')
+                .append('div')
+                .attr('class', 'tooltip')
+                .style('position', 'absolute')
+                .style('background', 'white')
+                .style('padding', '8px')
+                .style('border', '1px solid #ddd')
+                .style('border-radius', '4px')
+                .style('pointer-events', 'none')
+                .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+                .style('z-index', 1000)
+                .html(`
+                    <div class="font-bold">${d.data?.name || d.name}</div>
+                    <div class="text-sm text-gray-600">${d.data?.type || d.type}</div>
+                    ${(d.data?.url || d.url) ? '<div class="text-xs text-blue-600">Click to open</div>' : ''}
+                    ${d.children ? `<div class="text-xs text-gray-500">${d.descendants().length - 1} descendants</div>` : ''}
+                `);
+
+            // Position tooltip
+            const tooltipNode = tooltip.node();
+            const tooltipRect = tooltipNode.getBoundingClientRect();
+            
+            tooltip
+                .style('left', `${event.pageX + 10}px`)
+                .style('top', `${event.pageY - tooltipRect.height - 10}px`);
+
+            // Adjust if tooltip goes off screen
+            const viewportWidth = window.innerWidth;
+            if (event.pageX + 10 + tooltipRect.width > viewportWidth) {
+                tooltip.style('left', `${event.pageX - tooltipRect.width - 10}px`);
+            }
+        })
+        .on('mouseout', function(event, d) {
+            // Reset circle size
+            d3Instance.select(this)
+                .transition()
+                .duration(200)
+                .attr('r', nodeSize[d.data?.type || d.type] || 10);
+            
+            // Remove tooltip
+            d3Instance.selectAll('.tooltip').remove();
+        });
+
+    // Add labels
+    node.append('text')
+        .attr('dx', d => (nodeSize[d.data?.type || d.type] || 10) + 5)
+        .attr('dy', '.35em')
+        .text(d => d.data?.name || d.name)
+        .style('font-size', '12px')
+        .style('fill', '#374151')
+        .style('pointer-events', 'none')
+        .each(function(d) {
+            // Truncate long labels
+            const text = d3Instance.select(this);
+            const maxLength = 25;
+            let textContent = d.data?.name || d.name;
+            if (textContent.length > maxLength) {
+                textContent = textContent.substring(0, maxLength) + '...';
+            }
+            text.text(textContent);
+        });
+
+    return node;
+}

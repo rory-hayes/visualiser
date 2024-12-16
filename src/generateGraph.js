@@ -198,36 +198,65 @@ export function generateGraph(container, data) {
         d.fy = null;
     }
 
+    // Store references for layout switching
+    const graphState = {
+        svg,
+        g,
+        width,
+        height,
+        data,
+        currentLayout: 'force'
+    };
+
+    // Update layout switching function
+    function updateLayout(layoutName) {
+        console.log('Updating layout to:', layoutName);
+        graphState.currentLayout = layoutName;
+
+        // Clear existing content
+        graphState.g.selectAll('*').remove();
+
+        // Apply new layout
+        switch(layoutName) {
+            case 'force':
+                return setupForceLayout(graphState);
+            case 'radial':
+                return setupRadialLayout(graphState);
+            case 'tree':
+                return setupTreeLayout(graphState);
+            case 'circle':
+                return setupCircleLayout(graphState);
+            case 'disjoint':
+                return setupDisjointLayout(graphState);
+            default:
+                return setupForceLayout(graphState);
+        }
+    }
+
     // Add layout change listener
     const layoutSelect = document.getElementById('layoutSelect');
     if (layoutSelect) {
-        layoutSelect.value = currentLayout; // Set initial value
+        layoutSelect.value = graphState.currentLayout;
         layoutSelect.addEventListener('change', (e) => {
-            currentLayout = e.target.value;
-            console.log('Switching to layout:', currentLayout);
-            currentGraph = switchLayout(currentLayout, data, g, width, height);
+            console.log('Layout selection changed to:', e.target.value);
+            updateLayout(e.target.value);
         });
     }
 
+    // Initial layout
+    updateLayout(graphState.currentLayout);
+
     return {
         update: (newData) => {
-            if (!newData || !newData.nodes || !newData.links) {
-                console.error('Invalid data provided to update');
-                return;
-            }
-            simulation.nodes(newData.nodes);
-            simulation.force('link').links(newData.links);
-            simulation.alpha(1).restart();
-            console.log('Graph updated with new data:', {
-                nodes: newData.nodes.length,
-                links: newData.links.length
-            });
+            graphState.data = newData;
+            updateLayout(graphState.currentLayout);
         }
     };
 }
 
 // Add layout setup functions
-function setupForceLayout(data, g, width, height) {
+function setupForceLayout({ g, width, height, data }) {
+    console.log('Setting up force layout');
     const simulation = d3.forceSimulation(data.nodes)
         .force('link', d3.forceLink(data.links)
             .id(d => d.id)
@@ -253,7 +282,8 @@ function setupForceLayout(data, g, width, height) {
     return simulation;
 }
 
-function setupRadialLayout(data, g, width, height) {
+function setupRadialLayout({ g, width, height, data }) {
+    console.log('Setting up radial layout');
     const hierarchy = createHierarchy(data);
     const radius = Math.min(width, height) / 2 - 100;
     
@@ -292,7 +322,8 @@ function setupRadialLayout(data, g, width, height) {
     return { link, node };
 }
 
-function setupTreeLayout(data, g, width, height) {
+function setupTreeLayout({ g, width, height, data }) {
+    console.log('Setting up tree layout');
     const hierarchy = createHierarchy(data);
     
     const tree = d3.tree()
@@ -325,7 +356,8 @@ function setupTreeLayout(data, g, width, height) {
     return { link, node };
 }
 
-function setupCircleLayout(data, g, width, height) {
+function setupCircleLayout({ g, width, height, data }) {
+    console.log('Setting up circle layout');
     const pack = d3.pack()
         .size([width - 100, height - 100])
         .padding(3);
@@ -352,7 +384,8 @@ function setupCircleLayout(data, g, width, height) {
     return { node };
 }
 
-function setupDisjointLayout(data, g, width, height) {
+function setupDisjointLayout({ g, width, height, data }) {
+    console.log('Setting up disjoint layout');
     // Group nodes by their parent type
     const groups = new Map();
     data.nodes.forEach(node => {

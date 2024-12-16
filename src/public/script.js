@@ -153,6 +153,16 @@ function setupEventListeners(graph) {
     document.getElementById('refreshBtn').addEventListener('click', async () => {
         await initializeDashboard();
     });
+
+    // Debug layout button
+    document.getElementById('debugLayout')?.addEventListener('click', () => {
+        console.log('Current graph state:', {
+            layoutSelect: document.getElementById('layoutSelect')?.value,
+            visualization: document.getElementById('visualization'),
+            hasGraph: !!document.querySelector('#visualization svg'),
+            svgContent: document.querySelector('#visualization svg g')?.children?.length
+        });
+    });
 }
 
 function updateDashboardMetrics(graph, score) {

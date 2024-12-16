@@ -9,6 +9,20 @@ const LAYOUTS = {
     circle: setupCircleLayout
 };
 
+const nodeColors = {
+    workspace: '#6366f1', // Indigo
+    database: '#22c55e', // Green
+    page: '#3b82f6',     // Blue
+    child_page: '#8b5cf6' // Purple
+};
+
+const nodeSize = {
+    workspace: 20,
+    database: 15,
+    page: 10,
+    child_page: 8
+};
+
 export function generateGraph(container, data) {
     if (!window.d3) {
         console.error('D3 not found! Make sure d3 is loaded before calling generateGraph');
@@ -58,21 +72,6 @@ export function generateGraph(container, data) {
     svg.call(zoom);
 
     setupZoomControls(svg, g, zoom);
-
-    // Define node colors and sizes
-    const nodeColors = {
-        workspace: '#6366f1', // Indigo
-        database: '#22c55e', // Green
-        page: '#3b82f6',     // Blue
-        child_page: '#8b5cf6' // Purple
-    };
-
-    const nodeSize = {
-        workspace: 20,
-        database: 15,
-        page: 10,
-        child_page: 8
-    };
 
     // Create force simulation
     const simulation = d3Instance.forceSimulation(data.nodes)
@@ -213,23 +212,39 @@ export function generateGraph(container, data) {
         console.log('Updating layout to:', layoutName);
         graphState.currentLayout = layoutName;
 
-        // Clear existing content
-        graphState.g.selectAll('*').remove();
+        try {
+            // Clear existing content with transition
+            graphState.g.selectAll('*')
+                .transition()
+                .duration(300)
+                .style('opacity', 0)
+                .remove();
 
-        // Apply new layout
-        switch(layoutName) {
-            case 'force':
-                return setupForceLayout(graphState);
-            case 'radial':
-                return setupRadialLayout(graphState);
-            case 'tree':
-                return setupTreeLayout(graphState);
-            case 'circle':
-                return setupCircleLayout(graphState);
-            case 'disjoint':
-                return setupDisjointLayout(graphState);
-            default:
-                return setupForceLayout(graphState);
+            // Apply new layout after transition
+            setTimeout(() => {
+                try {
+                    const layout = LAYOUTS[layoutName];
+                    if (layout) {
+                        layout(graphState);
+                    } else {
+                        console.warn(`Layout ${layoutName} not found, falling back to force layout`);
+                        LAYOUTS.force(graphState);
+                    }
+
+                    // Fade in new layout
+                    graphState.g.selectAll('*')
+                        .style('opacity', 0)
+                        .transition()
+                        .duration(300)
+                        .style('opacity', 1);
+                } catch (error) {
+                    console.error('Error applying layout:', error);
+                    showError(graphState.g, 'Failed to apply layout');
+                }
+            }, 300);
+        } catch (error) {
+            console.error('Error updating layout:', error);
+            showError(graphState.g, 'Failed to update layout');
         }
     }
 
@@ -456,15 +471,25 @@ function setupDisjointLayout({ g, width, height, data }) {
 
 // Helper functions
 function createHierarchy(data) {
-    const stratify = d3.stratify()
-        .id(d => d.id)
-        .parentId(d => {
-            const link = data.links.find(l => l.target === d.id || l.target.id === d.id);
-            return link ? (link.source.id || link.source) : null;
-        });
+    if (!data.nodes || !data.links) {
+        console.error('Invalid data structure for hierarchy');
+        return null;
+    }
 
-    return stratify(data.nodes)
-        .sort((a, b) => d3.ascending(a.data.name, b.data.name));
+    try {
+        const stratify = d3.stratify()
+            .id(d => d.id)
+            .parentId(d => {
+                const link = data.links.find(l => l.target === d.id || l.target.id === d.id);
+                return link ? (link.source.id || link.source) : null;
+            });
+
+        return stratify(data.nodes)
+            .sort((a, b) => d3.ascending(a.data.name, b.data.name));
+    } catch (error) {
+        console.error('Error creating hierarchy:', error);
+        return null;
+    }
 }
 
 function renderBaseGraph(data, g) {
@@ -472,7 +497,7 @@ function renderBaseGraph(data, g) {
     const link = g.append('g')
         .attr('class', 'links')
         .selectAll('path')
-        .data(data.links)
+        .data(data.links || [])  // Handle case when links is undefined
         .join('path')
         .attr('fill', 'none')
         .attr('stroke', '#999')
@@ -486,7 +511,7 @@ function renderBaseGraph(data, g) {
         .data(data.nodes)
         .join('g');
 
-    // Apply styling
+    // Apply styling with global nodeColors and nodeSize
     applyNodeStyling(node, g.node().parentNode.parentNode, d3, nodeColors, nodeSize);
 
     return { link, node };
@@ -570,13 +595,6 @@ function switchLayout(layoutName, data, g, width, height) {
             .style('opacity', 1);
     }, 300);
 }
-
-// Update the refresh handler
-document.getElementById('refreshBtn')?.addEventListener('click', () => {
-    if (currentGraph) {
-        currentGraph = switchLayout(currentLayout, data, g, width, height);
-    }
-});
 
 function applyNodeStyling(node, container, d3Instance, nodeColors, nodeSize) {
     // Add circles
@@ -663,4 +681,13 @@ function applyNodeStyling(node, container, d3Instance, nodeColors, nodeSize) {
         });
 
     return node;
+}
+
+function showError(g, message) {
+    g.append('text')
+        .attr('x', '50%')
+        .attr('y', '50%')
+        .attr('text-anchor', 'middle')
+        .style('fill', '#ef4444')
+        .text(message);
 }

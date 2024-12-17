@@ -5,7 +5,6 @@ const LAYOUTS = {
     force: setupForceLayout,
     radial: setupRadialLayout,
     tree: setupTreeLayout,
-    disjoint: setupDisjointLayout,
     circle: setupCircleLayout
 };
 
@@ -209,42 +208,36 @@ export function generateGraph(container, data) {
 
     // Update layout switching function
     function updateLayout(layoutName) {
-        console.log('Updating layout to:', layoutName);
-        graphState.currentLayout = layoutName;
+        console.log('Switching to layout:', layoutName);
+        
+        // Clear existing content
+        graphState.g.selectAll('*').remove();
+
+        // Create center point for layouts
+        const centerX = graphState.width / 2;
+        const centerY = graphState.height / 2;
 
         try {
-            // Clear existing content with transition
-            graphState.g.selectAll('*')
-                .transition()
-                .duration(300)
-                .style('opacity', 0)
-                .remove();
-
-            // Apply new layout after transition
-            setTimeout(() => {
-                try {
-                    const layout = LAYOUTS[layoutName];
-                    if (layout) {
-                        layout(graphState);
-                    } else {
-                        console.warn(`Layout ${layoutName} not found, falling back to force layout`);
-                        LAYOUTS.force(graphState);
-                    }
-
-                    // Fade in new layout
-                    graphState.g.selectAll('*')
-                        .style('opacity', 0)
-                        .transition()
-                        .duration(300)
-                        .style('opacity', 1);
-                } catch (error) {
-                    console.error('Error applying layout:', error);
-                    showError(graphState.g, 'Failed to apply layout');
-                }
-            }, 300);
+            switch(layoutName) {
+                case 'force':
+                    setupForceLayout(graphState);
+                    break;
+                case 'radial':
+                    setupRadialLayout(graphState);
+                    break;
+                case 'tree':
+                    setupTreeLayout(graphState);
+                    break;
+                case 'circle':
+                    setupCircleLayout(graphState);
+                    break;
+                default:
+                    console.warn('Unknown layout, falling back to force');
+                    setupForceLayout(graphState);
+            }
         } catch (error) {
-            console.error('Error updating layout:', error);
-            showError(graphState.g, 'Failed to update layout');
+            console.error('Error applying layout:', error);
+            showError(graphState.g, 'Failed to apply layout');
         }
     }
 
@@ -272,6 +265,8 @@ export function generateGraph(container, data) {
 // Add layout setup functions
 function setupForceLayout({ g, width, height, data }) {
     console.log('Setting up force layout');
+
+    // Create simulation
     const simulation = d3.forceSimulation(data.nodes)
         .force('link', d3.forceLink(data.links)
             .id(d => d.id)
@@ -279,20 +274,56 @@ function setupForceLayout({ g, width, height, data }) {
         .force('charge', d3.forceManyBody()
             .strength(-400))
         .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(50));
+        .force('collision', d3.forceCollide().radius(30));
 
-    const { link, node } = renderBaseGraph(data, g);
-    
+    // Create links
+    const links = g.append('g')
+        .attr('class', 'links')
+        .selectAll('line')
+        .data(data.links)
+        .join('line')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', 1);
+
+    // Create nodes
+    const nodes = g.append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
+        .data(data.nodes)
+        .join('g');
+
+    // Apply node styling
+    applyNodeStyling(nodes, g.node().parentNode.parentNode, d3, nodeColors, nodeSize);
+
+    // Update positions on tick
     simulation.on('tick', () => {
-        link
+        links
             .attr('x1', d => d.source.x)
             .attr('y1', d => d.source.y)
             .attr('x2', d => d.target.x)
             .attr('y2', d => d.target.y);
 
-        node
+        nodes
             .attr('transform', d => `translate(${d.x},${d.y})`);
     });
+
+    // Add drag behavior
+    nodes.call(d3.drag()
+        .on('start', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        })
+        .on('drag', (event, d) => {
+            d.fx = event.x;
+            d.fy = event.y;
+        })
+        .on('end', (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }));
 
     return simulation;
 }
@@ -397,76 +428,6 @@ function setupCircleLayout({ g, width, height, data }) {
     node.attr('transform', d => `translate(${d.x},${d.y})`);
 
     return { node };
-}
-
-function setupDisjointLayout({ g, width, height, data }) {
-    console.log('Setting up disjoint layout');
-    // Group nodes by their parent type
-    const groups = new Map();
-    data.nodes.forEach(node => {
-        const parentLink = data.links.find(l => l.target === node.id || l.target.id === node.id);
-        const parentType = parentLink ? 
-            (data.nodes.find(n => n.id === (parentLink.source.id || parentLink.source))?.type || 'other') 
-            : 'root';
-        
-        if (!groups.has(parentType)) {
-            groups.set(parentType, []);
-        }
-        groups.get(parentType).push(node);
-    });
-
-    // Assign x-positions based on group
-    const groupPositions = new Map();
-    Array.from(groups.keys()).forEach((group, i) => {
-        groupPositions.set(group, (i + 1) * width / (groups.size + 1));
-    });
-
-    // Create force simulation with group forces
-    const simulation = d3.forceSimulation(data.nodes)
-        .force('link', d3.forceLink(data.links)
-            .id(d => d.id)
-            .distance(50))
-        .force('charge', d3.forceManyBody()
-            .strength(-200))
-        .force('x', d3.forceX(d => {
-            const parentLink = data.links.find(l => l.target === d.id || l.target.id === d.id);
-            const parentType = parentLink ? 
-                (data.nodes.find(n => n.id === (parentLink.source.id || parentLink.source))?.type || 'other') 
-                : 'root';
-            return groupPositions.get(parentType) || width / 2;
-        }).strength(0.5))
-        .force('y', d3.forceY(height / 2).strength(0.1))
-        .force('collision', d3.forceCollide().radius(30));
-
-    const { link, node } = renderBaseGraph(data, g);
-
-    // Add group labels
-    g.append('g')
-        .attr('class', 'group-labels')
-        .selectAll('text')
-        .data(Array.from(groups.entries()))
-        .join('text')
-        .attr('x', ([type]) => groupPositions.get(type))
-        .attr('y', 20)
-        .attr('text-anchor', 'middle')
-        .style('font-size', '14px')
-        .style('font-weight', 'bold')
-        .style('fill', '#666')
-        .text(([type, nodes]) => `${type} (${nodes.length})`);
-
-    // Update positions on tick
-    simulation.on('tick', () => {
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-
-        node
-            .attr('transform', d => `translate(${d.x},${d.y})`);
-    });
-
-    return simulation;
 }
 
 // Helper functions

@@ -1,6 +1,9 @@
 // Add at the top of the file for debugging
 console.log('Script loaded');
 
+// First, let's store the graph data globally so we can access it in our metrics
+let currentGraphData = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Content Loaded');
     
@@ -54,6 +57,9 @@ async function initializeDashboard() {
             throw new Error('Invalid data format received from server');
         }
 
+        // Store the graph data globally
+        currentGraphData = data.graph;
+        
         // Clear loading state
         visualization.innerHTML = '';
 
@@ -925,42 +931,128 @@ function getActiveAreas() {
 // Implementation of new metric calculation functions
 function getOverallHealth() {
     try {
-        const organization = parseFloat(getOrganizationScore()) || 0;
-        const activity = getActivityScore() || 0;
-        const maintenance = getMaintenanceScore() || 0;
+        if (!currentGraphData) return '0%';
         
-        const score = (organization + activity + maintenance) / 3;
-        return isNaN(score) ? '0%' : `${Math.round(score)}%`;
+        // Calculate based on three main factors
+        const structureScore = calculateStructureScore();
+        const activityScore = calculateActivityScore();
+        const organizationScore = calculateOrganizationScore();
+        
+        const overallScore = (structureScore + activityScore + organizationScore) / 3;
+        return Math.round(overallScore) + '%';
     } catch (error) {
         console.error('Error calculating overall health:', error);
         return '0%';
     }
 }
 
+function calculateStructureScore() {
+    if (!currentGraphData?.nodes) return 0;
+    
+    const totalNodes = currentGraphData.nodes.length;
+    const totalLinks = currentGraphData.links.length;
+    let score = 100;
+
+    // Penalize for disconnected nodes
+    const disconnectedNodes = currentGraphData.nodes.filter(node => 
+        !currentGraphData.links.some(link => 
+            link.source.id === node.id || link.target.id === node.id
+        )
+    ).length;
+    
+    score -= (disconnectedNodes / totalNodes) * 30;
+
+    // Penalize for very deep hierarchies
+    const maxDepth = Math.max(...currentGraphData.nodes.map(node => 
+        calculateNodeDepth(node, currentGraphData.links)
+    ));
+    if (maxDepth > 5) score -= (maxDepth - 5) * 10;
+
+    return Math.max(0, score);
+}
+
+function calculateActivityScore() {
+    if (!currentGraphData?.nodes) return 0;
+    
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    
+    const activeNodes = currentGraphData.nodes.filter(node => 
+        node.lastEdited && new Date(node.lastEdited) > thirtyDaysAgo
+    ).length;
+    
+    return (activeNodes / currentGraphData.nodes.length) * 100;
+}
+
+function calculateOrganizationScore() {
+    if (!currentGraphData?.nodes) return 0;
+    
+    let score = 100;
+    const totalNodes = currentGraphData.nodes.length;
+    
+    // Check naming conventions
+    const poorlyNamedNodes = currentGraphData.nodes.filter(node => 
+        node.name.toLowerCase().includes('untitled') ||
+        node.name.toLowerCase().includes('copy of') ||
+        node.name.length < 3
+    ).length;
+    
+    score -= (poorlyNamedNodes / totalNodes) * 30;
+    
+    // Check database usage
+    const databases = currentGraphData.nodes.filter(n => n.type === 'database');
+    const unusedDatabases = databases.filter(db => 
+        !currentGraphData.links.some(link => link.source.id === db.id)
+    ).length;
+    
+    if (databases.length > 0) {
+        score -= (unusedDatabases / databases.length) * 20;
+    }
+    
+    return Math.max(0, score);
+}
+
 function getComplexityScore() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    const links = svg.selectAll('.link').data();
+    try {
+        if (!currentGraphData?.nodes) return '0/100';
+        
+        let complexity = 0;
+        const totalNodes = currentGraphData.nodes.length;
+        const totalLinks = currentGraphData.links.length;
+        
+        // Factor 1: Size complexity
+        complexity += Math.min(50, (totalNodes / 20) * 10);
+        
+        // Factor 2: Connection complexity
+        const connectionDensity = totalLinks / totalNodes;
+        complexity += Math.min(25, connectionDensity * 10);
+        
+        // Factor 3: Depth complexity
+        const maxDepth = Math.max(...currentGraphData.nodes.map(node => 
+            calculateNodeDepth(node, currentGraphData.links)
+        ));
+        complexity += Math.min(25, maxDepth * 5);
+        
+        return `${Math.round(complexity)}/100`;
+    } catch (error) {
+        console.error('Error calculating complexity:', error);
+        return '0/100';
+    }
+}
+
+// Helper function for calculating node depth
+function calculateNodeDepth(node, links, visited = new Set()) {
+    if (visited.has(node.id)) return 0;
+    visited.add(node.id);
     
-    // Factors that increase complexity:
-    // 1. Deep nesting
-    // 2. Many cross-links
-    // 3. Large number of different page types
-    // 4. Inconsistent structure
+    const parentLink = links.find(link => link.target.id === node.id);
+    if (!parentLink) return 0;
     
-    const maxDepth = Math.max(...nodes.map(node => calculateNodeDepth(node)));
-    const avgConnections = links.length / nodes.length;
-    const pageTypes = new Set(nodes.map(n => n.type)).size;
-    
-    let complexity = 0;
-    complexity += maxDepth * 10;
-    complexity += avgConnections * 5;
-    complexity += pageTypes * 15;
-    
-    // Normalize to 0-100
-    complexity = Math.min(100, complexity);
-    
-    return `${Math.round(complexity)}/100`;
+    return 1 + calculateNodeDepth(
+        currentGraphData.nodes.find(n => n.id === parentLink.source.id),
+        links,
+        visited
+    );
 }
 
 function getNavigationDepth() {

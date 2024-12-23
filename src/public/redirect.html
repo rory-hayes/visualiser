@@ -128,7 +128,10 @@
                         </button>
                     </div>
                 </div>
-                <div id="visualization" class="w-full h-[600px]"></div>
+                <div id="visualization" 
+                     class="w-full h-[600px] border border-gray-200 rounded-lg bg-white overflow-hidden"
+                     style="min-height: 600px;">
+                </div>
             </div>
 
             <!-- Right Column Cards -->
@@ -188,7 +191,12 @@
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
-        window.d3 = d3;
+        // Verify D3 is loaded
+        if (window.d3) {
+            console.log('D3.js loaded successfully:', d3.version);
+        } else {
+            console.error('D3.js failed to load!');
+        }
     </script>
     <script type="module" src="script.js"></script>
 </body>

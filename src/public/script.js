@@ -48,44 +48,54 @@ async function initializeDashboard() {
             return;
         }
 
-        // Show loading state
+        console.log('Starting dashboard initialization');
         showLoading(visualization);
 
         // Import and initialize graph
         const { generateGraph } = await import('./generateGraph.js');
-        console.log('Successfully loaded generateGraph');
+        console.log('generateGraph imported successfully');
         
         const response = await fetch('/api/data');
-        if (!response.ok) {
-            throw new Error(`API Error (${response.status}): ${await response.text()}`);
-        }
-
+        console.log('API response status:', response.status);
+        
         const data = await response.json();
+        console.log('Received data structure:', {
+            hasGraph: !!data.graph,
+            nodes: data.graph?.nodes?.length || 0,
+            links: data.graph?.links?.length || 0,
+            score: data.score
+        });
+
         if (!data.graph || !data.score) {
             throw new Error('Invalid data format received from server');
         }
 
-        // Clear loading state
         visualization.innerHTML = '';
-
-        // Initialize graph BEFORE storing data globally
-        const graph = generateGraph(visualization, data.graph);
         
-        // Store data after graph is initialized
-        currentGraphData = data.graph;
+        // Add size logging
+        const containerSize = {
+            width: visualization.clientWidth,
+            height: visualization.clientHeight,
+            visible: visualization.offsetParent !== null
+        };
+        console.log('Visualization container size:', containerSize);
+
+        const graph = generateGraph(visualization, data.graph);
+        console.log('Graph generation result:', !!graph);
+
+        if (!graph) {
+            throw new Error('Failed to generate graph');
+        }
 
         // Setup additional features
         setupZoomControls(graph);
         setupEventListeners(graph);
         updateDashboardMetrics(data.graph, data.score);
 
-        log('Graph data:', data.graph);
-        log('Graph instance:', graph);
-
         return graph;
 
     } catch (error) {
-        console.error('Error initializing dashboard:', error);
+        console.error('Dashboard initialization error:', error);
         showError(error.message);
     }
 }

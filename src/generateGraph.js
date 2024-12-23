@@ -86,7 +86,101 @@ export function generateGraph(container, data) {
         .attr('r', d => nodeSize[d.type] || 10)
         .attr('fill', d => nodeColors[d.type] || '#999')
         .attr('stroke', '#fff')
-        .attr('stroke-width', 2);
+        .attr('stroke-width', 2)
+        // Add click handler
+        .style('cursor', d => d.url ? 'pointer' : 'default')
+        .on('click', (event, d) => {
+            if (d.url) {
+                window.open(d.url, '_blank');
+            }
+        })
+        // Add tooltip handlers
+        .on('mouseover', (event, d) => {
+            // Create tooltip
+            const tooltip = d3Instance.select('body')
+                .append('div')
+                .attr('class', 'graph-tooltip')
+                .style('position', 'absolute')
+                .style('background', 'white')
+                .style('padding', '10px')
+                .style('border', '1px solid #ddd')
+                .style('border-radius', '4px')
+                .style('pointer-events', 'none')
+                .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+                .style('z-index', 1000)
+                .style('opacity', 0);
+
+            // Populate tooltip content
+            tooltip.html(`
+                <div class="p-3">
+                    <h3 class="font-bold text-gray-900">${d.name}</h3>
+                    <p class="text-sm text-gray-600">Type: ${d.type}</p>
+                    ${d.lastEdited ? `<p class="text-sm text-gray-600">Last edited: ${formatDate(d.lastEdited)}</p>` : ''}
+                    ${d.url ? '<p class="text-xs text-blue-600 mt-1">Click to open in Notion</p>' : ''}
+                </div>
+            `);
+
+            // Position tooltip
+            const tooltipNode = tooltip.node();
+            const tooltipRect = tooltipNode.getBoundingClientRect();
+            const xPosition = event.pageX + 10;
+            const yPosition = event.pageY - tooltipRect.height - 10;
+
+            // Adjust position if tooltip would go off screen
+            const viewportWidth = window.innerWidth;
+            const adjustedX = xPosition + tooltipRect.width > viewportWidth 
+                ? viewportWidth - tooltipRect.width - 10 
+                : xPosition;
+
+            tooltip
+                .style('left', `${adjustedX}px`)
+                .style('top', `${yPosition}px`)
+                .transition()
+                .duration(200)
+                .style('opacity', 1);
+
+            // Highlight node and connected nodes
+            const circle = d3Instance.select(event.target);
+            circle
+                .transition()
+                .duration(200)
+                .attr('r', r => (nodeSize[d.type] || 10) * 1.2)
+                .attr('stroke', '#ffd700')
+                .attr('stroke-width', 3);
+
+            // Highlight connected links
+            link.filter(l => l.source === d || l.target === d)
+                .transition()
+                .duration(200)
+                .attr('stroke', '#ffd700')
+                .attr('stroke-width', 2)
+                .attr('stroke-opacity', 1);
+        })
+        .on('mouseout', (event, d) => {
+            // Remove tooltip
+            d3Instance.selectAll('.graph-tooltip')
+                .transition()
+                .duration(200)
+                .style('opacity', 0)
+                .remove();
+
+            // Reset node appearance
+            const circle = d3Instance.select(event.target);
+            circle
+                .transition()
+                .duration(200)
+                .attr('r', nodeSize[d.type] || 10)
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2);
+
+            // Reset link appearance
+            link.filter(l => l.source === d || l.target === d)
+                .transition()
+                .duration(200)
+                .attr('stroke', '#999')
+                .attr('stroke-width', 1.5)
+                .attr('stroke-opacity', 0.6);
+        });
 
     // Add text labels with background
     node.append('text')
@@ -167,3 +261,13 @@ const nodeSize = {
     page: 12,
     child_page: 10
 };
+
+// Add helper function for date formatting if not already present
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}

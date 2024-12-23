@@ -139,6 +139,43 @@
     <div id="visualization"></div>
     <div id="workspaceScore"></div>
 
+    <div class="search-filter-container mb-4">
+        <input type="text" 
+               id="pageSearch" 
+               placeholder="Search pages..." 
+               class="w-full p-2 border rounded-lg mb-2">
+        
+        <div id="filterControls" class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <select id="typeFilter" class="filter-control p-2 border rounded">
+                <option value="">All Types</option>
+                <option value="page">Pages</option>
+                <option value="database">Databases</option>
+                <option value="template">Templates</option>
+            </select>
+
+            <select id="activityFilter" class="filter-control p-2 border rounded">
+                <option value="">All Activity</option>
+                <option value="recent">Last 7 days</option>
+                <option value="active">Last 30 days</option>
+                <option value="stale">Inactive (90+ days)</option>
+            </select>
+
+            <select id="depthFilter" class="filter-control p-2 border rounded">
+                <option value="">All Levels</option>
+                <option value="root">Root Level</option>
+                <option value="shallow">Shallow (≤2 levels)</option>
+                <option value="deep">Deep (>4 levels)</option>
+            </select>
+
+            <select id="connectionsFilter" class="filter-control p-2 border rounded">
+                <option value="">All Connections</option>
+                <option value="none">No connections</option>
+                <option value="few">Few (≤2)</option>
+                <option value="many">Many (>5)</option>
+            </select>
+        </div>
+    </div>
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="script.js"></script>
 </body>

@@ -67,6 +67,9 @@ async function initializeDashboard() {
         // Setup event listeners
         setupEventListeners(graph);
 
+        // Enhance visualization
+        enhanceVisualization(graph);
+
     } catch (error) {
         console.error('Error initializing dashboard:', error);
         showError(error.message);
@@ -316,4 +319,147 @@ function calculateAvgPagesPerLevel(graph) {
     const avgNodesPerLevel = totalNodes / levels.length;
 
     return avgNodesPerLevel.toFixed(1);
+}
+
+function setupSearchAndFilter() {
+    const searchInput = document.getElementById('pageSearch');
+    const filterControls = document.getElementById('filterControls');
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            filterNodes(searchTerm, getActiveFilters());
+        });
+    }
+
+    // Setup filter listeners
+    document.querySelectorAll('.filter-control').forEach(control => {
+        control.addEventListener('change', () => {
+            filterNodes(searchInput?.value.toLowerCase() || '', getActiveFilters());
+        });
+    });
+}
+
+function getActiveFilters() {
+    return {
+        type: document.getElementById('typeFilter')?.value,
+        activity: document.getElementById('activityFilter')?.value,
+        depth: document.getElementById('depthFilter')?.value,
+        connections: document.getElementById('connectionsFilter')?.value
+    };
+}
+
+function filterNodes(searchTerm, filters) {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node');
+    const links = svg.selectAll('.link');
+
+    nodes.style('opacity', node => {
+        const matchesSearch = node.name.toLowerCase().includes(searchTerm);
+        const matchesType = !filters.type || node.type === filters.type;
+        const matchesActivity = !filters.activity || checkActivityMatch(node, filters.activity);
+        const matchesDepth = !filters.depth || checkDepthMatch(node, filters.depth);
+        const matchesConnections = !filters.connections || checkConnectionsMatch(node, filters.connections);
+
+        return (matchesSearch && matchesType && matchesActivity && 
+                matchesDepth && matchesConnections) ? 1 : 0.2;
+    });
+
+    links.style('opacity', link => {
+        const sourceVisible = nodes.filter(n => n.id === link.source.id).style('opacity') === '1';
+        const targetVisible = nodes.filter(n => n.id === link.target.id).style('opacity') === '1';
+        return (sourceVisible && targetVisible) ? 1 : 0.1;
+    });
+}
+
+function checkActivityMatch(node, activityFilter) {
+    const lastEdit = new Date(node.lastEdited);
+    const now = new Date();
+    const daysSinceEdit = (now - lastEdit) / (1000 * 60 * 60 * 24);
+
+    switch (activityFilter) {
+        case 'recent': return daysSinceEdit <= 7;
+        case 'active': return daysSinceEdit <= 30;
+        case 'stale': return daysSinceEdit > 90;
+        default: return true;
+    }
+}
+
+function checkDepthMatch(node, depthFilter) {
+    const depth = calculateNodeDepth(node);
+    switch (depthFilter) {
+        case 'root': return depth === 0;
+        case 'shallow': return depth <= 2;
+        case 'deep': return depth > 4;
+        default: return true;
+    }
+}
+
+function checkConnectionsMatch(node, connectionsFilter) {
+    const connectionCount = countNodeConnections(node);
+    switch (connectionsFilter) {
+        case 'none': return connectionCount === 0;
+        case 'few': return connectionCount <= 2;
+        case 'many': return connectionCount > 5;
+        default: return true;
+    }
+}
+
+function enhanceVisualization(graph) {
+    // Add node clustering
+    const clusters = createClusters(graph.nodes);
+    
+    // Enhance tooltips
+    setupEnhancedTooltips();
+    
+    // Apply color coding
+    applyColorCoding(graph);
+    
+    // Setup search and filter
+    setupSearchAndFilter();
+}
+
+function createClusters(nodes) {
+    // Group nodes by their parent database or closest related pages
+    const clusters = d3.group(nodes, d => d.parentId || 'unclustered');
+    
+    // Apply force simulation to keep clusters together
+    const forceCluster = d3.forceCluster()
+        .centers(Array.from(clusters.values())
+        .map(cluster => ({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            radius: Math.sqrt(cluster.length) * 30
+        })));
+
+    return clusters;
+}
+
+function setupEnhancedTooltips() {
+    const tooltip = d3.select('body').append('div')
+        .attr('class', 'graph-tooltip')
+        .style('opacity', 0);
+
+    d3.selectAll('.node')
+        .on('mouseover', (event, d) => {
+            tooltip.transition()
+                .duration(200)
+                .style('opacity', .9);
+            
+            tooltip.html(`
+                <div class="p-3 bg-white rounded-lg shadow-lg">
+                    <h3 class="font-bold">${d.name}</h3>
+                    <p class="text-sm text-gray-600">Type: ${d.type}</p>
+                    <p class="text-sm text-gray-600">Last edited: ${formatDate(d.lastEdited)}</p>
+                    <p class="text-sm text-gray-600">Child pages: ${countChildPages(d)}</p>
+                </div>
+            `)
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY - 10) + 'px');
+        })
+        .on('mouseout', () => {
+            tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
+        });
 }

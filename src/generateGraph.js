@@ -77,10 +77,29 @@ export function generateGraph(container, data) {
     const simulation = d3Instance.forceSimulation(data.nodes)
         .force('link', d3Instance.forceLink(data.links)
             .id(d => d.id)
-            .distance(100))
-        .force('charge', d3Instance.forceManyBody().strength(-400))
+            .distance(d => {
+                // Adjust distance based on node types
+                const sourceType = d.source.type;
+                const targetType = d.target.type;
+                if (sourceType === 'workspace' || targetType === 'workspace') {
+                    return 150;
+                }
+                return 100;
+            }))
+        .force('charge', d3Instance.forceManyBody()
+            .strength(d => {
+                // Adjust repulsion based on node type
+                if (d.type === 'workspace') return -600;
+                if (d.type === 'database') return -400;
+                return -200;
+            }))
         .force('center', d3Instance.forceCenter(width / 2, height / 2))
-        .force('collision', d3Instance.forceCollide().radius(50));
+        .force('collision', d3Instance.forceCollide().radius(d => {
+            // Adjust collision radius based on node size
+            return (nodeSize[d.type] || 10) * 1.5;
+        }))
+        .force('x', d3Instance.forceX(width / 2).strength(0.05))
+        .force('y', d3Instance.forceY(height / 2).strength(0.05));
 
     // Create links
     const link = g.append('g')
@@ -169,12 +188,22 @@ export function generateGraph(container, data) {
 
     // Update force simulation on tick
     simulation.on('tick', () => {
+        // Bound nodes within svg
+        data.nodes.forEach(d => {
+            d.x = Math.max(nodeSize[d.type] || 10, 
+                Math.min(width - (nodeSize[d.type] || 10), d.x));
+            d.y = Math.max(nodeSize[d.type] || 10, 
+                Math.min(height - (nodeSize[d.type] || 10), d.y));
+        });
+
+        // Update link positions
         link
             .attr('x1', d => d.source.x)
             .attr('y1', d => d.source.y)
             .attr('x2', d => d.target.x)
             .attr('y2', d => d.target.y);
 
+        // Update node positions
         node
             .attr('transform', d => `translate(${d.x},${d.y})`);
     });
@@ -182,19 +211,50 @@ export function generateGraph(container, data) {
     // Drag functions
     function dragstarted(event, d) {
         if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
+        d.fx = event.x;
+        d.fy = event.y;
+        
+        // Highlight dragged node and connected nodes
+        d3.select(event.sourceEvent.target)
+            .attr('stroke', '#ff0')
+            .attr('stroke-width', 3);
+        
+        link.filter(l => l.source === d || l.target === d)
+            .attr('stroke', '#ff0')
+            .attr('stroke-width', 2);
     }
 
     function dragged(event, d) {
         d.fx = event.x;
         d.fy = event.y;
+        
+        // Update connected links positions in real-time
+        link.filter(l => l.source === d || l.target === d)
+            .attr('x1', l => l.source === d ? event.x : l.source.x)
+            .attr('y1', l => l.source === d ? event.y : l.source.y)
+            .attr('x2', l => l.target === d ? event.x : l.target.x)
+            .attr('y2', l => l.target === d ? event.y : l.target.y);
     }
 
     function dragended(event, d) {
         if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
+        
+        // Reset node position if dropped outside bounds
+        const margin = 50;
+        if (d.x < margin || d.x > width - margin || 
+            d.y < margin || d.y > height - margin) {
+            d.fx = null;
+            d.fy = null;
+        }
+        
+        // Reset highlighting
+        d3.select(event.sourceEvent.target)
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2);
+        
+        link.filter(l => l.source === d || l.target === d)
+            .attr('stroke', '#999')
+            .attr('stroke-width', 1);
     }
 
     // Store references for layout switching
@@ -260,6 +320,30 @@ export function generateGraph(container, data) {
 
     // Initial layout
     updateLayout(graphState.currentLayout);
+
+    // Add this function to handle window resizing
+    function handleResize() {
+        const newWidth = container.clientWidth;
+        const newHeight = container.clientHeight;
+        
+        svg.attr('viewBox', [0, 0, newWidth, newHeight]);
+        
+        simulation
+            .force('center', d3.forceCenter(newWidth / 2, newHeight / 2))
+            .force('x', d3.forceX(newWidth / 2).strength(0.05))
+            .force('y', d3.forceY(newHeight / 2).strength(0.05))
+            .alpha(0.3)
+            .restart();
+    }
+
+    // Add resize listener
+    window.addEventListener('resize', handleResize);
+
+    // Clean up function
+    function cleanup() {
+        window.removeEventListener('resize', handleResize);
+        simulation.stop();
+    }
 
     return {
         update: (newData) => {

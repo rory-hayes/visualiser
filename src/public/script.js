@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+let graphCleanup;
+
 async function initializeDashboard() {
     const visualization = document.getElementById('visualization');
     if (!visualization) {
@@ -57,6 +59,7 @@ async function initializeDashboard() {
 
         // Initialize the graph
         const graph = generateGraph(visualization, data.graph);
+        graphCleanup = graph.cleanup;
 
         // Update all metrics
         updateDashboardMetrics(data.graph, data.score);
@@ -71,6 +74,9 @@ async function initializeDashboard() {
         enhanceVisualization(graph);
 
     } catch (error) {
+        if (graphCleanup) {
+            graphCleanup();
+        }
         console.error('Error initializing dashboard:', error);
         showError(error.message);
     }

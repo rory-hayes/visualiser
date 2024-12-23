@@ -197,56 +197,29 @@ function setupEventListeners(graph) {
 }
 
 function updateDashboardMetrics(graph, score) {
-    // Update workspace score
-    document.getElementById('workspaceScore').innerText = score;
-
-    // Basic metrics
-    const totalPages = graph.metadata.totalPages;
-    const totalDatabases = graph.metadata.totalDatabases;
+    const workspaceScore = calculateWorkspaceScore(graph);
     
-    document.getElementById('totalPages').innerText = totalPages;
-    document.getElementById('totalDatabases').innerText = totalDatabases;
+    // Update score display
+    document.getElementById('workspaceScore').innerText = workspaceScore.total;
     
-    // Activity metrics
-    const now = new Date();
-    const lastEditTimes = graph.metadata.lastEditTimes.map(t => new Date(t));
+    // Update existing metrics
+    document.getElementById('totalPages').innerText = workspaceScore.metrics.totalPages;
+    document.getElementById('totalDatabases').innerText = workspaceScore.metrics.databaseCount;
+    document.getElementById('activePages').innerText = workspaceScore.metrics.activePages;
     
-    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-    const sixtyDaysAgo = new Date(now - 60 * 24 * 60 * 60 * 1000);
-    const ninetyDaysAgo = new Date(now - 90 * 24 * 60 * 60 * 1000);
-
-    const activePages = lastEditTimes.filter(date => date > thirtyDaysAgo).length;
-    
-    document.getElementById('activePages').innerText = activePages;
-    document.getElementById('last30Days').innerText = activePages;
-    document.getElementById('last60Days').innerText = lastEditTimes.filter(date => date > sixtyDaysAgo).length;
-    document.getElementById('last90Days').innerText = lastEditTimes.filter(date => date > ninetyDaysAgo).length;
-    document.getElementById('over90Days').innerText = lastEditTimes.filter(date => date <= ninetyDaysAgo).length;
-
-    // Structure metrics with additional detail
-    const maxDepth = calculateMaxDepth(graph);
-    const avgPagesPerLevel = calculateAvgPagesPerLevel(graph);
-    
-    document.getElementById('maxDepth').innerText = maxDepth;
-    document.getElementById('avgPagesPerLevel').innerHTML = `
-        <span class="font-semibold">${avgPagesPerLevel}</span>
-        <span class="text-xs text-gray-500 ml-1">pages/level</span>
-    `;
-    document.getElementById('totalConnections').innerText = graph.links.length;
-
-    // Add hover tooltip for structure stats
-    const structureStats = document.querySelector('.dashboard-card:last-child');
-    if (structureStats) {
-        structureStats.setAttribute('title', 
-            `Workspace Structure Details:\n` +
-            `• Maximum depth: ${maxDepth} levels\n` +
-            `• Average pages per level: ${avgPagesPerLevel}\n` +
-            `• Total connections: ${graph.links.length}`
-        );
+    // Add score breakdown if you have elements for them
+    if (document.getElementById('structureScore')) {
+        document.getElementById('structureScore').innerText = 
+            workspaceScore.breakdown.structure + '%';
     }
-
-    // Update database metrics
-    updateDatabaseMetrics(graph);
+    if (document.getElementById('activityScore')) {
+        document.getElementById('activityScore').innerText = 
+            workspaceScore.breakdown.activity + '%';
+    }
+    if (document.getElementById('connectivityScore')) {
+        document.getElementById('connectivityScore').innerText = 
+            workspaceScore.breakdown.connectivity + '%';
+    }
 }
 
 function updateDatabaseMetrics(graph) {
@@ -714,6 +687,165 @@ function showMetricsModal() {
     } catch (error) {
         console.error('Error showing metrics modal:', error);
     }
+}
+
+function calculateWorkspaceScore(workspaceData) {
+    const weights = {
+        structure: 0.40,    // 40% - Organization and hierarchy
+        activity: 0.30,     // 30% - Page activity and maintenance
+        connectivity: 0.30  // 30% - Inter-page connections
+    };
+
+    // Calculate component scores
+    const structureScore = calculateStructureScore(workspaceData);
+    const activityScore = calculateActivityScore(workspaceData);
+    const connectivityScore = calculateConnectivityScore(workspaceData);
+
+    // Calculate final score
+    const finalScore = Math.round(
+        (structureScore * weights.structure) +
+        (activityScore * weights.activity) +
+        (connectivityScore * weights.connectivity)
+    );
+
+    return {
+        total: finalScore,
+        breakdown: {
+            structure: Math.round(structureScore),
+            activity: Math.round(activityScore),
+            connectivity: Math.round(connectivityScore)
+        },
+        metrics: {
+            totalPages: workspaceData.nodes.length,
+            maxDepth: calculateMaxDepth(workspaceData),
+            activePages: countActivePages(workspaceData),
+            databaseCount: countDatabases(workspaceData)
+        },
+        suggestions: generateWorkspaceSuggestions({
+            structureScore,
+            activityScore,
+            connectivityScore
+        })
+    };
+}
+
+function calculateStructureScore(workspace) {
+    const depthScore = calculateDepthBalance(workspace);
+    const rootScore = calculateRootStructure(workspace);
+    const dbScore = calculateDatabaseRatio(workspace);
+    
+    return (depthScore + rootScore + dbScore) / 3;
+}
+
+function calculateDepthBalance(workspace) {
+    const depths = workspace.nodes.map(node => calculateNodeDepth(node));
+    const maxDepth = Math.max(...depths);
+    
+    // Ideal depth: 3-5 levels
+    if (maxDepth >= 3 && maxDepth <= 5) return 100;
+    return Math.max(0, 100 - Math.abs(maxDepth - 4) * 15);
+}
+
+function calculateRootStructure(workspace) {
+    const rootPages = workspace.nodes.filter(n => 
+        !workspace.links.some(l => l.target.id === n.id)
+    );
+    // Ideal: 3-7 root pages
+    return Math.max(0, 100 - Math.abs(rootPages.length - 5) * 10);
+}
+
+function calculateDatabaseRatio(workspace) {
+    const dbCount = workspace.nodes.filter(n => n.type === 'database').length;
+    const totalCount = workspace.nodes.length;
+    const ratio = dbCount / totalCount;
+    // Ideal ratio: 10-25% databases
+    return Math.max(0, 100 - Math.abs(ratio - 0.175) * 300);
+}
+
+function calculateActivityScore(workspace) {
+    const recentEditsScore = calculateRecentEdits(workspace);
+    const archiveScore = calculateArchiveStatus(workspace);
+    
+    return (recentEditsScore + archiveScore) / 2;
+}
+
+function calculateRecentEdits(workspace) {
+    const now = new Date();
+    return workspace.nodes.reduce((score, node) => {
+        if (!node.lastEdited) return score;
+        const daysSinceEdit = (now - new Date(node.lastEdited)) / (1000 * 60 * 60 * 24);
+        if (daysSinceEdit <= 7) return score + 1;
+        if (daysSinceEdit <= 30) return score + 0.5;
+        if (daysSinceEdit <= 90) return score + 0.25;
+        return score;
+    }, 0) / workspace.nodes.length * 100;
+}
+
+function calculateArchiveStatus(workspace) {
+    const archivedCount = workspace.nodes.filter(n => n.archived).length;
+    const ratio = archivedCount / workspace.nodes.length;
+    // Ideal archive ratio: 5-15%
+    return Math.max(0, 100 - Math.abs(ratio - 0.1) * 200);
+}
+
+function calculateConnectivityScore(workspace) {
+    const linkScore = calculatePageLinks(workspace);
+    const relationScore = calculateDatabaseRelations(workspace);
+    
+    return (linkScore + relationScore) / 2;
+}
+
+function calculatePageLinks(workspace) {
+    return workspace.nodes.reduce((score, node) => {
+        const linkCount = workspace.links.filter(l => 
+            l.source.id === node.id || l.target.id === node.id
+        ).length;
+        if (linkCount >= 2) return score + 1;
+        if (linkCount >= 1) return score + 0.5;
+        return score;
+    }, 0) / workspace.nodes.length * 100;
+}
+
+function calculateDatabaseRelations(workspace) {
+    const databases = workspace.nodes.filter(n => n.type === 'database');
+    if (databases.length === 0) return 0;
+    
+    return databases.reduce((score, db) => {
+        const hasRelations = workspace.links.some(l => 
+            l.source.id === db.id || l.target.id === db.id
+        );
+        return score + (hasRelations ? 1 : 0);
+    }, 0) / databases.length * 100;
+}
+
+function generateWorkspaceSuggestions({ structureScore, activityScore, connectivityScore }) {
+    const suggestions = [];
+    
+    if (structureScore < 70) {
+        suggestions.push(
+            'Consider reorganizing your workspace hierarchy to maintain 3-5 levels of depth',
+            'Aim for 3-7 top-level pages for better organization',
+            'Review your database to page ratio (ideal: 10-25% databases)'
+        );
+    }
+    
+    if (activityScore < 70) {
+        suggestions.push(
+            'Regular updates help maintain workspace relevance',
+            'Consider archiving outdated content (aim for 5-15% archived)',
+            'Review and update pages that haven't been modified in over 90 days'
+        );
+    }
+    
+    if (connectivityScore < 70) {
+        suggestions.push(
+            'Add more connections between related pages',
+            'Utilize database relations to link related content',
+            'Create index pages to improve navigation'
+        );
+    }
+    
+    return suggestions;
 }
 
 // Add implementations for other new metric functions...

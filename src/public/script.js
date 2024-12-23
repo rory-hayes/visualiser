@@ -1,6 +1,15 @@
 // Add at the top of the file for debugging
 console.log('Script loaded');
 
+// Add at the top of the file
+const DEBUG = true;
+
+function log(...args) {
+    if (DEBUG) {
+        console.log(...args);
+    }
+}
+
 // First, let's store the graph data globally so we can access it in our metrics
 let currentGraphData = null;
 
@@ -32,24 +41,23 @@ document.addEventListener('DOMContentLoaded', () => {
 let graphCleanup;
 
 async function initializeDashboard() {
-    const visualization = document.getElementById('visualization');
-    if (!visualization) {
-        console.error('Visualization container not found');
-        return;
-    }
-
-    // Show loading state
-    showLoading(visualization);
-
     try {
-        // Update the import path
+        const visualization = document.getElementById('visualization');
+        if (!visualization) {
+            console.error('Visualization container not found');
+            return;
+        }
+
+        // Show loading state
+        showLoading(visualization);
+
+        // Import and initialize graph
         const { generateGraph } = await import('./generateGraph.js');
         console.log('Successfully loaded generateGraph');
         
         const response = await fetch('/api/data');
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`API Error (${response.status}): ${errorText}`);
+            throw new Error(`API Error (${response.status}): ${await response.text()}`);
         }
 
         const data = await response.json();
@@ -57,32 +65,26 @@ async function initializeDashboard() {
             throw new Error('Invalid data format received from server');
         }
 
-        // Store the graph data globally
-        currentGraphData = data.graph;
-        
         // Clear loading state
         visualization.innerHTML = '';
 
-        // Initialize the graph
+        // Initialize graph BEFORE storing data globally
         const graph = generateGraph(visualization, data.graph);
-        graphCleanup = graph.cleanup;
+        
+        // Store data after graph is initialized
+        currentGraphData = data.graph;
 
-        // Update all metrics
+        // Setup additional features
+        setupZoomControls(graph);
+        setupEventListeners(graph);
         updateDashboardMetrics(data.graph, data.score);
 
-        // Setup zoom control buttons
-        setupZoomControls(graph);
+        log('Graph data:', data.graph);
+        log('Graph instance:', graph);
 
-        // Setup event listeners
-        setupEventListeners(graph);
-
-        // Enhance visualization
-        enhanceVisualization(graph);
+        return graph;
 
     } catch (error) {
-        if (graphCleanup) {
-            graphCleanup();
-        }
         console.error('Error initializing dashboard:', error);
         showError(error.message);
     }

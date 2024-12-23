@@ -56,50 +56,52 @@ export function generateGraph(container, data) {
         .append('svg')
         .attr('width', '100%')
         .attr('height', '100%')
-        .attr('viewBox', [0, 0, width, height])
+        .attr('viewBox', [-width/2, -height/2, width, height])
         .style('max-width', '100%')
         .style('height', 'auto');
 
     const g = svg.append('g');
 
-    // Add zoom support
+    // Improved zoom behavior
     const zoom = d3Instance.zoom()
         .scaleExtent([0.1, 4])
         .on('zoom', (event) => {
             g.attr('transform', event.transform);
         });
 
+    // Set initial zoom level
     svg.call(zoom);
+    svg.call(zoom.transform, d3Instance.zoomIdentity
+        .translate(width/2, height/2)
+        .scale(0.5)); // Start zoomed out
 
     setupZoomControls(svg, g, zoom);
 
-    // Create force simulation
+    // Update simulation with better initial forces
     const simulation = d3Instance.forceSimulation(data.nodes)
         .force('link', d3Instance.forceLink(data.links)
             .id(d => d.id)
             .distance(d => {
-                // Adjust distance based on node types
                 const sourceType = d.source.type;
                 const targetType = d.target.type;
                 if (sourceType === 'workspace' || targetType === 'workspace') {
-                    return 150;
+                    return 200; // Increased distance for workspace nodes
                 }
-                return 100;
+                return 150; // Increased general distance
             }))
         .force('charge', d3Instance.forceManyBody()
             .strength(d => {
-                // Adjust repulsion based on node type
-                if (d.type === 'workspace') return -600;
-                if (d.type === 'database') return -400;
-                return -200;
+                if (d.type === 'workspace') return -1000;
+                if (d.type === 'database') return -600;
+                return -400;
             }))
-        .force('center', d3Instance.forceCenter(width / 2, height / 2))
-        .force('collision', d3Instance.forceCollide().radius(d => {
-            // Adjust collision radius based on node size
-            return (nodeSize[d.type] || 10) * 1.5;
-        }))
-        .force('x', d3Instance.forceX(width / 2).strength(0.05))
-        .force('y', d3Instance.forceY(height / 2).strength(0.05));
+        .force('center', d3Instance.forceCenter(0, 0))
+        .force('collision', d3Instance.forceCollide().radius(d => 
+            (nodeSize[d.type] || 10) * 2))
+        .force('x', d3Instance.forceX(0).strength(0.1))
+        .force('y', d3Instance.forceY(0).strength(0.1))
+        .alphaDecay(0.01) // Slower decay for smoother initialization
+        .velocityDecay(0.3); // Added damping
 
     // Create links
     const link = g.append('g')
@@ -112,8 +114,8 @@ export function generateGraph(container, data) {
         .attr('stroke-opacity', 0.6)
         .attr('stroke-width', 1);
 
-    // Create nodes
-    const node = g.append('g')
+    // Update node creation with better text handling
+    const nodeGroup = g.append('g')
         .attr('class', 'nodes')
         .selectAll('g')
         .data(data.nodes)
@@ -124,8 +126,28 @@ export function generateGraph(container, data) {
             .on('drag', dragged)
             .on('end', dragended));
 
+    // Add text background for better visibility
+    nodeGroup.append('text')
+        .attr('dx', 15)
+        .attr('dy', '.35em')
+        .text(d => d.name)
+        .style('font-size', '12px')
+        .style('fill', '#374151')
+        .style('stroke', '#fff')
+        .style('stroke-width', '3px')
+        .style('stroke-opacity', '0.8')
+        .style('paint-order', 'stroke');
+
+    // Add actual text on top
+    nodeGroup.append('text')
+        .attr('dx', 15)
+        .attr('dy', '.35em')
+        .text(d => d.name)
+        .style('font-size', '12px')
+        .style('fill', '#374151');
+
     // Add circles to nodes
-    node.append('circle')
+    nodeGroup.append('circle')
         .attr('r', d => nodeSize[d.type] || 10)
         .attr('fill', d => nodeColors[d.type] || '#999')
         .attr('stroke', '#fff')
@@ -174,16 +196,8 @@ export function generateGraph(container, data) {
             d3Instance.selectAll('.tooltip').remove();
         });
 
-    // Add labels to nodes
-    node.append('text')
-        .attr('dx', 15)
-        .attr('dy', '.35em')
-        .text(d => d.name)
-        .style('font-size', '12px')
-        .style('fill', '#374151');
-
     // Add title for hover tooltip
-    node.append('title')
+    nodeGroup.append('title')
         .text(d => `${d.name} (${d.type})`);
 
     // Update force simulation on tick
@@ -204,7 +218,7 @@ export function generateGraph(container, data) {
             .attr('y2', d => d.target.y);
 
         // Update node positions
-        node
+        nodeGroup
             .attr('transform', d => `translate(${d.x},${d.y})`);
     });
 
@@ -214,21 +228,34 @@ export function generateGraph(container, data) {
         d.fx = event.x;
         d.fy = event.y;
         
-        // Highlight dragged node and connected nodes
-        d3.select(event.sourceEvent.target)
+        // Highlight dragged node
+        d3Instance.select(event.sourceEvent.target)
             .attr('stroke', '#ff0')
             .attr('stroke-width', 3);
-        
-        link.filter(l => l.source === d || l.target === d)
+            
+        // Highlight connected links and nodes
+        const connectedLinks = link.filter(l => l.source === d || l.target === d);
+        connectedLinks
             .attr('stroke', '#ff0')
             .attr('stroke-width', 2);
+            
+        // Keep text visible during drag
+        nodeGroup.selectAll('text')
+            .style('fill', n => {
+                if (n === d) return '#000'; // Dragged node text
+                if (connectedLinks.data().some(l => 
+                    l.source === n || l.target === n)) {
+                    return '#000'; // Connected node text
+                }
+                return '#666'; // Other node text
+            });
     }
 
     function dragged(event, d) {
         d.fx = event.x;
         d.fy = event.y;
         
-        // Update connected links positions in real-time
+        // Update connected elements positions
         link.filter(l => l.source === d || l.target === d)
             .attr('x1', l => l.source === d ? event.x : l.source.x)
             .attr('y1', l => l.source === d ? event.y : l.source.y)
@@ -241,20 +268,23 @@ export function generateGraph(container, data) {
         
         // Reset node position if dropped outside bounds
         const margin = 50;
-        if (d.x < margin || d.x > width - margin || 
-            d.y < margin || d.y > height - margin) {
+        if (Math.abs(d.x) > width/2 - margin || 
+            Math.abs(d.y) > height/2 - margin) {
             d.fx = null;
             d.fy = null;
         }
         
         // Reset highlighting
-        d3.select(event.sourceEvent.target)
+        d3Instance.select(event.sourceEvent.target)
             .attr('stroke', '#fff')
             .attr('stroke-width', 2);
-        
-        link.filter(l => l.source === d || l.target === d)
-            .attr('stroke', '#999')
+            
+        link.attr('stroke', '#999')
             .attr('stroke-width', 1);
+            
+        // Reset text colors
+        nodeGroup.selectAll('text')
+            .style('fill', '#374151');
     }
 
     // Store references for layout switching
@@ -349,7 +379,8 @@ export function generateGraph(container, data) {
         update: (newData) => {
             graphState.data = newData;
             updateLayout(graphState.currentLayout);
-        }
+        },
+        cleanup: cleanup
     };
 }
 

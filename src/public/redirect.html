@@ -55,6 +55,11 @@
                     <button id="refreshBtn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                         Refresh
                     </button>
+
+                    <!-- Add this near your other controls -->
+                    <button id="debugGraph" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                        Debug Graph
+                    </button>
                 </div>
             </div>
         </div>
@@ -199,5 +204,20 @@
         }
     </script>
     <script type="module" src="script.js"></script>
+
+    <!-- Add this event listener in your script.js -->
+    document.getElementById('debugGraph')?.addEventListener('click', () => {
+        const visualization = document.getElementById('visualization');
+        console.log('Debug visualization:', {
+            container: visualization,
+            dimensions: {
+                width: visualization.clientWidth,
+                height: visualization.clientHeight
+            },
+            svg: visualization.querySelector('svg'),
+            nodes: visualization.querySelectorAll('.node').length,
+            links: visualization.querySelectorAll('.link').length
+        });
+    });
 </body>
 </html>

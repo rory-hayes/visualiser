@@ -4,9 +4,9 @@ console.log('Script loaded');
 // Add at the top of the file
 const DEBUG = true;
 
-function log(...args) {
+function log(message, data) {
     if (DEBUG) {
-        console.log(...args);
+        console.log(`[DEBUG] ${message}`, data || '');
     }
 }
 
@@ -48,48 +48,37 @@ async function initializeDashboard() {
             return;
         }
 
-        console.log('Starting dashboard initialization');
-        showLoading(visualization);
-
-        // Import and initialize graph
-        const { generateGraph } = await import('./generateGraph.js');
-        console.log('generateGraph imported successfully');
-        
-        const response = await fetch('/api/data');
-        console.log('API response status:', response.status);
-        
-        const data = await response.json();
-        console.log('Received data structure:', {
-            hasGraph: !!data.graph,
-            nodes: data.graph?.nodes?.length || 0,
-            links: data.graph?.links?.length || 0,
-            score: data.score
+        console.log('Container dimensions:', {
+            width: visualization.clientWidth,
+            height: visualization.clientHeight
         });
 
-        if (!data.graph || !data.score) {
-            throw new Error('Invalid data format received from server');
-        }
+        showLoading(visualization);
+
+        const { generateGraph } = await import('./generateGraph.js');
+        
+        const response = await fetch('/api/data');
+        const data = await response.json();
+        
+        console.log('Graph data received:', {
+            nodes: data.graph.nodes.length,
+            links: data.graph.links.length,
+            sampleNode: data.graph.nodes[0]
+        });
 
         visualization.innerHTML = '';
-        
-        // Add size logging
-        const containerSize = {
-            width: visualization.clientWidth,
-            height: visualization.clientHeight,
-            visible: visualization.offsetParent !== null
-        };
-        console.log('Visualization container size:', containerSize);
 
+        // Initialize the graph
         const graph = generateGraph(visualization, data.graph);
-        console.log('Graph generation result:', !!graph);
-
+        
         if (!graph) {
-            throw new Error('Failed to generate graph');
+            throw new Error('Graph generation failed');
         }
 
-        // Setup additional features
-        setupZoomControls(graph);
-        setupEventListeners(graph);
+        // Store data globally
+        currentGraphData = data.graph;
+
+        // Update metrics
         updateDashboardMetrics(data.graph, data.score);
 
         return graph;
@@ -555,28 +544,6 @@ function countChildPages(node) {
     return links.filter(link => 
         link.source.id === node.id
     ).length;
-}
-
-function calculateNodeDepth(node, links, visited = new Set()) {
-    try {
-        if (!node || !links || visited.has(node.id)) return 0;
-        visited.add(node.id);
-        
-        const parentLink = links.find(link => 
-            (link.target.id === node.id) || (link.target === node.id)
-        );
-        
-        if (!parentLink) return 0;
-        
-        const parentNode = {
-            id: parentLink.source.id || parentLink.source
-        };
-        
-        return 1 + calculateNodeDepth(parentNode, links, visited);
-    } catch (error) {
-        console.error('Error calculating node depth:', error);
-        return 0;
-    }
 }
 
 function formatDate(dateString) {

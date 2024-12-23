@@ -172,6 +172,16 @@ function setupEventListeners(graph) {
             svgContent: document.querySelector('#visualization svg g')?.children?.length
         });
     });
+
+    // Analysis button
+    document.getElementById('analysisBtn').addEventListener('click', () => {
+        showAnalysisModal();
+    });
+
+    // Metrics button
+    document.getElementById('metricsBtn').addEventListener('click', () => {
+        showMetricsModal();
+    });
 }
 
 function updateDashboardMetrics(graph, score) {
@@ -571,4 +581,250 @@ function formatDate(dateString) {
         month: 'short',
         day: 'numeric'
     });
+}
+
+function showAnalysisModal() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+    modal.innerHTML = `
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="flex justify-between items-center pb-3">
+                <h3 class="text-xl font-bold">Workspace Analysis</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-500">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="mt-4">
+                <h4 class="font-semibold text-gray-800 mb-2">Structure Analysis</h4>
+                <ul class="list-disc pl-5 space-y-2 text-gray-600">
+                    <li>Deep hierarchies detected: ${getDeepHierarchies()}</li>
+                    <li>Orphaned pages: ${getOrphanedPages()}</li>
+                    <li>Underutilized databases: ${getUnderutilizedDatabases()}</li>
+                </ul>
+                
+                <h4 class="font-semibold text-gray-800 mt-6 mb-2">Recommendations</h4>
+                <ul class="list-disc pl-5 space-y-2 text-gray-600">
+                    ${generateRecommendations().map(rec => `<li>${rec}</li>`).join('')}
+                </ul>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    modal.querySelector('.modal-close').onclick = () => modal.remove();
+}
+
+function showMetricsModal() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+    modal.innerHTML = `
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="flex justify-between items-center pb-3">
+                <h3 class="text-xl font-bold">Workspace Metrics</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-500">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold text-gray-800 mb-2">Activity Metrics</h4>
+                    <div class="space-y-2">
+                        <p>Active pages (30 days): ${getActivePages()}</p>
+                        <p>Stale pages (90+ days): ${getStalePages()}</p>
+                        <p>Average updates per week: ${getUpdatesPerWeek()}</p>
+                    </div>
+                </div>
+                <div class="p-4 bg-gray-50 rounded-lg">
+                    <h4 class="font-semibold text-gray-800 mb-2">Structure Metrics</h4>
+                    <div class="space-y-2">
+                        <p>Average depth: ${getAverageDepth()}</p>
+                        <p>Connection density: ${getConnectionDensity()}</p>
+                        <p>Database utilization: ${getDatabaseUtilization()}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    modal.querySelector('.modal-close').onclick = () => modal.remove();
+}
+
+// Add helper functions for analysis and metrics
+// These functions should be implemented based on your data structure
+function getDeepHierarchies() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    const links = svg.selectAll('.link').data();
+    
+    // Track depth of each node
+    const nodeDepths = new Map();
+    const deepPaths = [];
+    const DEPTH_THRESHOLD = 5; // Consider hierarchies deeper than 5 levels as "deep"
+    
+    function calculateNodeDepth(node, visited = new Set()) {
+        if (nodeDepths.has(node.id)) return nodeDepths.get(node.id);
+        if (visited.has(node.id)) return 0;
+        
+        visited.add(node.id);
+        
+        // Find parent link
+        const parentLink = links.find(link => 
+            (link.target.id || link.target) === node.id
+        );
+        
+        if (!parentLink) {
+            nodeDepths.set(node.id, 0);
+            return 0;
+        }
+        
+        const parentNode = nodes.find(n => 
+            n.id === (parentLink.source.id || parentLink.source)
+        );
+        const parentDepth = calculateNodeDepth(parentNode, visited);
+        const depth = parentDepth + 1;
+        nodeDepths.set(node.id, depth);
+        
+        // Track deep paths
+        if (depth >= DEPTH_THRESHOLD) {
+            let currentNode = node;
+            const path = [currentNode.name];
+            
+            while (currentNode) {
+                const parentLink = links.find(link => 
+                    (link.target.id || link.target) === currentNode.id
+                );
+                if (!parentLink) break;
+                
+                currentNode = nodes.find(n => 
+                    n.id === (parentLink.source.id || parentLink.source)
+                );
+                if (currentNode) {
+                    path.unshift(currentNode.name);
+                }
+            }
+            
+            deepPaths.push(path);
+        }
+        
+        return depth;
+    }
+    
+    // Calculate depths for all nodes
+    nodes.forEach(node => calculateNodeDepth(node));
+    
+    // Get unique deep paths
+    const uniqueDeepPaths = Array.from(new Set(
+        deepPaths.map(path => path.join(' → '))
+    )).map(pathString => pathString.split(' → '));
+    
+    if (uniqueDeepPaths.length === 0) {
+        return 'No deep hierarchies detected';
+    }
+    
+    return `${uniqueDeepPaths.length} deep paths found:<br>` +
+        uniqueDeepPaths.map(path => 
+            `• ${path.join(' → ')}`
+        ).join('<br>');
+}
+
+function getOrphanedPages() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    const links = svg.selectAll('.link').data();
+    
+    const orphanedNodes = nodes.filter(node => {
+        // Skip workspace node
+        if (node.type === 'workspace') return false;
+        
+        // Check if node has any connections
+        const hasConnections = links.some(link => 
+            (link.source.id || link.source) === node.id || 
+            (link.target.id || link.target) === node.id
+        );
+        
+        return !hasConnections;
+    });
+    
+    if (orphanedNodes.length === 0) {
+        return 'No orphaned pages found';
+    }
+    
+    return `${orphanedNodes.length} orphaned pages found:<br>` +
+        orphanedNodes.map(node => 
+            `• ${node.name} (${node.type})`
+        ).join('<br>');
+}
+
+function getUnderutilizedDatabases() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    const links = svg.selectAll('.link').data();
+    
+    const databases = nodes.filter(node => node.type === 'database');
+    const underutilizedDbs = databases.filter(db => {
+        // Count child pages
+        const childCount = links.filter(link => 
+            (link.source.id || link.source) === db.id
+        ).length;
+        
+        // Consider databases with less than 3 child pages as underutilized
+        return childCount < 3;
+    });
+    
+    if (underutilizedDbs.length === 0) {
+        return 'No underutilized databases found';
+    }
+    
+    return `${underutilizedDbs.length} underutilized databases found:<br>` +
+        underutilizedDbs.map(db => {
+            const childCount = links.filter(link => 
+                (link.source.id || link.source) === db.id
+            ).length;
+            return `• ${db.name} (${childCount} pages)`;
+        }).join('<br>');
+}
+
+function generateRecommendations() {
+    const recommendations = [];
+    
+    // Deep hierarchies recommendations
+    const deepHierarchies = getDeepHierarchies();
+    if (deepHierarchies.includes('deep paths found')) {
+        recommendations.push(
+            'Consider flattening deep hierarchies to improve navigation',
+            'Create index pages to better organize deep content'
+        );
+    }
+    
+    // Orphaned pages recommendations
+    const orphanedPages = getOrphanedPages();
+    if (orphanedPages.includes('orphaned pages found')) {
+        recommendations.push(
+            'Connect or archive orphaned pages',
+            'Create a dedicated archive section for unused content'
+        );
+    }
+    
+    // Database recommendations
+    const underutilizedDbs = getUnderutilizedDatabases();
+    if (underutilizedDbs.includes('underutilized databases found')) {
+        recommendations.push(
+            'Consider merging underutilized databases',
+            'Review database structure to improve usage'
+        );
+    }
+    
+    // Add general recommendations
+    recommendations.push(
+        'Regularly review and update page connections',
+        'Use templates for consistent page structure',
+        'Consider implementing a tagging system'
+    );
+    
+    return recommendations;
 }

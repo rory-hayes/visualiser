@@ -197,28 +197,46 @@ function setupEventListeners(graph) {
 }
 
 function updateDashboardMetrics(graph, score) {
-    const workspaceScore = calculateWorkspaceScore(graph);
-    
-    // Update score display
-    document.getElementById('workspaceScore').innerText = workspaceScore.total;
-    
-    // Update existing metrics
-    document.getElementById('totalPages').innerText = workspaceScore.metrics.totalPages;
-    document.getElementById('totalDatabases').innerText = workspaceScore.metrics.databaseCount;
-    document.getElementById('activePages').innerText = workspaceScore.metrics.activePages;
-    
-    // Add score breakdown if you have elements for them
-    if (document.getElementById('structureScore')) {
-        document.getElementById('structureScore').innerText = 
-            workspaceScore.breakdown.structure + '%';
-    }
-    if (document.getElementById('activityScore')) {
-        document.getElementById('activityScore').innerText = 
-            workspaceScore.breakdown.activity + '%';
-    }
-    if (document.getElementById('connectivityScore')) {
-        document.getElementById('connectivityScore').innerText = 
-            workspaceScore.breakdown.connectivity + '%';
+    try {
+        const workspaceScore = calculateWorkspaceScore(graph);
+        
+        // Update score display with error handling
+        const scoreElement = document.getElementById('workspaceScore');
+        if (scoreElement) {
+            scoreElement.innerText = workspaceScore.total || '0';
+        }
+        
+        // Update metrics with error handling
+        const metrics = {
+            'totalPages': workspaceScore.metrics.totalPages || 0,
+            'totalDatabases': workspaceScore.metrics.databaseCount || 0,
+            'activePages': workspaceScore.metrics.activePages || 0,
+            'maxDepth': calculateMaxDepth(graph) || 0,
+            'totalConnections': (graph.links || []).length || 0
+        };
+        
+        // Update each metric element
+        Object.entries(metrics).forEach(([id, value]) => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.innerText = value;
+            }
+        });
+        
+        // Update database metrics
+        updateDatabaseMetrics(graph);
+        
+    } catch (error) {
+        console.error('Error updating dashboard metrics:', error);
+        // Set default values if there's an error
+        const defaultValue = '0';
+        ['workspaceScore', 'totalPages', 'totalDatabases', 'activePages', 
+         'maxDepth', 'totalConnections'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.innerText = defaultValue;
+            }
+        });
     }
 }
 
@@ -244,31 +262,19 @@ function updateDatabaseMetrics(graph) {
         `).join('');
 }
 
-function calculateMaxDepth(graph) {
-    const getNodeDepth = (nodeId, visited = new Set()) => {
-        if (visited.has(nodeId)) return 0;
-        visited.add(nodeId);
+function calculateMaxDepth(workspace) {
+    try {
+        if (!workspace?.nodes || !workspace?.links) return 0;
         
-        const childLinks = graph.links.filter(link => 
-            (link.source.id === nodeId || link.source === nodeId)
-        );
+        const depths = workspace.nodes.map(node => {
+            return calculateNodeDepth(node, workspace.links);
+        });
         
-        if (childLinks.length === 0) return 1;
-        
-        const childDepths = childLinks.map(link => 
-            getNodeDepth(link.target.id || link.target, visited)
-        );
-        
-        return 1 + Math.max(...childDepths);
-    };
-
-    const rootNodes = graph.nodes.filter(node => 
-        node.type === 'workspace' || 
-        !graph.links.some(link => link.target.id === node.id || link.target === node.id)
-    );
-
-    const depths = rootNodes.map(node => getNodeDepth(node.id));
-    return Math.max(...depths);
+        return Math.max(...depths, 0);
+    } catch (error) {
+        console.error('Error calculating max depth:', error);
+        return 0;
+    }
 }
 
 function calculateAvgPagesPerLevel(graph) {
@@ -539,24 +545,26 @@ function countChildPages(node) {
     ).length;
 }
 
-function calculateNodeDepth(node) {
-    const svg = d3.select('#visualization svg');
-    const links = svg.selectAll('.link').data();
-    let depth = 0;
-    let currentNode = node;
-    
-    while (true) {
+function calculateNodeDepth(node, links, visited = new Set()) {
+    try {
+        if (!node || !links || visited.has(node.id)) return 0;
+        visited.add(node.id);
+        
         const parentLink = links.find(link => 
-            link.target.id === currentNode.id
+            (link.target.id === node.id) || (link.target === node.id)
         );
         
-        if (!parentLink) break;
+        if (!parentLink) return 0;
         
-        currentNode = parentLink.source;
-        depth++;
+        const parentNode = {
+            id: parentLink.source.id || parentLink.source
+        };
+        
+        return 1 + calculateNodeDepth(parentNode, links, visited);
+    } catch (error) {
+        console.error('Error calculating node depth:', error);
+        return 0;
     }
-    
-    return depth;
 }
 
 function formatDate(dateString) {
@@ -846,6 +854,60 @@ function generateWorkspaceSuggestions({ structureScore, activityScore, connectiv
     }
     
     return suggestions;
+}
+
+// Add these helper functions for workspace metrics
+
+function countActivePages(workspace) {
+    try {
+        if (!workspace?.nodes) return 0;
+        
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        
+        return workspace.nodes.filter(node => 
+            node.lastEdited && new Date(node.lastEdited) > thirtyDaysAgo
+        ).length;
+    } catch (error) {
+        console.error('Error counting active pages:', error);
+        return 0;
+    }
+}
+
+function countDatabases(workspace) {
+    try {
+        if (!workspace?.nodes) return 0;
+        
+        return workspace.nodes.filter(node => 
+            node.type === 'database'
+        ).length;
+    } catch (error) {
+        console.error('Error counting databases:', error);
+        return 0;
+    }
+}
+
+// Add error handling to existing functions
+function calculateNodeDepth(node, links, visited = new Set()) {
+    try {
+        if (!node || !links || visited.has(node.id)) return 0;
+        visited.add(node.id);
+        
+        const parentLink = links.find(link => 
+            (link.target.id === node.id) || (link.target === node.id)
+        );
+        
+        if (!parentLink) return 0;
+        
+        const parentNode = {
+            id: parentLink.source.id || parentLink.source
+        };
+        
+        return 1 + calculateNodeDepth(parentNode, links, visited);
+    } catch (error) {
+        console.error('Error calculating node depth:', error);
+        return 0;
+    }
 }
 
 // Add implementations for other new metric functions...

@@ -620,31 +620,131 @@ function showMetricsModal() {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
     modal.innerHTML = `
-        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-            <div class="flex justify-between items-center pb-3">
-                <h3 class="text-xl font-bold">Workspace Metrics</h3>
-                <button class="modal-close text-gray-400 hover:text-gray-500">
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="p-4 bg-gray-50 rounded-lg">
-                    <h4 class="font-semibold text-gray-800 mb-2">Activity Metrics</h4>
-                    <div class="space-y-2">
-                        <p>Active pages (30 days): ${getActivePages()}</p>
-                        <p>Stale pages (90+ days): ${getStalePages()}</p>
-                        <p>Average updates per week: ${getUpdatesPerWeek()}</p>
-                    </div>
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white max-h-[80vh] overflow-y-auto">
+            <!-- Workspace Overview -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">Workspace Overview</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    ${createMetricItem(
+                        'Overall Health', 
+                        getOverallHealth(), 
+                        'Composite score based on organization, activity, and maintenance'
+                    )}
+                    ${createMetricItem(
+                        'Workspace Complexity', 
+                        getComplexityScore(), 
+                        'Measures how complex your workspace structure is (lower is better)'
+                    )}
                 </div>
-                <div class="p-4 bg-gray-50 rounded-lg">
-                    <h4 class="font-semibold text-gray-800 mb-2">Structure Metrics</h4>
-                    <div class="space-y-2">
-                        <p>Average depth: ${getAverageDepth()}</p>
-                        <p>Connection density: ${getConnectionDensity()}</p>
-                        <p>Database utilization: ${getDatabaseUtilization()}</p>
-                    </div>
+            </div>
+
+            <!-- Information Architecture -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">Information Architecture</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    ${createMetricItem(
+                        'Navigation Depth', 
+                        getNavigationDepth(), 
+                        'Average number of clicks to reach any page (ideal: 3-4)'
+                    )}
+                    ${createMetricItem(
+                        'Cross-linking', 
+                        getCrossLinkingScore(), 
+                        'How well pages are connected across different sections'
+                    )}
+                    ${createMetricItem(
+                        'Section Balance', 
+                        getSectionBalance(), 
+                        'How evenly content is distributed across main sections'
+                    )}
+                </div>
+            </div>
+
+            <!-- Content Management -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">Content Management</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    ${createMetricItem(
+                        'Template Coverage', 
+                        getTemplateCoverage(), 
+                        'Percentage of pages using standardized templates'
+                    )}
+                    ${createMetricItem(
+                        'Database Efficiency', 
+                        getDatabaseEfficiency(), 
+                        'How effectively databases are structured and utilized'
+                    )}
+                    ${createMetricItem(
+                        'Content Redundancy', 
+                        getContentRedundancy(), 
+                        'Potential duplicate or similar content detected'
+                    )}
+                </div>
+            </div>
+
+            <!-- Maintenance Metrics -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">Maintenance</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    ${createMetricItem(
+                        'Update Consistency', 
+                        getUpdateConsistency(), 
+                        'How regularly content is maintained across sections'
+                    )}
+                    ${createMetricItem(
+                        'Archive Ratio', 
+                        getArchiveRatio(), 
+                        'Proportion of archived vs active content'
+                    )}
+                    ${createMetricItem(
+                        'Dead Links', 
+                        getDeadLinks(), 
+                        'Number of broken or invalid internal links'
+                    )}
+                </div>
+            </div>
+
+            <!-- Collaboration Insights -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">Collaboration Patterns</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    ${createMetricItem(
+                        'Shared Access', 
+                        getSharedAccessMetrics(), 
+                        'How well content is shared and accessible across teams'
+                    )}
+                    ${createMetricItem(
+                        'Update Hotspots', 
+                        getUpdateHotspots(), 
+                        'Areas with highest collaboration activity'
+                    )}
+                    ${createMetricItem(
+                        'Permission Health', 
+                        getPermissionHealth(), 
+                        'Assessment of permission structure and security'
+                    )}
+                </div>
+            </div>
+
+            <!-- Best Practices Score -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3">Best Practices Compliance</h4>
+                <div class="grid grid-cols-2 gap-4">
+                    ${createMetricItem(
+                        'Naming Conventions', 
+                        getNamingScore(), 
+                        'Consistency in page and database naming'
+                    )}
+                    ${createMetricItem(
+                        'Documentation', 
+                        getDocumentationScore(), 
+                        'Presence and quality of workspace documentation'
+                    )}
+                    ${createMetricItem(
+                        'Organization Score', 
+                        getOrganizationScore(), 
+                        'Overall adherence to workspace organization best practices'
+                    )}
                 </div>
             </div>
         </div>
@@ -654,177 +754,169 @@ function showMetricsModal() {
     modal.querySelector('.modal-close').onclick = () => modal.remove();
 }
 
-// Add helper functions for analysis and metrics
-// These functions should be implemented based on your data structure
-function getDeepHierarchies() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    const links = svg.selectAll('.link').data();
-    
-    // Track depth of each node
-    const nodeDepths = new Map();
-    const deepPaths = [];
-    const DEPTH_THRESHOLD = 5; // Consider hierarchies deeper than 5 levels as "deep"
-    
-    function calculateNodeDepth(node, visited = new Set()) {
-        if (nodeDepths.has(node.id)) return nodeDepths.get(node.id);
-        if (visited.has(node.id)) return 0;
-        
-        visited.add(node.id);
-        
-        // Find parent link
-        const parentLink = links.find(link => 
-            (link.target.id || link.target) === node.id
-        );
-        
-        if (!parentLink) {
-            nodeDepths.set(node.id, 0);
-            return 0;
-        }
-        
-        const parentNode = nodes.find(n => 
-            n.id === (parentLink.source.id || parentLink.source)
-        );
-        const parentDepth = calculateNodeDepth(parentNode, visited);
-        const depth = parentDepth + 1;
-        nodeDepths.set(node.id, depth);
-        
-        // Track deep paths
-        if (depth >= DEPTH_THRESHOLD) {
-            let currentNode = node;
-            const path = [currentNode.name];
-            
-            while (currentNode) {
-                const parentLink = links.find(link => 
-                    (link.target.id || link.target) === currentNode.id
-                );
-                if (!parentLink) break;
-                
-                currentNode = nodes.find(n => 
-                    n.id === (parentLink.source.id || parentLink.source)
-                );
-                if (currentNode) {
-                    path.unshift(currentNode.name);
-                }
-            }
-            
-            deepPaths.push(path);
-        }
-        
-        return depth;
-    }
-    
-    // Calculate depths for all nodes
-    nodes.forEach(node => calculateNodeDepth(node));
-    
-    // Get unique deep paths
-    const uniqueDeepPaths = Array.from(new Set(
-        deepPaths.map(path => path.join(' → '))
-    )).map(pathString => pathString.split(' → '));
-    
-    if (uniqueDeepPaths.length === 0) {
-        return 'No deep hierarchies detected';
-    }
-    
-    return `${uniqueDeepPaths.length} deep paths found:<br>` +
-        uniqueDeepPaths.map(path => 
-            `• ${path.join(' → ')}`
-        ).join('<br>');
+// Helper function to create metric items with tooltips
+function createMetricItem(label, value, tooltip) {
+    return `
+        <div class="relative group">
+            <div class="flex justify-between items-center">
+                <span class="text-sm text-gray-600">${label}</span>
+                <span class="font-semibold">${value}</span>
+            </div>
+            <div class="invisible group-hover:visible absolute z-50 w-64 p-2 mt-1 text-sm text-gray-600 bg-white rounded-lg shadow-lg border border-gray-200">
+                ${tooltip}
+            </div>
+        </div>
+    `;
 }
 
-function getOrphanedPages() {
+// Metric calculation functions
+function getHierarchyScore() {
     const svg = d3.select('#visualization svg');
     const nodes = svg.selectAll('.node').data();
     const links = svg.selectAll('.link').data();
     
-    const orphanedNodes = nodes.filter(node => {
-        // Skip workspace node
-        if (node.type === 'workspace') return false;
-        
-        // Check if node has any connections
-        const hasConnections = links.some(link => 
-            (link.source.id || link.source) === node.id || 
-            (link.target.id || link.target) === node.id
-        );
-        
-        return !hasConnections;
+    // Calculate based on:
+    // 1. Average depth (ideal: 3-5 levels)
+    // 2. Branching factor (ideal: 3-7 children per parent)
+    // 3. Consistency of structure
+    
+    const depths = nodes.map(node => calculateNodeDepth(node));
+    const avgDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
+    const branchingFactors = nodes.map(node => countChildPages(node));
+    const avgBranching = branchingFactors.reduce((a, b) => a + b, 0) / branchingFactors.length;
+    
+    let score = 100;
+    
+    // Penalize for too shallow or too deep
+    if (avgDepth < 2) score -= 20;
+    if (avgDepth > 6) score -= 15;
+    
+    // Penalize for too few or too many children
+    if (avgBranching < 2) score -= 15;
+    if (avgBranching > 8) score -= 10;
+    
+    return Math.max(0, Math.min(100, score)) + '%';
+}
+
+function getContentDistribution() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    // Count nodes at each level
+    const levelCounts = new Map();
+    nodes.forEach(node => {
+        const depth = calculateNodeDepth(node);
+        levelCounts.set(depth, (levelCounts.get(depth) || 0) + 1);
     });
     
-    if (orphanedNodes.length === 0) {
-        return 'No orphaned pages found';
-    }
+    // Calculate distribution evenness
+    const counts = Array.from(levelCounts.values());
+    const max = Math.max(...counts);
+    const min = Math.min(...counts);
     
-    return `${orphanedNodes.length} orphaned pages found:<br>` +
-        orphanedNodes.map(node => 
-            `• ${node.name} (${node.type})`
-        ).join('<br>');
+    // Return as a ratio where 1 is perfectly even
+    const evenness = min / max;
+    return (evenness * 100).toFixed(1) + '%';
 }
 
-function getUnderutilizedDatabases() {
+function getDatabaseIntegrationScore() {
     const svg = d3.select('#visualization svg');
     const nodes = svg.selectAll('.node').data();
     const links = svg.selectAll('.link').data();
     
-    const databases = nodes.filter(node => node.type === 'database');
-    const underutilizedDbs = databases.filter(db => {
-        // Count child pages
-        const childCount = links.filter(link => 
-            (link.source.id || link.source) === db.id
+    const databases = nodes.filter(n => n.type === 'database');
+    if (databases.length === 0) return 'N/A';
+    
+    let score = 100;
+    
+    // Check each database
+    databases.forEach(db => {
+        const connectedPages = links.filter(l => 
+            l.source.id === db.id || l.target.id === db.id
         ).length;
         
-        // Consider databases with less than 3 child pages as underutilized
-        return childCount < 3;
+        // Penalize underutilized databases
+        if (connectedPages < 3) score -= 15;
+        if (connectedPages === 0) score -= 25;
     });
     
-    if (underutilizedDbs.length === 0) {
-        return 'No underutilized databases found';
-    }
-    
-    return `${underutilizedDbs.length} underutilized databases found:<br>` +
-        underutilizedDbs.map(db => {
-            const childCount = links.filter(link => 
-                (link.source.id || link.source) === db.id
-            ).length;
-            return `• ${db.name} (${childCount} pages)`;
-        }).join('<br>');
+    return Math.max(0, score) + '%';
 }
 
-function generateRecommendations() {
-    const recommendations = [];
+function getActiveAreas() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
     
-    // Deep hierarchies recommendations
-    const deepHierarchies = getDeepHierarchies();
-    if (deepHierarchies.includes('deep paths found')) {
-        recommendations.push(
-            'Consider flattening deep hierarchies to improve navigation',
-            'Create index pages to better organize deep content'
-        );
-    }
+    // Group nodes by parent and count recent updates
+    const areaActivity = new Map();
+    nodes.forEach(node => {
+        const parentId = node.parentId || 'root';
+        const isRecent = new Date(node.lastEdited) > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        
+        if (!areaActivity.has(parentId)) {
+            areaActivity.set(parentId, { total: 0, active: 0 });
+        }
+        
+        const stats = areaActivity.get(parentId);
+        stats.total++;
+        if (isRecent) stats.active++;
+    });
     
-    // Orphaned pages recommendations
-    const orphanedPages = getOrphanedPages();
-    if (orphanedPages.includes('orphaned pages found')) {
-        recommendations.push(
-            'Connect or archive orphaned pages',
-            'Create a dedicated archive section for unused content'
-        );
-    }
+    // Find most active areas
+    const activeAreas = Array.from(areaActivity.entries())
+        .sort((a, b) => (b[1].active / b[1].total) - (a[1].active / a[1].total))
+        .slice(0, 3);
     
-    // Database recommendations
-    const underutilizedDbs = getUnderutilizedDatabases();
-    if (underutilizedDbs.includes('underutilized databases found')) {
-        recommendations.push(
-            'Consider merging underutilized databases',
-            'Review database structure to improve usage'
-        );
-    }
-    
-    // Add general recommendations
-    recommendations.push(
-        'Regularly review and update page connections',
-        'Use templates for consistent page structure',
-        'Consider implementing a tagging system'
-    );
-    
-    return recommendations;
+    return activeAreas.map(([id, stats]) => {
+        const areaNode = nodes.find(n => n.id === id) || { name: 'Root' };
+        return `${areaNode.name}: ${Math.round(stats.active / stats.total * 100)}%`;
+    }).join(', ');
 }
+
+// Implementation of new metric calculation functions
+function getOverallHealth() {
+    const organization = getOrganizationScore();
+    const activity = getActivityScore();
+    const maintenance = getMaintenanceScore();
+    
+    const score = (organization + activity + maintenance) / 3;
+    return `${Math.round(score)}%`;
+}
+
+function getComplexityScore() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    const links = svg.selectAll('.link').data();
+    
+    // Factors that increase complexity:
+    // 1. Deep nesting
+    // 2. Many cross-links
+    // 3. Large number of different page types
+    // 4. Inconsistent structure
+    
+    const maxDepth = Math.max(...nodes.map(node => calculateNodeDepth(node)));
+    const avgConnections = links.length / nodes.length;
+    const pageTypes = new Set(nodes.map(n => n.type)).size;
+    
+    let complexity = 0;
+    complexity += maxDepth * 10;
+    complexity += avgConnections * 5;
+    complexity += pageTypes * 15;
+    
+    // Normalize to 0-100
+    complexity = Math.min(100, complexity);
+    
+    return `${Math.round(complexity)}/100`;
+}
+
+function getNavigationDepth() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const depths = nodes.map(node => calculateNodeDepth(node));
+    const avgDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
+    
+    return avgDepth.toFixed(1) + ' clicks';
+}
+
+// Add implementations for other new metric functions...

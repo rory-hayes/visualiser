@@ -804,11 +804,12 @@ function createMetricsContent() {
 
 // Helper function to create metric items with tooltips
 function createMetricItem(label, value, tooltip) {
+    const displayValue = value || '0%';
     return `
         <div class="relative group">
             <div class="flex justify-between items-center">
                 <span class="text-sm text-gray-600">${label}</span>
-                <span class="font-semibold">${value}</span>
+                <span class="font-semibold">${displayValue}</span>
             </div>
             <div class="invisible group-hover:visible absolute z-50 w-64 p-2 mt-1 text-sm text-gray-600 bg-white rounded-lg shadow-lg border border-gray-200">
                 ${tooltip}
@@ -923,12 +924,17 @@ function getActiveAreas() {
 
 // Implementation of new metric calculation functions
 function getOverallHealth() {
-    const organization = getOrganizationScore();
-    const activity = getActivityScore();
-    const maintenance = getMaintenanceScore();
-    
-    const score = (organization + activity + maintenance) / 3;
-    return `${Math.round(score)}%`;
+    try {
+        const organization = parseFloat(getOrganizationScore()) || 0;
+        const activity = getActivityScore() || 0;
+        const maintenance = getMaintenanceScore() || 0;
+        
+        const score = (organization + activity + maintenance) / 3;
+        return isNaN(score) ? '0%' : `${Math.round(score)}%`;
+    } catch (error) {
+        console.error('Error calculating overall health:', error);
+        return '0%';
+    }
 }
 
 function getComplexityScore() {
@@ -958,29 +964,43 @@ function getComplexityScore() {
 }
 
 function getNavigationDepth() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    
-    const depths = nodes.map(node => calculateNodeDepth(node));
-    const avgDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
-    
-    return avgDepth.toFixed(1) + ' clicks';
+    try {
+        const svg = d3.select('#visualization svg');
+        const nodes = svg.selectAll('.node').data();
+        
+        if (!nodes.length) return '0 clicks';
+        
+        const depths = nodes.map(node => calculateNodeDepth(node) || 0);
+        const avgDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
+        
+        return isNaN(avgDepth) ? '0 clicks' : avgDepth.toFixed(1) + ' clicks';
+    } catch (error) {
+        console.error('Error calculating navigation depth:', error);
+        return '0 clicks';
+    }
 }
 
 // Add these metric calculation functions
 
 function getActivityScore() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-    
-    const activeNodes = nodes.filter(node => 
-        new Date(node.lastEdited) > thirtyDaysAgo
-    ).length;
-    
-    return (activeNodes / nodes.length) * 100;
+    try {
+        const svg = d3.select('#visualization svg');
+        const nodes = svg.selectAll('.node').data();
+        
+        if (!nodes.length) return 0;
+        
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+        
+        const activeNodes = nodes.filter(node => 
+            node.lastEdited && new Date(node.lastEdited) > thirtyDaysAgo
+        ).length;
+        
+        return (activeNodes / nodes.length) * 100;
+    } catch (error) {
+        console.error('Error calculating activity score:', error);
+        return 0;
+    }
 }
 
 function getMaintenanceScore() {
@@ -1000,44 +1020,69 @@ function getOrganizationScore() {
 }
 
 function getCrossLinkingScore() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    const links = svg.selectAll('.link').data();
-    
-    const crossLinks = links.filter(link => {
-        const sourceType = nodes.find(n => n.id === (link.source.id || link.source))?.type;
-        const targetType = nodes.find(n => n.id === (link.target.id || link.target))?.type;
-        return sourceType !== targetType;
-    }).length;
-    
-    return Math.round((crossLinks / links.length) * 100) + '%';
+    try {
+        const svg = d3.select('#visualization svg');
+        const nodes = svg.selectAll('.node').data();
+        const links = svg.selectAll('.link').data();
+        
+        if (!links.length || !nodes.length) return '0%';
+        
+        const crossLinks = links.filter(link => {
+            const sourceType = nodes.find(n => n.id === (link.source?.id || link.source))?.type;
+            const targetType = nodes.find(n => n.id === (link.target?.id || link.target))?.type;
+            return sourceType && targetType && sourceType !== targetType;
+        }).length;
+        
+        return Math.round((crossLinks / links.length) * 100) + '%';
+    } catch (error) {
+        console.error('Error calculating cross-linking score:', error);
+        return '0%';
+    }
 }
 
 function getSectionBalance() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    
-    const sectionCounts = new Map();
-    nodes.forEach(node => {
-        const section = node.section || 'uncategorized';
-        sectionCounts.set(section, (sectionCounts.get(section) || 0) + 1);
-    });
-    
-    const counts = Array.from(sectionCounts.values());
-    const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
-    const variance = counts.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / counts.length;
-    
-    // Lower variance means better balance
-    const balance = Math.max(0, 100 - Math.sqrt(variance));
-    return Math.round(balance) + '%';
+    try {
+        const svg = d3.select('#visualization svg');
+        const nodes = svg.selectAll('.node').data();
+        
+        if (!nodes.length) return '0%';
+        
+        const sectionCounts = new Map();
+        nodes.forEach(node => {
+            const section = node.section || 'uncategorized';
+            sectionCounts.set(section, (sectionCounts.get(section) || 0) + 1);
+        });
+        
+        const counts = Array.from(sectionCounts.values());
+        if (!counts.length) return '0%';
+        
+        const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
+        const variance = counts.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / counts.length;
+        
+        const balance = Math.max(0, 100 - Math.sqrt(variance));
+        return Math.round(balance) + '%';
+    } catch (error) {
+        console.error('Error calculating section balance:', error);
+        return '0%';
+    }
 }
 
 function getTemplateCoverage() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    
-    const templatedPages = nodes.filter(node => node.hasTemplate || node.type === 'template').length;
-    return Math.round((templatedPages / nodes.length) * 100) + '%';
+    try {
+        const svg = d3.select('#visualization svg');
+        const nodes = svg.selectAll('.node').data();
+        
+        if (!nodes.length) return '0%';
+        
+        const templatedPages = nodes.filter(node => 
+            node.hasTemplate || node.type === 'template'
+        ).length;
+        
+        return Math.round((templatedPages / nodes.length) * 100) + '%';
+    } catch (error) {
+        console.error('Error calculating template coverage:', error);
+        return '0%';
+    }
 }
 
 function getDatabaseEfficiency() {
@@ -1108,11 +1153,21 @@ function getDeadLinks() {
 }
 
 function getSharedAccessMetrics() {
-    const svg = d3.select('#visualization svg');
-    const nodes = svg.selectAll('.node').data();
-    
-    const sharedNodes = nodes.filter(n => n.shared || n.permissions?.includes('shared')).length;
-    return Math.round((sharedNodes / nodes.length) * 100) + '%';
+    try {
+        const svg = d3.select('#visualization svg');
+        const nodes = svg.selectAll('.node').data();
+        
+        if (!nodes.length) return '0%';
+        
+        const sharedNodes = nodes.filter(n => 
+            n.shared || (n.permissions && n.permissions.includes('shared'))
+        ).length;
+        
+        return Math.round((sharedNodes / nodes.length) * 100) + '%';
+    } catch (error) {
+        console.error('Error calculating shared access metrics:', error);
+        return '0%';
+    }
 }
 
 function getUpdateHotspots() {

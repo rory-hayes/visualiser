@@ -833,7 +833,7 @@ function generateWorkspaceSuggestions({ structureScore, activityScore, connectiv
         suggestions.push(
             'Regular updates help maintain workspace relevance',
             'Consider archiving outdated content (aim for 5-15% archived)',
-            'Review and update pages that haven't been modified in over 90 days'
+            'Review and update pages that have not been modified in over 90 days'
         );
     }
     

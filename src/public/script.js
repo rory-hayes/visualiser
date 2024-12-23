@@ -179,9 +179,15 @@ function setupEventListeners(graph) {
     });
 
     // Metrics button
-    document.getElementById('metricsBtn').addEventListener('click', () => {
-        showMetricsModal();
-    });
+    const metricsBtn = document.getElementById('metricsBtn');
+    if (metricsBtn) {
+        metricsBtn.addEventListener('click', () => {
+            console.log('Metrics button clicked');
+            showMetricsModal();
+        });
+    } else {
+        console.error('Metrics button not found');
+    }
 }
 
 function updateDashboardMetrics(graph, score) {
@@ -617,10 +623,52 @@ function showAnalysisModal() {
 }
 
 function showMetricsModal() {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
-    modal.innerHTML = `
-        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white max-h-[80vh] overflow-y-auto">
+    try {
+        console.log('Creating metrics modal');
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+        
+        // Add a close button at the top
+        modal.innerHTML = `
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white max-h-[80vh] overflow-y-auto">
+                <div class="flex justify-between items-center pb-3">
+                    <h3 class="text-xl font-bold">Workspace Metrics</h3>
+                    <button class="modal-close text-gray-400 hover:text-gray-500">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                    </button>
+                </div>
+                <!-- Rest of the modal content -->
+                ${createMetricsContent()}
+            </div>
+        `;
+
+        // Add click outside to close
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+
+        document.body.appendChild(modal);
+        
+        // Add close button handler
+        const closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) {
+            closeBtn.onclick = () => modal.remove();
+        }
+
+        console.log('Metrics modal created and displayed');
+    } catch (error) {
+        console.error('Error showing metrics modal:', error);
+    }
+}
+
+// Helper function to create metrics content
+function createMetricsContent() {
+    try {
+        return `
             <!-- Workspace Overview -->
             <div class="bg-gray-50 rounded-lg p-4 mb-6">
                 <h4 class="font-semibold text-gray-800 mb-3">Workspace Overview</h4>
@@ -747,11 +795,11 @@ function showMetricsModal() {
                     )}
                 </div>
             </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-    modal.querySelector('.modal-close').onclick = () => modal.remove();
+        `;
+    } catch (error) {
+        console.error('Error creating metrics content:', error);
+        return '<div class="text-red-500">Error loading metrics</div>';
+    }
 }
 
 // Helper function to create metric items with tooltips
@@ -917,6 +965,220 @@ function getNavigationDepth() {
     const avgDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
     
     return avgDepth.toFixed(1) + ' clicks';
+}
+
+// Add these metric calculation functions
+
+function getActivityScore() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    
+    const activeNodes = nodes.filter(node => 
+        new Date(node.lastEdited) > thirtyDaysAgo
+    ).length;
+    
+    return (activeNodes / nodes.length) * 100;
+}
+
+function getMaintenanceScore() {
+    const deadLinks = getDeadLinks();
+    const updateConsistency = getUpdateConsistency();
+    const archiveRatio = parseFloat(getArchiveRatio());
+    
+    return Math.round((100 - deadLinks + updateConsistency + archiveRatio) / 3);
+}
+
+function getOrganizationScore() {
+    const namingScore = parseFloat(getNamingScore());
+    const docScore = parseFloat(getDocumentationScore());
+    const templateScore = parseFloat(getTemplateCoverage());
+    
+    return Math.round((namingScore + docScore + templateScore) / 3);
+}
+
+function getCrossLinkingScore() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    const links = svg.selectAll('.link').data();
+    
+    const crossLinks = links.filter(link => {
+        const sourceType = nodes.find(n => n.id === (link.source.id || link.source))?.type;
+        const targetType = nodes.find(n => n.id === (link.target.id || link.target))?.type;
+        return sourceType !== targetType;
+    }).length;
+    
+    return Math.round((crossLinks / links.length) * 100) + '%';
+}
+
+function getSectionBalance() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const sectionCounts = new Map();
+    nodes.forEach(node => {
+        const section = node.section || 'uncategorized';
+        sectionCounts.set(section, (sectionCounts.get(section) || 0) + 1);
+    });
+    
+    const counts = Array.from(sectionCounts.values());
+    const avg = counts.reduce((a, b) => a + b, 0) / counts.length;
+    const variance = counts.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / counts.length;
+    
+    // Lower variance means better balance
+    const balance = Math.max(0, 100 - Math.sqrt(variance));
+    return Math.round(balance) + '%';
+}
+
+function getTemplateCoverage() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const templatedPages = nodes.filter(node => node.hasTemplate || node.type === 'template').length;
+    return Math.round((templatedPages / nodes.length) * 100) + '%';
+}
+
+function getDatabaseEfficiency() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    const links = svg.selectAll('.link').data();
+    
+    const databases = nodes.filter(n => n.type === 'database');
+    if (databases.length === 0) return 'N/A';
+    
+    const efficiency = databases.reduce((sum, db) => {
+        const connections = links.filter(l => 
+            l.source.id === db.id || l.target.id === db.id
+        ).length;
+        return sum + (connections >= 3 ? 1 : 0);
+    }, 0) / databases.length;
+    
+    return Math.round(efficiency * 100) + '%';
+}
+
+function getContentRedundancy() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    // Simple check for similar names
+    const names = nodes.map(n => n.name.toLowerCase());
+    const duplicates = names.filter((name, index) => 
+        names.indexOf(name) !== index
+    ).length;
+    
+    return duplicates + ' potential duplicates';
+}
+
+function getUpdateConsistency() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const updates = nodes.map(n => new Date(n.lastEdited).getTime());
+    const now = Date.now();
+    const timeGaps = updates.map(u => now - u);
+    
+    const avgGap = timeGaps.reduce((a, b) => a + b, 0) / timeGaps.length;
+    const variance = timeGaps.reduce((a, b) => a + Math.pow(b - avgGap, 2), 0) / timeGaps.length;
+    
+    // Lower variance means more consistent updates
+    const consistency = Math.max(0, 100 - Math.sqrt(variance) / (24 * 60 * 60 * 1000));
+    return Math.round(consistency) + '%';
+}
+
+function getArchiveRatio() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const archivedNodes = nodes.filter(n => n.archived || n.name.toLowerCase().includes('archive')).length;
+    return Math.round((archivedNodes / nodes.length) * 100) + '%';
+}
+
+function getDeadLinks() {
+    const svg = d3.select('#visualization svg');
+    const links = svg.selectAll('.link').data();
+    
+    const deadLinks = links.filter(link => 
+        !link.source || !link.target || 
+        !link.source.id || !link.target.id
+    ).length;
+    
+    return deadLinks;
+}
+
+function getSharedAccessMetrics() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const sharedNodes = nodes.filter(n => n.shared || n.permissions?.includes('shared')).length;
+    return Math.round((sharedNodes / nodes.length) * 100) + '%';
+}
+
+function getUpdateHotspots() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    const recentUpdates = nodes.filter(n => 
+        new Date(n.lastEdited) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    ).length;
+    
+    return recentUpdates + ' pages this week';
+}
+
+function getPermissionHealth() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    // Check for consistent permissions within sections
+    const sectionPermissions = new Map();
+    nodes.forEach(node => {
+        const section = node.section || 'uncategorized';
+        if (!sectionPermissions.has(section)) {
+            sectionPermissions.set(section, new Set());
+        }
+        if (node.permissions) {
+            node.permissions.forEach(p => 
+                sectionPermissions.get(section).add(p)
+            );
+        }
+    });
+    
+    const avgPermissions = Array.from(sectionPermissions.values())
+        .reduce((sum, perms) => sum + perms.size, 0) / sectionPermissions.size;
+    
+    // Lower average means more consistent permissions
+    const health = Math.max(0, 100 - (avgPermissions - 1) * 20);
+    return Math.round(health) + '%';
+}
+
+function getNamingScore() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    // Check for consistent naming patterns
+    const consistentNaming = nodes.filter(node => {
+        const name = node.name.toLowerCase();
+        return !name.includes('untitled') && 
+               !name.includes('copy of') &&
+               name.length > 3;
+    }).length;
+    
+    return Math.round((consistentNaming / nodes.length) * 100) + '%';
+}
+
+function getDocumentationScore() {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node').data();
+    
+    // Check for documentation pages and README files
+    const docs = nodes.filter(node => 
+        node.name.toLowerCase().includes('readme') ||
+        node.name.toLowerCase().includes('guide') ||
+        node.name.toLowerCase().includes('documentation')
+    ).length;
+    
+    return Math.min(100, Math.round((docs / (nodes.length / 10)) * 100)) + '%';
 }
 
 // Add implementations for other new metric functions...

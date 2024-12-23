@@ -406,33 +406,60 @@ function checkConnectionsMatch(node, connectionsFilter) {
 }
 
 function enhanceVisualization(graph) {
-    // Add node clustering
-    const clusters = createClusters(graph.nodes);
+    // Apply color coding first
+    applyColorCoding(graph);
+    
+    // Setup clustering force
+    const simulation = d3.select('#visualization svg').datum();
+    if (simulation && simulation.force) {
+        const clusterForce = createClusters(graph.nodes);
+        simulation
+            .force('cluster', clusterForce)
+            .alpha(0.3)
+            .restart();
+    }
     
     // Enhance tooltips
     setupEnhancedTooltips();
-    
-    // Apply color coding
-    applyColorCoding(graph);
     
     // Setup search and filter
     setupSearchAndFilter();
 }
 
 function createClusters(nodes) {
-    // Group nodes by their parent database or closest related pages
-    const clusters = d3.group(nodes, d => d.parentId || 'unclustered');
+    // Group nodes by their parent or type
+    const clusters = d3.group(nodes, d => d.parentId || d.type || 'unclustered');
     
-    // Apply force simulation to keep clusters together
-    const forceCluster = d3.forceCluster()
-        .centers(Array.from(clusters.values())
-        .map(cluster => ({
-            x: Math.random() * width,
-            y: Math.random() * height,
-            radius: Math.sqrt(cluster.length) * 30
-        })));
-
-    return clusters;
+    // Calculate cluster centers
+    const width = document.getElementById('visualization').clientWidth;
+    const height = document.getElementById('visualization').clientHeight;
+    
+    const clusterCenters = new Map();
+    let angle = 0;
+    const increment = (2 * Math.PI) / clusters.size;
+    const radius = Math.min(width, height) / 3;
+    
+    for (const [key, nodes] of clusters) {
+        clusterCenters.set(key, {
+            x: width/2 + radius * Math.cos(angle),
+            y: height/2 + radius * Math.sin(angle),
+            nodes: nodes
+        });
+        angle += increment;
+    }
+    
+    // Add clustering force to the simulation
+    const forceCluster = (alpha) => {
+        for (const node of nodes) {
+            const cluster = clusterCenters.get(node.parentId || node.type || 'unclustered');
+            if (cluster) {
+                node.vx = (cluster.x - node.x) * alpha * 0.3;
+                node.vy = (cluster.y - node.y) * alpha * 0.3;
+            }
+        }
+    };
+    
+    return forceCluster;
 }
 
 function setupEnhancedTooltips() {
@@ -462,4 +489,80 @@ function setupEnhancedTooltips() {
                 .duration(500)
                 .style('opacity', 0);
         });
+}
+
+function applyColorCoding(graph) {
+    const svg = d3.select('#visualization svg');
+    const nodes = svg.selectAll('.node');
+    
+    // Color scale for different types
+    const typeColors = {
+        workspace: '#4f46e5', // indigo
+        database: '#059669', // emerald
+        page: '#2563eb',     // blue
+        template: '#7c3aed'  // violet
+    };
+
+    // Color scale for activity
+    const activityColorScale = d3.scaleSequential()
+        .domain([0, 90]) // days
+        .interpolator(d3.interpolateRgb('#22c55e', '#ef4444')); // green to red
+
+    nodes.style('fill', node => {
+        // First priority: node type
+        if (typeColors[node.type]) {
+            return typeColors[node.type];
+        }
+        
+        // Second priority: activity level
+        const daysSinceEdit = (new Date() - new Date(node.lastEdited)) / (1000 * 60 * 60 * 24);
+        return activityColorScale(Math.min(daysSinceEdit, 90));
+    });
+}
+
+// Helper functions for node metrics
+function countNodeConnections(node) {
+    const svg = d3.select('#visualization svg');
+    const links = svg.selectAll('.link').data();
+    return links.filter(link => 
+        link.source.id === node.id || 
+        link.target.id === node.id
+    ).length;
+}
+
+function countChildPages(node) {
+    const svg = d3.select('#visualization svg');
+    const links = svg.selectAll('.link').data();
+    return links.filter(link => 
+        link.source.id === node.id
+    ).length;
+}
+
+function calculateNodeDepth(node) {
+    const svg = d3.select('#visualization svg');
+    const links = svg.selectAll('.link').data();
+    let depth = 0;
+    let currentNode = node;
+    
+    while (true) {
+        const parentLink = links.find(link => 
+            link.target.id === currentNode.id
+        );
+        
+        if (!parentLink) break;
+        
+        currentNode = parentLink.source;
+        depth++;
+    }
+    
+    return depth;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
 }

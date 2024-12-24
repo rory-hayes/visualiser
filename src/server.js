@@ -13,15 +13,21 @@ import axios from 'axios';
 // Load environment variables from .env file
 dotenv.config();
 
+// Define constants
+const PORT = process.env.PORT || 3000;
+const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
+const CLIENT_ID = process.env.NOTION_CLIENT_ID;
+const CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
+
 // Verify environment variables are loaded
 console.log('Environment check:', {
-    hasNotionId: !!process.env.NOTION_CLIENT_ID,
-    hasNotionSecret: !!process.env.NOTION_CLIENT_SECRET,
-    nodeEnv: process.env.NODE_ENV
+    hasNotionId: !!CLIENT_ID,
+    hasNotionSecret: !!CLIENT_SECRET,
+    nodeEnv: process.env.NODE_ENV,
+    redirectUri: REDIRECT_URI
 });
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 let graphCache = null; // Cache to store graph data temporarily
 
@@ -67,9 +73,6 @@ app.get('/', (req, res) => {
 
 // Notion OAuth Redirect
 app.get('/auth', (req, res) => {
-    const CLIENT_ID = process.env.NOTION_CLIENT_ID;
-    const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
-    
     console.log('Auth endpoint hit, redirecting to Notion OAuth with:', {
         clientId: CLIENT_ID,
         redirectUri: REDIRECT_URI
@@ -104,8 +107,8 @@ app.get('/callback', async (req, res) => {
             redirect_uri: REDIRECT_URI
         }, {
             auth: {
-                username: process.env.NOTION_CLIENT_ID,
-                password: process.env.NOTION_CLIENT_SECRET
+                username: CLIENT_ID,
+                password: CLIENT_SECRET
             },
             headers: {
                 'Content-Type': 'application/json'

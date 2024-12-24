@@ -7,6 +7,8 @@ import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
 import { calculateWorkspaceScore } from './utils.js';
 import { Client } from '@notionhq/client';
+import session from 'express-session';
+import axios from 'axios';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -46,6 +48,17 @@ app.use((req, res, next) => {
     next();
 });
 
+// Add session middleware before your routes
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { 
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
+
 // Landing Page
 app.get('/', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
@@ -82,46 +95,26 @@ app.get('/callback', async (req, res) => {
 
     try {
         console.log('Received auth code:', code);
-        console.log('Starting workspace data fetch...');
         
-        const workspaceData = await fetchWorkspaceData(code);
-        
-        console.log('Workspace data fetched successfully');
-        console.log('Workspace data structure:', {
-            type: typeof workspaceData,
-            hasResults: !!workspaceData.results,
-            resultsCount: workspaceData.results?.length
-        });
-        
-        if (!workspaceData) {
-            throw new Error('No workspace data received from Notion');
-        }
-
-        const graphData = parseDataToGraph(workspaceData);
-        const workspaceScore = calculateWorkspaceScore(graphData);
-
-        // Log the parsed graph data
-        console.log('Graph parsing complete:', {
-            nodesCount: graphData.nodes.length,
-            linksCount: graphData.links.length
+        // Get access token from Notion OAuth
+        const tokenResponse = await axios.post('https://api.notion.com/v1/oauth/token', {
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: REDIRECT_URI
+        }, {
+            auth: {
+                username: process.env.NOTION_CLIENT_ID,
+                password: process.env.NOTION_CLIENT_SECRET
+            }
         });
 
-        graphCache = { 
-            score: workspaceScore, 
-            graph: graphData,
-            timestamp: Date.now()
-        };
-
+        // Store the access token in session
+        req.session.notionToken = tokenResponse.data.access_token;
+        
         res.redirect('/redirect');
     } catch (error) {
-        console.error('Callback error details:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status
-        });
-        
-        const errorMessage = error.response?.data?.message || error.message;
-        res.redirect(`/redirect?error=${encodeURIComponent(errorMessage)}`);
+        console.error('Callback error:', error);
+        res.redirect(`/redirect?error=${encodeURIComponent(error.message)}`);
     }
 });
 

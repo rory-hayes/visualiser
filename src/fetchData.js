@@ -50,7 +50,7 @@ async function fetchMissingParents(notion, missingParentIds) {
     return parents;
 }
 
-// Main data fetching function - now properly exported
+// Main data fetching function
 export async function fetchWorkspaceData(notion) {
     try {
         if (!notion) {
@@ -59,10 +59,8 @@ export async function fetchWorkspaceData(notion) {
 
         // Initial data fetch
         const results = await fetchAllPages(notion);
-        if (!Array.isArray(results)) {
-            throw new Error('Failed to fetch pages from Notion');
-        }
-        
+        console.log('Raw Notion data sample:', results.slice(0, 2));
+
         // Track missing parents
         const missingParentIds = new Set();
         results.forEach(page => {
@@ -72,7 +70,7 @@ export async function fetchWorkspaceData(notion) {
             }
         });
 
-        // Fetch missing parents if any
+        // Fetch missing parents
         let additionalNodes = [];
         if (missingParentIds.size > 0) {
             console.log(`Fetching ${missingParentIds.size} missing parent nodes...`);
@@ -83,23 +81,64 @@ export async function fetchWorkspaceData(notion) {
         // Combine all nodes
         const allNodes = [...results, ...additionalNodes];
 
-        // Create graph structure
+        // Create graph structure with improved type detection
         const graph = {
-            nodes: allNodes.map(page => ({
-                id: page.id,
-                name: page.properties?.title?.title[0]?.text?.content || 'Untitled',
-                type: determineNodeType(page),
-                lastEdited: page.last_edited_time,
-                url: page.url,
-                parentId: page.parent?.page_id || page.parent?.database_id
-            })),
+            nodes: allNodes.map(page => {
+                // Improved title extraction
+                let title = 'Untitled';
+                try {
+                    if (page.properties?.title?.title) {
+                        title = page.properties.title.title[0]?.text?.content || 'Untitled';
+                    } else if (page.properties?.Name?.title) {
+                        title = page.properties.Name.title[0]?.text?.content || 'Untitled';
+                    } else if (page.title) {
+                        title = Array.isArray(page.title) 
+                            ? page.title[0]?.text?.content 
+                            : page.title;
+                    }
+                } catch (error) {
+                    console.warn('Error extracting title for page:', page.id, error);
+                }
+
+                // Improved type detection
+                let type = 'page';
+                try {
+                    if (page.parent?.type === 'workspace') {
+                        type = 'workspace';
+                    } else if (page.object === 'database') {
+                        type = 'database';
+                    } else if (page.parent?.database_id) {
+                        type = 'page'; // This is a database item
+                    } else if (page.parent?.page_id) {
+                        type = page.has_children ? 'page' : 'child_page';
+                    }
+
+                    // Debug logging for type detection
+                    console.log('Node type detection:', {
+                        id: page.id,
+                        title,
+                        detectedType: type,
+                        parentType: page.parent?.type,
+                        isDatabase: page.object === 'database',
+                        hasParentDb: !!page.parent?.database_id,
+                        hasParentPage: !!page.parent?.page_id
+                    });
+
+                } catch (error) {
+                    console.warn('Error detecting type for page:', page.id, error);
+                }
+
+                return {
+                    id: page.id,
+                    name: title,
+                    type: type,
+                    lastEdited: page.last_edited_time,
+                    url: page.url,
+                    parentId: page.parent?.page_id || page.parent?.database_id
+                };
+            }),
             links: []
         };
-
-        // Validate nodes exist before creating links
-        if (!Array.isArray(graph.nodes)) {
-            throw new Error('Failed to create valid node structure');
-        }
 
         // Create links only when both nodes exist
         allNodes.forEach(page => {
@@ -112,15 +151,17 @@ export async function fetchWorkspaceData(notion) {
             }
         });
 
-        // Final validation
-        if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
-            throw new Error('Invalid graph structure generated');
-        }
+        // Log node type distribution
+        const typeDistribution = graph.nodes.reduce((acc, node) => {
+            acc[node.type] = (acc[node.type] || 0) + 1;
+            return acc;
+        }, {});
 
         console.log('Graph structure created:', {
             nodes: graph.nodes.length,
             links: graph.links.length,
-            missingParentsFetched: additionalNodes.length
+            typeDistribution,
+            untitledNodes: graph.nodes.filter(n => n.name === 'Untitled').length
         });
 
         return graph;

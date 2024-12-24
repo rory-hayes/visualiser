@@ -10,106 +10,89 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        .dashboard-card {
-            @apply bg-white rounded-lg shadow p-6 transition-all duration-200 hover:shadow-md;
-        }
-        .metric-value {
-            @apply text-2xl font-bold text-indigo-600;
-        }
-        .metric-label {
-            @apply text-sm text-gray-500;
-        }
     </style>
 </head>
 <body class="bg-gray-50">
     <!-- Navigation -->
-    <nav class="bg-white shadow-sm sticky top-0 z-50">
+    <nav class="bg-white shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16 items-center">
                 <div class="flex-shrink-0">
                     <span class="text-xl font-bold text-gray-800">Notion Visualizer</span>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <!-- Analysis Button -->
-                    <button id="analysisBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
-                        Analysis
-                    </button>
-
-                    <!-- Metrics Button -->
-                    <button id="metricsBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                        </svg>
+                    <button id="metricsBtn" class="text-gray-600 hover:text-gray-900 px-4 py-2 text-sm font-medium">
                         Metrics
                     </button>
-
-                    <!-- Export Button (existing) -->
-                    <button id="exportBtn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
-                        Export Data
+                    <button id="exportBtn" class="text-gray-600 hover:text-gray-900 px-4 py-2 text-sm font-medium">
+                        Export
                     </button>
-
-                    <!-- Refresh Button (existing) -->
-                    <button id="refreshBtn" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                        Refresh
-                    </button>
-
-                    <!-- Add this near your other controls -->
-                    <button id="debugGraph" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                        Debug Graph
+                    <button id="refreshBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700">
+                        Refresh Data
                     </button>
                 </div>
             </div>
         </div>
     </nav>
 
-    <!-- Dashboard Content -->
+    <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Header -->
-        <div class="mb-8">
-            <h1 class="text-2xl font-bold text-gray-900">Workspace Analysis</h1>
-            <p class="mt-1 text-sm text-gray-500">Comprehensive overview of your Notion workspace structure and metrics.</p>
+        <!-- Key Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+            <!-- Workspace Score -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm font-medium text-gray-500">Workspace Score</div>
+                <div class="mt-1">
+                    <div id="workspaceScore" class="text-2xl font-bold text-indigo-600">--</div>
+                    <div class="text-xs text-gray-500">Overall health</div>
+                </div>
+            </div>
+            <!-- Total Pages -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm font-medium text-gray-500">Total Pages</div>
+                <div class="mt-1">
+                    <div id="totalPages" class="text-2xl font-bold text-gray-900">--</div>
+                    <div class="text-xs text-gray-500">Including databases</div>
+                </div>
+            </div>
+            <!-- Active Pages -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm font-medium text-gray-500">Active Pages</div>
+                <div class="mt-1">
+                    <div id="activePages" class="text-2xl font-bold text-green-600">--</div>
+                    <div class="text-xs text-gray-500">Last 30 days</div>
+                </div>
+            </div>
+            <!-- Max Depth -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm font-medium text-gray-500">Max Depth</div>
+                <div class="mt-1">
+                    <div id="maxDepth" class="text-2xl font-bold text-gray-900">--</div>
+                    <div class="text-xs text-gray-500">Page hierarchy</div>
+                </div>
+            </div>
+            <!-- Connections -->
+            <div class="bg-white rounded-lg shadow p-4">
+                <div class="text-sm font-medium text-gray-500">Connections</div>
+                <div class="mt-1">
+                    <div id="totalConnections" class="text-2xl font-bold text-gray-900">--</div>
+                    <div class="text-xs text-gray-500">Page links</div>
+                </div>
+            </div>
         </div>
 
-        <!-- Top Row - Key Metrics -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-            <div class="dashboard-card">
-                <h3 class="metric-label">Workspace Score</h3>
-                <div id="workspaceScore" class="metric-value">--</div>
-                <div class="text-sm text-gray-500 mt-2">Overall organization score</div>
-            </div>
-            <div class="dashboard-card">
-                <h3 class="metric-label">Total Pages</h3>
-                <div id="totalPages" class="metric-value">--</div>
-                <div class="text-sm text-gray-500 mt-2">Including databases</div>
-            </div>
-            <div class="dashboard-card">
-                <h3 class="metric-label">Total Databases</h3>
-                <div id="totalDatabases" class="metric-value">--</div>
-                <div class="text-sm text-gray-500 mt-2">Across workspace</div>
-            </div>
-            <div class="dashboard-card">
-                <h3 class="metric-label">Active Pages</h3>
-                <div id="activePages" class="metric-value">--</div>
-                <div class="text-sm text-gray-500 mt-2">Updated in last 30 days</div>
-            </div>
-        </div>
-
-        <!-- Main Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Main Visualization Card -->
-            <div class="dashboard-card lg:col-span-2">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-lg font-medium text-gray-900">Workspace Structure</h2>
+        <!-- Main Visualization Area -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-medium text-gray-900">Workspace Visualization</h2>
                     <div class="flex items-center space-x-4">
-                        <!-- Layout selector -->
-                        <select id="layoutSelect" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <!-- Layout Controls -->
+                        <select id="layoutSelect" class="text-sm border-gray-300 rounded-md">
                             <option value="force">Network View</option>
                             <option value="tree">Hierarchy View</option>
                         </select>
-                        <!-- Zoom controls -->
+                        <!-- Zoom Controls -->
                         <div class="flex space-x-2">
                             <button id="zoomIn" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,66 +110,66 @@
                                 </svg>
                             </button>
                         </div>
-                        <!-- Add this near the other controls -->
-                        <button id="debugLayout" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                            Debug Layout
-                        </button>
                     </div>
-                </div>
-                <div id="visualization" 
-                     class="w-full h-[600px] border border-gray-200 rounded-lg bg-white overflow-hidden"
-                     style="min-height: 600px;">
                 </div>
             </div>
+            <div id="visualization" class="w-full" style="height: calc(100vh - 300px);"></div>
+        </div>
+    </div>
 
-            <!-- Right Column Cards -->
-            <div class="space-y-6">
-                <!-- Page Activity -->
-                <div class="dashboard-card">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Page Activity</h2>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center">
+    <!-- Metrics Modal -->
+    <div id="metricsModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="flex justify-between items-center pb-3">
+                <h3 class="text-xl font-bold">Workspace Metrics</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-500">×</button>
+            </div>
+            <div class="mt-4 space-y-6">
+                <!-- Structure Metrics -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-800 mb-3">Structure</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Page Depth</p>
+                            <p id="metricsDepth" class="text-lg font-semibold">--</p>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">Root Pages</p>
+                            <p id="metricsRootPages" class="text-lg font-semibold">--</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Activity Metrics -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-800 mb-3">Activity</h4>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">Last 7 days</span>
+                            <span id="metricsLast7Days" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between">
                             <span class="text-sm text-gray-500">Last 30 days</span>
-                            <span id="last30Days" class="font-semibold">--</span>
+                            <span id="metricsLast30Days" class="font-semibold">--</span>
                         </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">30-60 days</span>
-                            <span id="last60Days" class="font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">60-90 days</span>
-                            <span id="last90Days" class="font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">90+ days</span>
-                            <span id="over90Days" class="font-semibold">--</span>
+                        <div class="flex justify-between">
+                            <span class="text-sm text-gray-500">Inactive (90+ days)</span>
+                            <span id="metricsInactive" class="font-semibold">--</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Database Metrics -->
-                <div class="dashboard-card">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Database Metrics</h2>
-                    <div id="databaseMetrics" class="space-y-4">
-                        <!-- Will be populated by JavaScript -->
-                    </div>
-                </div>
-
-                <!-- Structure Stats -->
-                <div class="dashboard-card">
-                    <h2 class="text-lg font-medium text-gray-900 mb-4">Structure Stats</h2>
-                    <div class="space-y-4">
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">Max Depth</span>
-                            <span id="maxDepth" class="font-semibold">--</span>
+                <!-- Connectivity Metrics -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="font-semibold text-gray-800 mb-3">Connectivity</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">Avg. Connections</p>
+                            <p id="metricsAvgConnections" class="text-lg font-semibold">--</p>
                         </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">Avg. Pages per Level</span>
-                            <span id="avgPagesPerLevel" class="font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-sm text-gray-500">Total Connections</span>
-                            <span id="totalConnections" class="font-semibold">--</span>
+                        <div>
+                            <p class="text-sm text-gray-500">Isolated Pages</p>
+                            <p id="metricsIsolatedPages" class="text-lg font-semibold">--</p>
                         </div>
                     </div>
                 </div>
@@ -195,29 +178,6 @@
     </div>
 
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script>
-        // Verify D3 is loaded
-        if (window.d3) {
-            console.log('D3.js loaded successfully:', d3.version);
-        } else {
-            console.error('D3.js failed to load!');
-        }
-    </script>
-    <script type="module" src="script.js"></script>
-
-    <!-- Add this event listener in your script.js -->
-    document.getElementById('debugGraph')?.addEventListener('click', () => {
-        const visualization = document.getElementById('visualization');
-        console.log('Debug visualization:', {
-            container: visualization,
-            dimensions: {
-                width: visualization.clientWidth,
-                height: visualization.clientHeight
-            },
-            svg: visualization.querySelector('svg'),
-            nodes: visualization.querySelectorAll('.node').length,
-            links: visualization.querySelectorAll('.link').length
-        });
-    });
+    <script src="script.js"></script>
 </body>
 </html>

@@ -4,7 +4,31 @@ const CLIENT_ID = process.env.NOTION_CLIENT_ID;
 const CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
 const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
 
-// Add this function to handle missing parents
+// Helper function to fetch all pages
+async function fetchAllPages(notion) {
+    const results = [];
+    let hasMore = true;
+    let startCursor = undefined;
+
+    while (hasMore) {
+        const response = await notion.search({
+            page_size: 100,
+            start_cursor: startCursor,
+            filter: {
+                property: 'object',
+                value: 'page'
+            }
+        });
+
+        results.push(...response.results);
+        hasMore = response.has_more;
+        startCursor = response.next_cursor;
+    }
+
+    return results;
+}
+
+// Helper function to handle missing parents
 async function fetchMissingParents(notion, missingParentIds) {
     const parents = new Map();
     
@@ -26,8 +50,8 @@ async function fetchMissingParents(notion, missingParentIds) {
     return parents;
 }
 
-// Update the main data fetching function
-async function fetchWorkspaceData(notion) {
+// Main data fetching function - now properly exported
+export async function fetchWorkspaceData(notion) {
     try {
         // Initial data fetch
         const results = await fetchAllPages(notion);
@@ -57,7 +81,7 @@ async function fetchWorkspaceData(notion) {
             nodes: allNodes.map(page => ({
                 id: page.id,
                 name: page.properties?.title?.title[0]?.text?.content || 'Untitled',
-                type: page.parent.type === 'database_id' ? 'database' : 'page',
+                type: determineNodeType(page),
                 lastEdited: page.last_edited_time,
                 url: page.url,
                 parentId: page.parent?.page_id || page.parent?.database_id
@@ -90,26 +114,33 @@ async function fetchWorkspaceData(notion) {
     }
 }
 
-// Helper function to fetch all pages
-async function fetchAllPages(notion) {
-    const results = [];
-    let hasMore = true;
-    let startCursor = undefined;
+// Helper function to determine node type
+function determineNodeType(page) {
+    if (page.parent.type === 'workspace') return 'workspace';
+    if (page.parent.type === 'database_id') return 'database';
+    if (page.parent.type === 'page_id') {
+        return page.has_children ? 'page' : 'child_page';
+    }
+    return 'page';
+}
 
-    while (hasMore) {
-        const response = await notion.search({
-            page_size: 100,
-            start_cursor: startCursor,
-            filter: {
-                property: 'object',
-                value: 'page'
+// Export other necessary functions if needed
+export async function exchangeCodeForToken(code) {
+    try {
+        const response = await axios.post('https://api.notion.com/v1/oauth/token', {
+            grant_type: 'authorization_code',
+            code: code,
+            redirect_uri: REDIRECT_URI
+        }, {
+            auth: {
+                username: CLIENT_ID,
+                password: CLIENT_SECRET
             }
         });
-
-        results.push(...response.results);
-        hasMore = response.has_more;
-        startCursor = response.next_cursor;
+        
+        return response.data;
+    } catch (error) {
+        console.error('Token exchange error:', error);
+        throw error;
     }
-
-    return results;
 }

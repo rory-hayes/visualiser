@@ -126,22 +126,46 @@ app.get('/redirect', (req, res) => {
 // API endpoint with better error handling
 app.get('/api/data', async (req, res) => {
     try {
+        // Check if we have a valid token
+        if (!req.session.notionToken) {
+            return res.status(401).json({ 
+                error: 'No authentication token found. Please authenticate with Notion.' 
+            });
+        }
+
         const notion = new Client({
             auth: req.session.notionToken
         });
 
+        // Fetch and validate graph data
         const graph = await fetchWorkspaceData(notion);
         
-        // Calculate workspace score based on complete graph
+        if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
+            console.error('Invalid graph structure:', graph);
+            return res.status(500).json({ 
+                error: 'Failed to generate valid graph structure' 
+            });
+        }
+
+        // Calculate score only if we have valid graph data
         const score = calculateWorkspaceScore(graph);
+
+        console.log('Sending graph data:', {
+            nodes: graph.nodes.length,
+            links: graph.links.length,
+            hasScore: !!score
+        });
 
         res.json({
             graph,
             score
         });
+
     } catch (error) {
-        console.error('Error fetching data:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error in /api/data:', error);
+        res.status(500).json({ 
+            error: error.message || 'Internal server error'
+        });
     }
 });
 

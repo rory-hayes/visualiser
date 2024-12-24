@@ -53,8 +53,15 @@ async function fetchMissingParents(notion, missingParentIds) {
 // Main data fetching function - now properly exported
 export async function fetchWorkspaceData(notion) {
     try {
+        if (!notion) {
+            throw new Error('Notion client is required');
+        }
+
         // Initial data fetch
         const results = await fetchAllPages(notion);
+        if (!Array.isArray(results)) {
+            throw new Error('Failed to fetch pages from Notion');
+        }
         
         // Track missing parents
         const missingParentIds = new Set();
@@ -89,6 +96,11 @@ export async function fetchWorkspaceData(notion) {
             links: []
         };
 
+        // Validate nodes exist before creating links
+        if (!Array.isArray(graph.nodes)) {
+            throw new Error('Failed to create valid node structure');
+        }
+
         // Create links only when both nodes exist
         allNodes.forEach(page => {
             const parentId = page.parent?.page_id || page.parent?.database_id;
@@ -100,6 +112,11 @@ export async function fetchWorkspaceData(notion) {
             }
         });
 
+        // Final validation
+        if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) {
+            throw new Error('Invalid graph structure generated');
+        }
+
         console.log('Graph structure created:', {
             nodes: graph.nodes.length,
             links: graph.links.length,
@@ -109,7 +126,7 @@ export async function fetchWorkspaceData(notion) {
         return graph;
 
     } catch (error) {
-        console.error('Error fetching workspace data:', error);
+        console.error('Error in fetchWorkspaceData:', error);
         throw error;
     }
 }

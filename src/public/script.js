@@ -44,42 +44,42 @@ async function initializeDashboard() {
     try {
         const visualization = document.getElementById('visualization');
         if (!visualization) {
-            console.error('Visualization container not found');
-            return;
+            throw new Error('Visualization container not found');
         }
-
-        console.log('Container dimensions:', {
-            width: visualization.clientWidth,
-            height: visualization.clientHeight
-        });
 
         showLoading(visualization);
 
         const { generateGraph } = await import('./generateGraph.js');
         
         const response = await fetch('/api/data');
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
         const data = await response.json();
         
-        console.log('Graph data received:', {
+        // Validate data structure
+        if (!data || !data.graph || !Array.isArray(data.graph.nodes) || !Array.isArray(data.graph.links)) {
+            console.error('Invalid data structure:', data);
+            throw new Error('Invalid data structure received from server');
+        }
+
+        console.log('Received graph data:', {
             nodes: data.graph.nodes.length,
-            links: data.graph.links.length,
-            sampleNode: data.graph.nodes[0]
+            links: data.graph.links.length
         });
 
         visualization.innerHTML = '';
-
-        // Initialize the graph
-        const graph = generateGraph(visualization, data.graph);
         
+        const graph = generateGraph(visualization, data.graph);
         if (!graph) {
-            throw new Error('Graph generation failed');
+            throw new Error('Failed to generate graph');
         }
 
-        // Store data globally
-        currentGraphData = data.graph;
-
-        // Update metrics
-        updateDashboardMetrics(data.graph, data.score);
+        // Update metrics only if we have valid data
+        if (data.score !== undefined) {
+            updateDashboardMetrics(data.graph, data.score);
+        }
 
         return graph;
 

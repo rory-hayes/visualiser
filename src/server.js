@@ -51,11 +51,12 @@ app.use((req, res, next) => {
 // Add session middleware before your routes
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true
     }
 }));
 
@@ -105,16 +106,32 @@ app.get('/callback', async (req, res) => {
             auth: {
                 username: process.env.NOTION_CLIENT_ID,
                 password: process.env.NOTION_CLIENT_SECRET
+            },
+            headers: {
+                'Content-Type': 'application/json'
             }
+        });
+
+        console.log('Token response received:', {
+            success: !!tokenResponse.data.access_token,
+            workspace_name: tokenResponse.data.workspace_name
         });
 
         // Store the access token in session
         req.session.notionToken = tokenResponse.data.access_token;
         
-        res.redirect('/redirect');
+        // Save session explicitly
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.redirect('/redirect?error=Session storage failed');
+            }
+            res.redirect('/redirect');
+        });
+
     } catch (error) {
-        console.error('Callback error:', error);
-        res.redirect(`/redirect?error=${encodeURIComponent(error.message)}`);
+        console.error('Callback error:', error.response?.data || error.message);
+        res.redirect(`/redirect?error=${encodeURIComponent('Authentication failed')}`);
     }
 });
 
@@ -126,8 +143,13 @@ app.get('/redirect', (req, res) => {
 // API endpoint with better error handling
 app.get('/api/data', async (req, res) => {
     try {
-        // Check if we have a valid token
+        console.log('Session check:', {
+            hasSession: !!req.session,
+            hasToken: !!req.session.notionToken
+        });
+
         if (!req.session.notionToken) {
+            console.error('No token found in session');
             return res.status(401).json({ 
                 error: 'No authentication token found. Please authenticate with Notion.' 
             });
@@ -136,6 +158,16 @@ app.get('/api/data', async (req, res) => {
         const notion = new Client({
             auth: req.session.notionToken
         });
+
+        // Test the token with a simple API call
+        try {
+            await notion.users.me();
+        } catch (error) {
+            console.error('Token validation failed:', error.message);
+            return res.status(401).json({ 
+                error: 'Invalid or expired token. Please authenticate again.' 
+            });
+        }
 
         // Fetch and validate graph data
         const graph = await fetchWorkspaceData(notion);
@@ -162,9 +194,10 @@ app.get('/api/data', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error in /api/data:', error);
+        console.error('API error:', error);
         res.status(500).json({ 
-            error: error.message || 'Internal server error'
+            error: error.message || 'Internal server error',
+            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });
@@ -174,6 +207,14 @@ app.get('/debug-env', (req, res) => {
     res.json({
         hasSecret: !!process.env.NOTION_CLIENT_SECRET,
         secretLength: process.env.NOTION_CLIENT_SECRET?.length || 0
+    });
+});
+
+// Add a debug endpoint to check session
+app.get('/debug-session', (req, res) => {
+    res.json({
+        hasToken: !!req.session.notionToken,
+        sessionData: req.session
     });
 });
 

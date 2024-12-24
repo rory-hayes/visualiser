@@ -53,7 +53,13 @@ async function initializeDashboard() {
         
         const response = await fetch('/api/data');
         if (!response.ok) {
-            throw new Error(`API Error: ${response.status}`);
+            const errorData = await response.json();
+            if (response.status === 401) {
+                // Redirect to auth if token is invalid or missing
+                window.location.href = '/auth';
+                return;
+            }
+            throw new Error(errorData.error || `API Error: ${response.status}`);
         }
 
         const data = await response.json();
@@ -107,8 +113,8 @@ function showError(message) {
             <div class="p-4 text-red-600 bg-red-100 rounded-lg">
                 <h3 class="font-bold">Error Loading Dashboard</h3>
                 <p>${message}</p>
-                <button onclick="window.location.href='/'" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-                    Start Over
+                <button onclick="window.location.href='/auth'" class="mt-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                    Reconnect to Notion
                 </button>
             </div>
         `;

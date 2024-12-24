@@ -224,17 +224,26 @@ app.get('/debug-session', (req, res) => {
 // Add this to your existing /api/workspace-data endpoint
 app.get('/api/workspace-data', async (req, res) => {
     try {
-        // Your existing data fetching code...
+        if (!req.session.notionToken) {
+            return res.status(401).json({ error: 'No authentication token found' });
+        }
+        
+        const notion = new Client({
+            auth: req.session.notionToken
+        });
+        
+        const graph = await fetchWorkspaceData(notion);
+        const { nodes, links } = graph;
         
         // Add these calculations before sending the response
         const workspaceData = {
             nodes: nodes,
             links: links,
-            workspaceScore: calculateWorkspaceScore(nodes, links),
+            workspaceScore: calculateWorkspaceScore(graph),
             totalPages: nodes.length,
             activePages: nodes.filter(n => n.lastEdited && 
                 (Date.now() - new Date(n.lastEdited).getTime()) < 30 * 24 * 60 * 60 * 1000).length,
-            maxDepth: calculateMaxDepth(nodes),
+            maxDepth: Math.max(...nodes.map(n => n.depth || 0), 0),
             totalConnections: links.length
         };
         
@@ -244,23 +253,6 @@ app.get('/api/workspace-data', async (req, res) => {
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
-// Helper functions
-function calculateWorkspaceScore(nodes, links) {
-    // Simple scoring example - customize based on your needs
-    const connectivity = links.length / nodes.length;
-    const activeRatio = nodes.filter(n => n.lastEdited && 
-        (Date.now() - new Date(n.lastEdited).getTime()) < 30 * 24 * 60 * 60 * 1000).length / nodes.length;
-    
-    return (connectivity * 50 + activeRatio * 50); // Returns a score from 0-100
-}
-
-function calculateMaxDepth(nodes) {
-    // Simple depth calculation - customize based on your hierarchy data structure
-    return nodes.reduce((max, node) => {
-        return Math.max(max, (node.depth || 0));
-    }, 0);
-}
 
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

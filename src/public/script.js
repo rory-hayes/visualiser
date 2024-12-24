@@ -13,6 +13,33 @@ function log(message, data) {
 // First, let's store the graph data globally so we can access it in our metrics
 let currentGraphData = null;
 
+function updateStatsCards(data) {
+    console.log('Updating stats cards with data:', data);
+    
+    // Update workspace score (assuming it's a 0-100 scale)
+    document.getElementById('workspaceScore').textContent = 
+        data.workspaceScore ? Math.round(data.workspaceScore) : '--';
+    
+    // Update total pages
+    document.getElementById('totalPages').textContent = 
+        data.totalPages || data.nodes?.length || '--';
+    
+    // Update active pages
+    document.getElementById('activePages').textContent = 
+        data.activePages || '--';
+    
+    // Update max depth
+    document.getElementById('maxDepth').textContent = 
+        data.maxDepth || '--';
+    
+    // Update total connections
+    document.getElementById('totalConnections').textContent = 
+        data.totalConnections || data.links?.length || '--';
+}
+
+// Add at the top level of your script
+window.lastReceivedData = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM Content Loaded');
     
@@ -896,3 +923,14 @@ function calculateNodeDepth(node, links, visited = new Set()) {
 }
 
 // Add implementations for other new metric functions...
+
+fetch('/api/workspace-data')
+    .then(response => response.json())
+    .then(data => {
+        window.lastReceivedData = data;  // Store the data
+        updateStatsCards(data);
+        // Your existing visualization code...
+    })
+    .catch(error => {
+        console.error('Error fetching workspace data:', error);
+    });

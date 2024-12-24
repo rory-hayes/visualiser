@@ -4,144 +4,112 @@ const CLIENT_ID = process.env.NOTION_CLIENT_ID;
 const CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
 const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
 
-export async function fetchWorkspaceData(code) {
+// Add this function to handle missing parents
+async function fetchMissingParents(notion, missingParentIds) {
+    const parents = new Map();
+    
+    for (const parentId of missingParentIds) {
+        try {
+            const response = await notion.pages.retrieve({ page_id: parentId });
+            parents.set(parentId, {
+                id: response.id,
+                name: response.properties?.title?.title[0]?.text?.content || 'Untitled',
+                type: response.parent.type === 'database_id' ? 'database' : 'page',
+                lastEdited: response.last_edited_time,
+                url: response.url
+            });
+        } catch (error) {
+            console.warn(`Could not fetch parent ${parentId}:`, error.message);
+        }
+    }
+    
+    return parents;
+}
+
+// Update the main data fetching function
+async function fetchWorkspaceData(notion) {
     try {
-        // Verify required environment variables
-        if (!CLIENT_ID || !CLIENT_SECRET) {
-            throw new Error('Missing required Notion credentials');
-        }
-
-        console.log('OAuth exchange parameters:', {
-            redirectUri: REDIRECT_URI,
-            hasClientId: !!CLIENT_ID,
-            hasClientSecret: !!CLIENT_SECRET,
-            code: code?.substring(0, 8) + '...'
-        });
-
-        console.log('Attempting token exchange with code:', code);
+        // Initial data fetch
+        const results = await fetchAllPages(notion);
         
-        // First, exchange the authorization code for an access token
-        const tokenResponse = await axios.post('https://api.notion.com/v1/oauth/token', {
-            grant_type: 'authorization_code',
-            code: code,
-            redirect_uri: REDIRECT_URI
-        }, {
-            auth: {
-                username: CLIENT_ID,
-                password: CLIENT_SECRET
-            },
-            headers: {
-                'Content-Type': 'application/json'
+        // Track missing parents
+        const missingParentIds = new Set();
+        results.forEach(page => {
+            const parentId = page.parent?.page_id || page.parent?.database_id;
+            if (parentId && !results.some(p => p.id === parentId)) {
+                missingParentIds.add(parentId);
             }
         });
 
-        console.log('Token exchange response status:', tokenResponse.status);
-        console.log('Token response data:', {
-            bot_id: tokenResponse.data.bot_id,
-            workspace_name: tokenResponse.data.workspace_name,
-            workspace_icon: tokenResponse.data.workspace_icon,
-            workspace_id: tokenResponse.data.workspace_id
-        });
-
-        if (!tokenResponse.data.access_token) {
-            throw new Error('Failed to obtain access token');
+        // Fetch missing parents if any
+        let additionalNodes = [];
+        if (missingParentIds.size > 0) {
+            console.log(`Fetching ${missingParentIds.size} missing parent nodes...`);
+            const parents = await fetchMissingParents(notion, missingParentIds);
+            additionalNodes = Array.from(parents.values());
         }
 
-        const accessToken = tokenResponse.data.access_token;
-        const workspaceId = tokenResponse.data.workspace_id;
-        const workspaceName = tokenResponse.data.workspace_name;
+        // Combine all nodes
+        const allNodes = [...results, ...additionalNodes];
 
-        console.log('Successfully obtained access token');
-
-        // First, get all pages and databases
-        const searchResponse = await axios.post('https://api.notion.com/v1/search', {
-            filter: {
-                value: "page",
-                property: "object"
-            },
-            page_size: 100,
-            sort: {
-                direction: "ascending",
-                timestamp: "last_edited_time"
-            }
-        }, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Notion-Version': '2022-06-28',
-                'Content-Type': 'application/json'
-            }
-        });
-
-        // Then get databases separately
-        const databaseResponse = await axios.post('https://api.notion.com/v1/search', {
-            filter: {
-                value: "database",
-                property: "object"
-            },
-            page_size: 100
-        }, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Notion-Version': '2022-06-28',
-                'Content-Type': 'application/json'
-            }
-        });
-
-        // Combine all results
-        const allResults = [
-            // Add workspace as root node
-            {
-                id: workspaceId,
-                type: 'workspace',
-                name: workspaceName,
-                icon: tokenResponse.data.workspace_icon,
-                parent: null
-            },
-            // Add pages and databases
-            ...searchResponse.data.results,
-            ...databaseResponse.data.results
-        ];
-
-        console.log('Data fetched successfully:', {
-            pagesCount: searchResponse.data.results.length,
-            databasesCount: databaseResponse.data.results.length,
-            totalCount: allResults.length
-        });
-
-        return {
-            workspace: {
-                id: workspaceId,
-                name: workspaceName,
-                icon: tokenResponse.data.workspace_icon
-            },
-            results: allResults.map(item => ({
-                ...item,
-                workspace_id: workspaceId,
-                last_edited_time: item.last_edited_time,
-                created_time: item.created_time,
-                // Get proper title based on object type
-                title: item.type === 'workspace' ? item.name :
-                    item.object === 'database' ? 
-                        item.title?.[0]?.plain_text :
-                        item.properties?.title?.title?.[0]?.plain_text || 
-                        item.properties?.Name?.title?.[0]?.plain_text ||
-                        `Untitled ${item.object}`
+        // Create graph structure
+        const graph = {
+            nodes: allNodes.map(page => ({
+                id: page.id,
+                name: page.properties?.title?.title[0]?.text?.content || 'Untitled',
+                type: page.parent.type === 'database_id' ? 'database' : 'page',
+                lastEdited: page.last_edited_time,
+                url: page.url,
+                parentId: page.parent?.page_id || page.parent?.database_id
             })),
-            has_more: searchResponse.data.has_more || databaseResponse.data.has_more
+            links: []
         };
 
-    } catch (error) {
-        console.error('Fetch workspace data error details:', {
-            message: error.message,
-            response: error.response?.data,
-            status: error.response?.status,
-            stack: error.stack
+        // Create links only when both nodes exist
+        allNodes.forEach(page => {
+            const parentId = page.parent?.page_id || page.parent?.database_id;
+            if (parentId && graph.nodes.some(n => n.id === parentId)) {
+                graph.links.push({
+                    source: parentId,
+                    target: page.id
+                });
+            }
         });
 
-        throw new Error(
-            error.response?.data?.message || 
-            error.message || 
-            'An unexpected error occurred during authentication'
-        );
+        console.log('Graph structure created:', {
+            nodes: graph.nodes.length,
+            links: graph.links.length,
+            missingParentsFetched: additionalNodes.length
+        });
+
+        return graph;
+
+    } catch (error) {
+        console.error('Error fetching workspace data:', error);
+        throw error;
     }
+}
+
+// Helper function to fetch all pages
+async function fetchAllPages(notion) {
+    const results = [];
+    let hasMore = true;
+    let startCursor = undefined;
+
+    while (hasMore) {
+        const response = await notion.search({
+            page_size: 100,
+            start_cursor: startCursor,
+            filter: {
+                property: 'object',
+                value: 'page'
+            }
+        });
+
+        results.push(...response.results);
+        hasMore = response.has_more;
+        startCursor = response.next_cursor;
+    }
+
+    return results;
 }

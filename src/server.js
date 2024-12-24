@@ -6,6 +6,7 @@ import { dirname } from 'path';
 import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
 import { calculateWorkspaceScore } from './utils.js';
+import { Client } from '@notionhq/client';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -130,28 +131,24 @@ app.get('/redirect', (req, res) => {
 });
 
 // API endpoint with better error handling
-app.get('/api/data', (req, res) => {
+app.get('/api/data', async (req, res) => {
     try {
-        if (!graphCache) {
-            return res.status(404).json({ 
-                error: 'No graph data available. Please authenticate first.' 
-            });
-        }
-
-        // Check if cache is too old (optional)
-        const cacheAge = Date.now() - graphCache.timestamp;
-        if (cacheAge > 3600000) { // 1 hour
-            return res.status(404).json({ 
-                error: 'Cache expired. Please authenticate again.' 
-            });
-        }
-
-        res.json(graphCache);
-    } catch (error) {
-        console.error('API error:', error);
-        res.status(500).json({ 
-            error: 'Error retrieving graph data' 
+        const notion = new Client({
+            auth: req.session.notionToken
         });
+
+        const graph = await fetchWorkspaceData(notion);
+        
+        // Calculate workspace score based on complete graph
+        const score = calculateWorkspaceScore(graph);
+
+        res.json({
+            graph,
+            score
+        });
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

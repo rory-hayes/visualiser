@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Metrics - Notion Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .metric-row {
+            transition: all 0.3s ease;
+        }
+        .metric-detail {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .metric-detail.expanded {
+            max-height: 500px;
+            transition: max-height 0.5s ease-in;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center space-x-8">
+                    <a href="/redirect" class="flex-shrink-0">
+                        <span class="text-xl font-bold text-gray-800">Notion Visualizer</span>
+                    </a>
+                    <div class="text-gray-500">Workspace Metrics</div>
+                </div>
+                <button onclick="window.location.href='/redirect'" 
+                        class="text-gray-600 hover:text-gray-900 px-4 py-2 text-sm font-medium">
+                    Back to Dashboard
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Overview Section -->
+        <div class="bg-white rounded-lg shadow mb-8">
+            <div class="p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Workspace Overview</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm font-medium text-gray-500">Workspace Score</div>
+                        <div class="mt-1">
+                            <div id="overallScore" class="text-3xl font-bold text-indigo-600">--</div>
+                            <div class="text-sm text-gray-500">Overall health</div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm font-medium text-gray-500">Last Updated</div>
+                        <div class="mt-1">
+                            <div id="lastUpdated" class="text-3xl font-bold text-gray-900">--</div>
+                            <div class="text-sm text-gray-500">Workspace activity</div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="text-sm font-medium text-gray-500">Total Content</div>
+                        <div class="mt-1">
+                            <div id="totalContent" class="text-3xl font-bold text-gray-900">--</div>
+                            <div class="text-sm text-gray-500">Pages and databases</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Metrics -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-6">Detailed Metrics</h2>
+                
+                <!-- Structure Metrics -->
+                <div class="space-y-6">
+                    <div class="metric-row">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-base font-medium text-gray-900">Structure</h3>
+                                <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
+                                        data-target="structure-details">
+                                    See details
+                                </button>
+                            </div>
+                            <div class="text-2xl font-semibold text-gray-900" id="structureScore">--</div>
+                        </div>
+                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="structure-details">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="text-sm text-gray-500">Page Hierarchy</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Max Depth</span>
+                                            <span id="maxDepth" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Root Pages</span>
+                                            <span id="rootPages" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Content Distribution</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Pages</span>
+                                            <span id="pageCount" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Databases</span>
+                                            <span id="databaseCount" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Activity Metrics -->
+                    <div class="metric-row">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-base font-medium text-gray-900">Activity</h3>
+                                <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
+                                        data-target="activity-details">
+                                    See details
+                                </button>
+                            </div>
+                            <div class="text-2xl font-semibold text-gray-900" id="activityScore">--</div>
+                        </div>
+                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="activity-details">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="text-sm text-gray-500">Recent Activity</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Last 7 days</span>
+                                            <span id="last7Days" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Last 30 days</span>
+                                            <span id="last30Days" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Page Status</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Active Pages</span>
+                                            <span id="activePages" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Stale Pages (90+ days)</span>
+                                            <span id="stalePages" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connectivity Metrics -->
+                    <div class="metric-row">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-base font-medium text-gray-900">Connectivity</h3>
+                                <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
+                                        data-target="connectivity-details">
+                                    See details
+                                </button>
+                            </div>
+                            <div class="text-2xl font-semibold text-gray-900" id="connectivityScore">--</div>
+                        </div>
+                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="connectivity-details">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="text-sm text-gray-500">Connections</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Total Links</span>
+                                            <span id="totalLinks" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Avg. Links per Page</span>
+                                            <span id="avgLinks" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Integration</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Connected Pages</span>
+                                            <span id="connectedPages" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Isolated Pages</span>
+                                            <span id="isolatedPages" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Type Analysis -->
+                    <div class="metric-row">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-base font-medium text-gray-900">Content Analysis</h3>
+                                <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
+                                        data-target="content-details">
+                                    See details
+                                </button>
+                            </div>
+                            <div class="text-2xl font-semibold text-gray-900" id="contentScore">--</div>
+                        </div>
+                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="content-details">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="text-sm text-gray-500">Database Usage</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Total Databases</span>
+                                            <span id="totalDatabases" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Linked Databases</span>
+                                            <span id="linkedDatabases" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div class="text-sm text-gray-500">Page Types</div>
+                                    <div class="mt-1 space-y-2">
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Documentation</span>
+                                            <span id="docPages" class="font-medium">--</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-sm">Templates</span>
+                                            <span id="templatePages" class="font-medium">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="metrics.js"></script>
+</body>
+</html> 

@@ -232,5 +232,31 @@ app.get('/debug-session', (req, res) => {
     });
 });
 
+// Metrics Page
+app.get('/metrics', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'metrics.html'));
+});
+
+// Metrics API endpoint
+app.get('/api/metrics', async (req, res) => {
+    try {
+        if (!req.session.notionToken) {
+            return res.status(401).json({ error: 'No authentication token found' });
+        }
+
+        const notion = new Client({
+            auth: req.session.notionToken
+        });
+
+        const graph = await fetchWorkspaceData(notion);
+        const metrics = calculateDetailedMetrics(graph);
+
+        res.json(metrics);
+    } catch (error) {
+        console.error('Error fetching metrics:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

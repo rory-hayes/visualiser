@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
-import { calculateWorkspaceScore, calculateMaxDepth } from './utils.js';
+import { calculateWorkspaceScore, calculateMaxDepth, calculateDetailedMetrics } from './utils.js';
 import { Client } from '@notionhq/client';
 import session from 'express-session';
 import axios from 'axios';

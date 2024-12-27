@@ -1,4 +1,10 @@
-export function calculateWorkspaceScore(graph) {
+export {
+    calculateWorkspaceScore,
+    calculateMaxDepth,
+    calculateDetailedMetrics
+};
+
+function calculateWorkspaceScore(graph) {
     const { nodes, links } = graph;
     
     // Calculate different aspects of the workspace
@@ -16,7 +22,28 @@ export function calculateWorkspaceScore(graph) {
     return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-export function calculateDetailedMetrics(graph) {
+function calculateMaxDepth(nodes) {
+    if (!nodes || nodes.length === 0) return 0;
+    const visited = new Set();
+    
+    function getNodeDepth(node) {
+        if (visited.has(node.id)) return 0;
+        visited.add(node.id);
+        
+        const parents = nodes.filter(n => 
+            n.children?.includes(node.id) || 
+            n.childPages?.includes(node.id) ||
+            n.childDatabases?.includes(node.id)
+        );
+        
+        if (parents.length === 0) return 1;
+        return 1 + Math.max(...parents.map(parent => getNodeDepth(parent)));
+    }
+    
+    return Math.max(...nodes.map(node => getNodeDepth(node)));
+}
+
+function calculateDetailedMetrics(graph) {
     const { nodes, links } = graph;
     const now = new Date();
 
@@ -176,27 +203,6 @@ function calculateDetailedContentScore(nodes, links, metrics) {
 }
 
 // Utility functions
-export function calculateMaxDepth(nodes) {
-    if (!nodes || nodes.length === 0) return 0;
-    const visited = new Set();
-    
-    function getNodeDepth(node) {
-        if (visited.has(node.id)) return 0;
-        visited.add(node.id);
-        
-        const parents = nodes.filter(n => 
-            n.children?.includes(node.id) || 
-            n.childPages?.includes(node.id) ||
-            n.childDatabases?.includes(node.id)
-        );
-        
-        if (parents.length === 0) return 1;
-        return 1 + Math.max(...parents.map(parent => getNodeDepth(parent)));
-    }
-    
-    return Math.max(...nodes.map(node => getNodeDepth(node)));
-}
-
 function countRecentEdits(nodes, days) {
     const now = new Date();
     const cutoff = new Date(now - days * 24 * 60 * 60 * 1000);

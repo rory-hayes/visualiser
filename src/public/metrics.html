@@ -16,11 +16,15 @@
         .metric-detail {
             max-height: 0;
             overflow: hidden;
+            opacity: 0;
+            visibility: hidden;
             transition: max-height 0.3s ease-out;
         }
         .metric-detail.expanded {
             max-height: 500px;
-            transition: max-height 0.5s ease-in;
+            opacity: 1;
+            visibility: visible;
+            transition: all 0.5s ease-in;
         }
     </style>
 </head>
@@ -93,31 +97,33 @@
                             </div>
                             <div class="text-2xl font-semibold text-gray-900" id="structureScore">--</div>
                         </div>
-                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="structure-details">
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <div class="text-sm text-gray-500">Page Hierarchy</div>
-                                    <div class="mt-1 space-y-2">
-                                        <div class="flex justify-between">
-                                            <span class="text-sm">Max Depth</span>
-                                            <span id="maxDepth" class="font-medium">--</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-sm">Root Pages</span>
-                                            <span id="rootPages" class="font-medium">--</span>
+                        <div class="metric-detail bg-gray-50 rounded-lg mt-0 p-0" id="structure-details">
+                            <div class="p-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <div class="text-sm text-gray-500">Page Hierarchy</div>
+                                        <div class="mt-1 space-y-2">
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Max Depth</span>
+                                                <span id="maxDepth" class="font-medium">--</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Root Pages</span>
+                                                <span id="rootPages" class="font-medium">--</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div>
-                                    <div class="text-sm text-gray-500">Content Distribution</div>
-                                    <div class="mt-1 space-y-2">
-                                        <div class="flex justify-between">
-                                            <span class="text-sm">Pages</span>
-                                            <span id="pageCount" class="font-medium">--</span>
-                                        </div>
-                                        <div class="flex justify-between">
-                                            <span class="text-sm">Databases</span>
-                                            <span id="databaseCount" class="font-medium">--</span>
+                                    <div>
+                                        <div class="text-sm text-gray-500">Content Distribution</div>
+                                        <div class="mt-1 space-y-2">
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Pages</span>
+                                                <span id="pageCount" class="font-medium">--</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Databases</span>
+                                                <span id="databaseCount" class="font-medium">--</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

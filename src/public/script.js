@@ -22,26 +22,29 @@ function updateStatsCards(data) {
         return;
     }
 
+    // Store the data globally so we can access it later if needed
+    currentGraphData = data;
+
     // Update workspace score (assuming it's a 0-100 scale)
     document.getElementById('workspaceScore').textContent = 
-        typeof data.workspaceScore === 'number' ? Math.round(data.workspaceScore) : '--';
+        typeof data.score === 'number' ? Math.round(data.score) : '--';
     
     // Update total pages
     document.getElementById('totalPages').textContent = 
-        data.nodes.length || '--';
+        (data.nodes?.length || 0).toString();
     
     // Update active pages
     document.getElementById('activePages').textContent = 
-        (data.nodes.filter(n => n.lastEdited && 
-            (Date.now() - new Date(n.lastEdited).getTime()) < 30 * 24 * 60 * 60 * 1000).length) || '--';
+        (data.nodes?.filter(n => n.lastEdited && 
+            (Date.now() - new Date(n.lastEdited).getTime()) < 30 * 24 * 60 * 60 * 1000)?.length || 0).toString();
     
     // Update max depth
     document.getElementById('maxDepth').textContent = 
-        Math.max(...data.nodes.map(n => n.depth || 0), 0) || '--';
+        (Math.max(...(data.nodes?.map(n => n.depth || 0) || [0]), 0)).toString();
     
     // Update total connections
     document.getElementById('totalConnections').textContent = 
-        data.links?.length || '--';
+        (data.links?.length || 0).toString();
 
     console.log('Stats cards updated with values:', {
         score: document.getElementById('workspaceScore').textContent,
@@ -114,18 +117,23 @@ async function initializeDashboard() {
 
         console.log('Received graph data:', {
             nodes: data.graph.nodes.length,
-            links: data.graph.links.length
+            links: data.graph.links.length,
+            score: data.score
         });
 
         visualization.innerHTML = '';
+        
+        // Update stats before generating graph
+        updateStatsCards({
+            nodes: data.graph.nodes,
+            links: data.graph.links,
+            score: data.score
+        });
         
         const graph = generateGraph(visualization, data.graph);
         if (!graph) {
             throw new Error('Failed to generate graph');
         }
-
-        // Update the stats cards with the graph data
-        updateStatsCards(data.graph);
 
         return graph;
 

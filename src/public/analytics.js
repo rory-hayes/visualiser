@@ -314,12 +314,17 @@ function showError(message) {
 }
 
 function showLoading() {
-    // Add loading overlay to each chart container
     document.querySelectorAll('.chart-container').forEach(container => {
+        // Clear any existing content
+        container.innerHTML = '';
+
         const overlay = document.createElement('div');
-        overlay.className = 'absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center';
+        overlay.className = 'w-full h-full flex items-center justify-center bg-gray-50 rounded-lg';
         overlay.innerHTML = `
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+                <p class="text-sm text-gray-600">Loading chart data...</p>
+            </div>
         `;
         container.style.position = 'relative';
         container.appendChild(overlay);

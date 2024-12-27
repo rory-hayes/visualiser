@@ -11,20 +11,25 @@
             font-family: 'Inter', sans-serif;
         }
         .metric-row {
-            transition: all 0.3s ease;
+            transition: all 0.2s ease-in-out;
         }
         .metric-detail {
             max-height: 0;
             overflow: hidden;
             opacity: 0;
             visibility: hidden;
-            transition: max-height 0.3s ease-out;
+            transition: all 0.3s ease-in-out;
+            transform: translateY(-10px);
         }
         .metric-detail.expanded {
             max-height: 500px;
             opacity: 1;
             visibility: visible;
-            transition: all 0.5s ease-in;
+            transform: translateY(0);
+        }
+        .loading-overlay {
+            z-index: 10;
+            backdrop-filter: blur(2px);
         }
     </style>
 </head>
@@ -84,9 +89,9 @@
             <div class="p-6">
                 <h2 class="text-lg font-semibold text-gray-900 mb-6">Detailed Metrics</h2>
                 
-                <!-- Structure Metrics -->
-                <div class="space-y-6">
-                    <div class="metric-row">
+                <div class="grid gap-6">
+                    <!-- Structure Metrics -->
+                    <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
                                 <h3 class="text-base font-medium text-gray-900">Structure</h3>
@@ -97,7 +102,7 @@
                             </div>
                             <div class="text-2xl font-semibold text-gray-900" id="structureScore">--</div>
                         </div>
-                        <div class="metric-detail bg-gray-50 rounded-lg mt-0 p-0" id="structure-details">
+                        <div class="metric-detail bg-white rounded-lg mt-4 shadow-sm" id="structure-details">
                             <div class="p-4">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
@@ -132,7 +137,7 @@
                     </div>
 
                     <!-- Activity Metrics -->
-                    <div class="metric-row">
+                    <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
                                 <h3 class="text-base font-medium text-gray-900">Activity</h3>
@@ -143,7 +148,7 @@
                             </div>
                             <div class="text-2xl font-semibold text-gray-900" id="activityScore">--</div>
                         </div>
-                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="activity-details">
+                        <div class="metric-detail bg-white rounded-lg mt-4 shadow-sm" id="activity-details">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <div class="text-sm text-gray-500">Recent Activity</div>
@@ -176,7 +181,7 @@
                     </div>
 
                     <!-- Connectivity Metrics -->
-                    <div class="metric-row">
+                    <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
                                 <h3 class="text-base font-medium text-gray-900">Connectivity</h3>
@@ -187,7 +192,7 @@
                             </div>
                             <div class="text-2xl font-semibold text-gray-900" id="connectivityScore">--</div>
                         </div>
-                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="connectivity-details">
+                        <div class="metric-detail bg-white rounded-lg mt-4 shadow-sm" id="connectivity-details">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <div class="text-sm text-gray-500">Connections</div>
@@ -220,7 +225,7 @@
                     </div>
 
                     <!-- Content Type Analysis -->
-                    <div class="metric-row">
+                    <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
                                 <h3 class="text-base font-medium text-gray-900">Content Analysis</h3>
@@ -231,7 +236,7 @@
                             </div>
                             <div class="text-2xl font-semibold text-gray-900" id="contentScore">--</div>
                         </div>
-                        <div class="metric-detail bg-gray-50 rounded-lg mt-4 p-4" id="content-details">
+                        <div class="metric-detail bg-white rounded-lg mt-4 shadow-sm" id="content-details">
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <div class="text-sm text-gray-500">Database Usage</div>
@@ -264,7 +269,7 @@
                     </div>
 
                     <!-- Workspace Health -->
-                    <div class="metric-row mb-8">
+                    <div class="metric-row bg-gray-50 rounded-lg p-4 mb-8">
                         <div class="flex justify-between items-center">
                             <div>
                                 <h3 class="text-base font-medium text-gray-900">Workspace Health</h3>
@@ -275,7 +280,7 @@
                             </div>
                             <div class="text-2xl font-semibold text-gray-900" id="healthScore">--</div>
                         </div>
-                        <div class="metric-detail bg-gray-50 rounded-lg mt-0 p-0" id="health-details">
+                        <div class="metric-detail bg-white rounded-lg mt-4 shadow-sm" id="health-details">
                             <div class="p-4">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <!-- Content Health -->

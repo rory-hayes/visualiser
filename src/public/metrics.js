@@ -151,20 +151,39 @@ function showError(message) {
 }
 
 function showLoading() {
-    const elements = document.querySelectorAll('[id]');
-    elements.forEach(el => {
+    // Add spinner to each metric card
+    document.querySelectorAll('[id]').forEach(el => {
         if (el.textContent === '--') {
-            el.textContent = 'Loading...';
+            el.innerHTML = `
+                <div class="flex justify-center">
+                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600"></div>
+                </div>
+            `;
         }
+    });
+
+    // Add spinner to each detail section
+    document.querySelectorAll('.metric-detail').forEach(section => {
+        const spinner = document.createElement('div');
+        spinner.className = 'loading-overlay absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center';
+        spinner.innerHTML = `
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        `;
+        section.style.position = 'relative';
+        section.appendChild(spinner);
     });
 }
 
 function hideLoading() {
-    const elements = document.querySelectorAll('[id]');
-    elements.forEach(el => {
-        if (el.textContent === 'Loading...') {
-            el.textContent = '--';
-        }
+    // Remove spinners from metric cards
+    document.querySelectorAll('[id]').forEach(el => {
+        const spinner = el.querySelector('.flex.justify-center');
+        if (spinner) spinner.remove();
+    });
+
+    // Remove spinners from detail sections
+    document.querySelectorAll('.loading-overlay').forEach(overlay => {
+        overlay.remove();
     });
 }
 

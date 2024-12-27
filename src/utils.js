@@ -47,30 +47,26 @@ function calculateStructureScore(nodes) {
 export function calculateMaxDepth(nodes) {
     if (!nodes || nodes.length === 0) return 0;
     
-    // Create a map of parent-child relationships
-    const parentChildMap = new Map();
-    nodes.forEach(node => {
-        if (node.parent) {
-            const children = parentChildMap.get(node.parent) || [];
-            children.push(node.id);
-            parentChildMap.set(node.parent, children);
-        }
-    });
+    // Track visited nodes to prevent infinite loops
+    const visited = new Set();
     
-    // Function to calculate depth recursively
-    function getDepth(nodeId, visited = new Set()) {
-        if (visited.has(nodeId)) return 0; // Prevent circular references
-        visited.add(nodeId);
+    function getNodeDepth(node) {
+        if (visited.has(node.id)) return 0;
+        visited.add(node.id);
         
-        const children = parentChildMap.get(nodeId) || [];
-        if (children.length === 0) return 1;
+        // Find all parent references to this node
+        const parents = nodes.filter(n => 
+            n.children?.includes(node.id) || 
+            n.childPages?.includes(node.id) ||
+            n.childDatabases?.includes(node.id)
+        );
         
-        return 1 + Math.max(...children.map(childId => getDepth(childId, visited)));
+        if (parents.length === 0) return 1;
+        
+        // Calculate max depth through all possible parent paths
+        return 1 + Math.max(...parents.map(parent => getNodeDepth(parent)));
     }
     
-    // Find root nodes (nodes without parents)
-    const rootNodes = nodes.filter(node => !node.parent).map(node => node.id);
-    
-    // Calculate max depth from any root node
-    return Math.max(...rootNodes.map(rootId => getDepth(rootId)));
+    // Calculate depth for each node and find the maximum
+    return Math.max(...nodes.map(node => getNodeDepth(node)));
 }

@@ -41,7 +41,14 @@
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
             <!-- Workspace Score -->
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500">Workspace Score</div>
+                <div class="text-sm font-medium text-gray-500 group relative">
+                    Workspace Score
+                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                        Overall health score based on connectivity (40%), 
+                        activity (30%), and structure (30%) of your workspace
+                    </div>
+                </div>
                 <div class="mt-1">
                     <div id="workspaceScore" class="text-2xl font-bold text-indigo-600">--</div>
                     <div class="text-xs text-gray-500">Overall health</div>
@@ -49,7 +56,13 @@
             </div>
             <!-- Total Pages -->
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500">Total Pages</div>
+                <div class="text-sm font-medium text-gray-500 group relative">
+                    Total Pages
+                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                        Total number of pages and databases in your workspace
+                    </div>
+                </div>
                 <div class="mt-1">
                     <div id="totalPages" class="text-2xl font-bold text-gray-900">--</div>
                     <div class="text-xs text-gray-500">Including databases</div>
@@ -57,7 +70,13 @@
             </div>
             <!-- Active Pages -->
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500">Active Pages</div>
+                <div class="text-sm font-medium text-gray-500 group relative">
+                    Active Pages
+                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                        Number of pages that have been edited in the last 30 days
+                    </div>
+                </div>
                 <div class="mt-1">
                     <div id="activePages" class="text-2xl font-bold text-green-600">--</div>
                     <div class="text-xs text-gray-500">Last 30 days</div>
@@ -65,7 +84,13 @@
             </div>
             <!-- Max Depth -->
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500">Max Depth</div>
+                <div class="text-sm font-medium text-gray-500 group relative">
+                    Max Depth
+                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                        Maximum number of nested levels in your page hierarchy
+                    </div>
+                </div>
                 <div class="mt-1">
                     <div id="maxDepth" class="text-2xl font-bold text-gray-900">--</div>
                     <div class="text-xs text-gray-500">Page hierarchy</div>
@@ -73,7 +98,13 @@
             </div>
             <!-- Connections -->
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500">Connections</div>
+                <div class="text-sm font-medium text-gray-500 group relative">
+                    Connections
+                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                        Total number of links and relationships between pages
+                    </div>
+                </div>
                 <div class="mt-1">
                     <div id="totalConnections" class="text-2xl font-bold text-gray-900">--</div>
                     <div class="text-xs text-gray-500">Page links</div>

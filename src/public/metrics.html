@@ -6,6 +6,7 @@
     <title>Metrics - Notion Visualizer</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <script src="/components/nav.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -34,23 +35,11 @@
     </style>
 </head>
 <body class="bg-gray-50">
-    <!-- Navigation -->
-    <nav class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16 items-center">
-                <div class="flex items-center space-x-8">
-                    <a href="/redirect" class="flex-shrink-0">
-                        <span class="text-xl font-bold text-gray-800">Notion Visualizer</span>
-                    </a>
-                    <div class="text-gray-500">Workspace Metrics</div>
-                </div>
-                <button onclick="window.location.href='/redirect'" 
-                        class="text-gray-600 hover:text-gray-900 px-4 py-2 text-sm font-medium">
-                    Back to Dashboard
-                </button>
-            </div>
-        </div>
-    </nav>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeNavigation();
+        });
+    </script>
 
     <!-- Main Content -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -94,7 +83,17 @@
                     <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
-                                <h3 class="text-base font-medium text-gray-900">Structure</h3>
+                                <div class="flex items-center group relative">
+                                    <h3 class="text-base font-medium text-gray-900">Structure</h3>
+                                    <div class="ml-2">
+                                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </div>
+                                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute z-10 bg-black text-white text-xs rounded p-2 w-64 -top-12 left-0">
+                                        Analyzes the organization and hierarchy of your workspace pages
+                                    </div>
+                                </div>
                                 <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
                                         data-target="structure-details">
                                     See details
@@ -140,7 +139,17 @@
                     <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
-                                <h3 class="text-base font-medium text-gray-900">Activity</h3>
+                                <div class="flex items-center group relative">
+                                    <h3 class="text-base font-medium text-gray-900">Activity</h3>
+                                    <div class="ml-2">
+                                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </div>
+                                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute z-10 bg-black text-white text-xs rounded p-2 w-64 -top-12 left-0">
+                                        Shows the number of page edits over time, helping track workspace activity levels
+                                    </div>
+                                </div>
                                 <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
                                         data-target="activity-details">
                                     See details
@@ -184,7 +193,17 @@
                     <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
-                                <h3 class="text-base font-medium text-gray-900">Connectivity</h3>
+                                <div class="flex items-center group relative">
+                                    <h3 class="text-base font-medium text-gray-900">Connectivity</h3>
+                                    <div class="ml-2">
+                                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </div>
+                                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute z-10 bg-black text-white text-xs rounded p-2 w-64 -top-12 left-0">
+                                        Tracks the total number of connections in your workspace
+                                    </div>
+                                </div>
                                 <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
                                         data-target="connectivity-details">
                                     See details
@@ -228,7 +247,17 @@
                     <div class="metric-row bg-gray-50 rounded-lg p-4">
                         <div class="flex justify-between items-center">
                             <div>
-                                <h3 class="text-base font-medium text-gray-900">Content Analysis</h3>
+                                <div class="flex items-center group relative">
+                                    <h3 class="text-base font-medium text-gray-900">Content Analysis</h3>
+                                    <div class="ml-2">
+                                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </div>
+                                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute z-10 bg-black text-white text-xs rounded p-2 w-64 -top-12 left-0">
+                                        Analyzes the usage and types of content in your workspace
+                                    </div>
+                                </div>
                                 <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
                                         data-target="content-details">
                                     See details
@@ -272,7 +301,17 @@
                     <div class="metric-row bg-gray-50 rounded-lg p-4 mb-8">
                         <div class="flex justify-between items-center">
                             <div>
-                                <h3 class="text-base font-medium text-gray-900">Workspace Health</h3>
+                                <div class="flex items-center group relative">
+                                    <h3 class="text-base font-medium text-gray-900">Workspace Health</h3>
+                                    <div class="ml-2">
+                                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </div>
+                                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 absolute z-10 bg-black text-white text-xs rounded p-2 w-64 -top-12 left-0">
+                                        Evaluates the overall health and maintenance of your workspace
+                                    </div>
+                                </div>
                                 <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
                                         data-target="health-details">
                                     See details

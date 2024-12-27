@@ -65,6 +65,19 @@ function createActivityChart(data) {
             plugins: {
                 legend: {
                     position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return `Activity on ${tooltipItems[0].label}`;
+                        },
+                        label: function(context) {
+                            return `${context.parsed.y} edits made`;
+                        },
+                        footer: function(tooltipItems) {
+                            return 'Click to see detailed activity for this day';
+                        }
+                    }
                 }
             },
             scales: {
@@ -101,6 +114,19 @@ function createGrowthChart(data) {
             plugins: {
                 legend: {
                     position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return `Growth as of ${tooltipItems[0].label}`;
+                        },
+                        label: function(context) {
+                            return `${context.parsed.y} total pages`;
+                        },
+                        footer: function() {
+                            return 'Shows cumulative workspace growth';
+                        }
+                    }
                 }
             },
             scales: {
@@ -143,6 +169,17 @@ function createContentTypeChart(data) {
             plugins: {
                 legend: {
                     position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const percentage = (context.parsed / context.dataset.data.reduce((a, b) => a + b) * 100).toFixed(1);
+                            return `${context.label}: ${context.parsed} (${percentage}%)`;
+                        },
+                        footer: function() {
+                            return 'Click to filter by content type';
+                        }
+                    }
                 }
             }
         }
@@ -223,6 +260,22 @@ function createActivityTimeChart(data) {
             plugins: {
                 legend: {
                     position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return `Activity at ${tooltipItems[0].label}`;
+                        },
+                        label: function(context) {
+                            return `${context.parsed.y} actions performed`;
+                        },
+                        footer: function(tooltipItems) {
+                            const hour = parseInt(tooltipItems[0].label);
+                            if (hour >= 9 && hour <= 17) return 'Peak working hours';
+                            if (hour >= 23 || hour <= 5) return 'Off-hours activity';
+                            return 'Regular activity hours';
+                        }
+                    }
                 }
             },
             scales: {
@@ -255,6 +308,26 @@ function createConnectionChart(data) {
             plugins: {
                 legend: {
                     position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return 'Page Connections';
+                        },
+                        label: function(context) {
+                            return [
+                                `Incoming: ${context.parsed.x} connections`,
+                                `Outgoing: ${context.parsed.y} connections`,
+                                `Total: ${context.parsed.x + context.parsed.y} connections`
+                            ];
+                        },
+                        footer: function(tooltipItems) {
+                            const total = tooltipItems[0].parsed.x + tooltipItems[0].parsed.y;
+                            return total > 10 ? 'Highly connected page' : 
+                                   total > 5 ? 'Well-connected page' : 
+                                   'Could use more connections';
+                        }
+                    }
                 }
             },
             scales: {
@@ -295,6 +368,52 @@ function setupEventListeners() {
             showError(error.message);
         }
     });
+
+    // Add click handlers for chart elements
+    Object.values(charts).forEach(chart => {
+        if (!chart) return;
+        
+        chart.canvas.addEventListener('click', (evt) => {
+            const points = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+            if (points.length) {
+                const firstPoint = points[0];
+                const data = chart.data.datasets[firstPoint.datasetIndex].data[firstPoint.index];
+                handleChartClick(chart.canvas.id, data, firstPoint);
+            }
+        });
+    });
+}
+
+function handleChartClick(chartId, data, point) {
+    switch(chartId) {
+        case 'activityChart':
+            // Show detailed activity for that day
+            showDetailedActivity(data, point);
+            break;
+        case 'contentTypeChart':
+            // Filter workspace view by content type
+            filterByContentType(data, point);
+            break;
+        case 'connectionChart':
+            // Show connected pages
+            showConnectedPages(data, point);
+            break;
+    }
+}
+
+function showDetailedActivity(data, point) {
+    // Implementation for showing detailed activity
+    console.log('Showing detailed activity:', data);
+}
+
+function filterByContentType(data, point) {
+    // Implementation for filtering by content type
+    console.log('Filtering by content type:', data);
+}
+
+function showConnectedPages(data, point) {
+    // Implementation for showing connected pages
+    console.log('Showing connected pages:', data);
 }
 
 function showError(message) {

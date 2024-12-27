@@ -249,9 +249,51 @@ app.get('/api/metrics', async (req, res) => {
         });
 
         const graph = await fetchWorkspaceData(notion);
-        const metrics = calculateDetailedMetrics(graph);
+        console.log('Fetched graph data:', {
+            nodeCount: graph.nodes.length,
+            linkCount: graph.links.length
+        });
 
-        res.json(metrics);
+        const metrics = calculateDetailedMetrics(graph);
+        console.log('Calculated metrics:', metrics);
+
+        res.json({
+            workspaceScore: metrics.workspaceScore,
+            lastUpdated: metrics.lastUpdated,
+            totalContent: metrics.metrics.totalPages,
+            scores: {
+                structure: metrics.scores.structure,
+                activity: metrics.scores.activity,
+                connectivity: metrics.scores.connectivity,
+                content: metrics.scores.content
+            },
+            metrics: {
+                // Structure metrics
+                maxDepth: metrics.metrics.maxDepth,
+                rootPages: metrics.metrics.rootPages,
+                pages: metrics.metrics.pages,
+                databases: metrics.metrics.databases,
+
+                // Activity metrics
+                last7Days: metrics.metrics.last7Days,
+                last30Days: metrics.metrics.last30Days,
+                activePages: metrics.metrics.activePages,
+                stalePages: metrics.metrics.stalePages,
+
+                // Connectivity metrics
+                totalLinks: metrics.metrics.totalLinks,
+                avgLinks: metrics.metrics.avgLinks,
+                connectedPages: metrics.metrics.connectedPages,
+                isolatedPages: metrics.metrics.isolatedPages,
+
+                // Content metrics
+                totalDatabases: metrics.metrics.totalDatabases,
+                linkedDatabases: metrics.metrics.linkedDatabases,
+                docPages: metrics.metrics.docPages,
+                templatePages: metrics.metrics.templatePages
+            },
+            recommendations: metrics.recommendations
+        });
     } catch (error) {
         console.error('Error fetching metrics:', error);
         res.status(500).json({ error: error.message });

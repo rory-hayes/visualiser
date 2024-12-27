@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
-import { calculateWorkspaceScore } from './utils.js';
+import { calculateWorkspaceScore, calculateMaxDepth } from './utils.js';
 import { Client } from '@notionhq/client';
 import session from 'express-session';
 import axios from 'axios';
@@ -183,6 +183,11 @@ app.get('/api/data', async (req, res) => {
         }
 
         // Calculate metrics
+        console.log('Calculating metrics for graph:', {
+            nodeCount: graph.nodes.length,
+            linkCount: graph.links.length
+        });
+
         const workspaceMetrics = {
             score: calculateWorkspaceScore(graph),
             totalPages: graph.nodes.length,
@@ -197,6 +202,8 @@ app.get('/api/data', async (req, res) => {
             totalConnections: graph.links.length
         };
         
+        console.log('Calculated metrics:', workspaceMetrics);
+
         res.json({
             graph,
             metrics: workspaceMetrics,
@@ -223,39 +230,6 @@ app.get('/debug-session', (req, res) => {
         hasToken: !!req.session.notionToken,
         sessionData: req.session
     });
-});
-
-// Add this to your existing /api/workspace-data endpoint
-app.get('/api/workspace-data', async (req, res) => {
-    try {
-        if (!req.session.notionToken) {
-            return res.status(401).json({ error: 'No authentication token found' });
-        }
-        
-        const notion = new Client({
-            auth: req.session.notionToken
-        });
-        
-        const graph = await fetchWorkspaceData(notion);
-        const { nodes, links } = graph;
-        
-        // Add these calculations before sending the response
-        const workspaceData = {
-            nodes: nodes,
-            links: links,
-            workspaceScore: calculateWorkspaceScore(graph),
-            totalPages: nodes.length,
-            activePages: nodes.filter(n => n.lastEdited && 
-                (Date.now() - new Date(n.lastEdited).getTime()) < 30 * 24 * 60 * 60 * 1000).length,
-            maxDepth: Math.max(...nodes.map(n => n.depth || 0), 0),
-            totalConnections: links.length
-        };
-        
-        res.json(workspaceData);
-    } catch (error) {
-        console.error('Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
 });
 
 // Start the Server

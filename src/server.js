@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
-import { calculateWorkspaceScore, calculateMaxDepth, calculateDetailedMetrics, calculateWorkspaceHealth } from './utils.js';
+import { calculateWorkspaceScore, calculateMaxDepth, calculateDetailedMetrics, calculateWorkspaceHealth, calculateAnalytics } from './utils.js';
 import { Client } from '@notionhq/client';
 import session from 'express-session';
 import axios from 'axios';
@@ -290,12 +290,26 @@ app.get('/api/analytics', async (req, res) => {
 
         const days = parseInt(req.query.days) || 30;
         const graph = await fetchWorkspaceData(notion);
+
+        console.log('Fetching analytics for graph:', {
+            nodeCount: graph.nodes.length,
+            linkCount: graph.links.length,
+            days: days
+        });
+
         const analytics = calculateAnalytics(graph, days);
+
+        if (!analytics) {
+            throw new Error('Failed to calculate analytics');
+        }
 
         res.json(analytics);
     } catch (error) {
         console.error('Error fetching analytics:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 

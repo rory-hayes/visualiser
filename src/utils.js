@@ -134,7 +134,8 @@ function calculateAnalytics(graph, days = 30) {
     const { nodes, links } = graph;
     const now = new Date();
 
-    return {
+    // Process the data for analytics
+    const processedData = {
         activity: calculateActivityData(nodes, days),
         growth: calculateGrowthData(nodes, days),
         contentTypes: calculateContentTypeData(nodes),
@@ -142,6 +143,9 @@ function calculateAnalytics(graph, days = 30) {
         activityTimes: calculateActivityTimeData(nodes),
         connections: calculateConnectionData(nodes, links)
     };
+
+    console.log('Calculated analytics:', processedData);
+    return processedData;
 }
 
 function calculateActivityData(nodes, days) {

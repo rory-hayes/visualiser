@@ -158,7 +158,11 @@ function createDepthChart(data) {
             datasets: [{
                 label: 'Pages at Depth',
                 data: data.counts,
-                backgroundColor: 'rgb(99, 102, 241)'
+                backgroundColor: data.counts.map((_, index) => 
+                    index === 0 ? 'rgb(16, 185, 129)' :  // Root level (green)
+                    index <= 2 ? 'rgb(99, 102, 241)' :   // Optimal levels (blue)
+                    'rgb(244, 63, 94)'                   // Deep levels (red)
+                )
             }]
         },
         options: {
@@ -167,6 +171,19 @@ function createDepthChart(data) {
             plugins: {
                 legend: {
                     position: 'bottom'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} pages at ${context.label}`;
+                        },
+                        title: function(tooltipItems) {
+                            const depth = tooltipItems[0].dataIndex;
+                            if (depth === 0) return 'Root Level Pages';
+                            if (depth <= 2) return 'Optimal Depth';
+                            return 'Deep Hierarchy';
+                        }
+                    }
                 }
             },
             scales: {
@@ -180,7 +197,7 @@ function createDepthChart(data) {
                 x: {
                     title: {
                         display: true,
-                        text: 'Depth Level'
+                        text: 'Hierarchy Level'
                     }
                 }
             }

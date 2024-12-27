@@ -252,15 +252,67 @@ function calculateContentTypeData(nodes) {
 }
 
 function calculatePageDepthData(nodes) {
-    const depths = nodes.map(n => n.depth || 0);
-    const maxDepth = Math.max(...depths);
-    const depthCounts = Array.from({ length: maxDepth + 1 }, (_, i) => {
-        return depths.filter(d => d === i).length;
+    // Create a map of parent-child relationships
+    const childrenMap = new Map();
+    nodes.forEach(node => {
+        const parentId = node.parent_id || node.parent || node.parentId;
+        if (parentId) {
+            if (!childrenMap.has(parentId)) {
+                childrenMap.set(parentId, new Set());
+            }
+            childrenMap.get(parentId).add(node.id);
+        }
     });
 
+    // Keep track of calculated depths
+    const nodeDepths = new Map();
+
+    function calculateNodeDepth(nodeId, visited = new Set()) {
+        if (visited.has(nodeId)) return 0;
+        if (nodeDepths.has(nodeId)) return nodeDepths.get(nodeId);
+
+        visited.add(nodeId);
+
+        // If node has no children, it's at depth 0
+        if (!childrenMap.has(nodeId)) {
+            nodeDepths.set(nodeId, 0);
+            return 0;
+        }
+
+        // Calculate max depth of children
+        const childDepths = Array.from(childrenMap.get(nodeId))
+            .map(childId => calculateNodeDepth(childId, new Set(visited)));
+
+        const depth = 1 + Math.max(...childDepths, 0);
+        nodeDepths.set(nodeId, depth);
+        return depth;
+    }
+
+    // Find root nodes and calculate their depths
+    const rootNodes = nodes.filter(node => {
+        const parentId = node.parent_id || node.parent || node.parentId;
+        return !parentId;
+    });
+
+    rootNodes.forEach(node => calculateNodeDepth(node.id));
+
+    // Count nodes at each depth level
+    const depthCounts = new Map();
+    nodeDepths.forEach(depth => {
+        depthCounts.set(depth, (depthCounts.get(depth) || 0) + 1);
+    });
+
+    // Convert to arrays for the chart
+    const maxDepth = Math.max(...nodeDepths.values(), 0);
+    const counts = Array.from({ length: maxDepth + 1 }, (_, i) => 
+        depthCounts.get(i) || 0
+    );
+
     return {
-        labels: Array.from({ length: maxDepth + 1 }, (_, i) => `Level ${i}`),
-        counts: depthCounts
+        labels: Array.from({ length: maxDepth + 1 }, (_, i) => 
+            i === 0 ? 'Root Level' : `Level ${i}`
+        ),
+        counts: counts
     };
 }
 

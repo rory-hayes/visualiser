@@ -16,25 +16,40 @@ let currentGraphData = null;
 function updateStatsCards(data) {
     console.log('Updating stats cards with data:', data);
     
+    // Check if we're getting valid data
+    if (!data || !data.nodes) {
+        console.error('Invalid data received in updateStatsCards:', data);
+        return;
+    }
+
     // Update workspace score (assuming it's a 0-100 scale)
     document.getElementById('workspaceScore').textContent = 
-        data.workspaceScore ? Math.round(data.workspaceScore) : '--';
+        typeof data.workspaceScore === 'number' ? Math.round(data.workspaceScore) : '--';
     
     // Update total pages
     document.getElementById('totalPages').textContent = 
-        data.totalPages || data.nodes?.length || '--';
+        data.nodes.length || '--';
     
     // Update active pages
     document.getElementById('activePages').textContent = 
-        data.activePages || '--';
+        (data.nodes.filter(n => n.lastEdited && 
+            (Date.now() - new Date(n.lastEdited).getTime()) < 30 * 24 * 60 * 60 * 1000).length) || '--';
     
     // Update max depth
     document.getElementById('maxDepth').textContent = 
-        data.maxDepth || '--';
+        Math.max(...data.nodes.map(n => n.depth || 0), 0) || '--';
     
     // Update total connections
     document.getElementById('totalConnections').textContent = 
-        data.totalConnections || data.links?.length || '--';
+        data.links?.length || '--';
+
+    console.log('Stats cards updated with values:', {
+        score: document.getElementById('workspaceScore').textContent,
+        pages: document.getElementById('totalPages').textContent,
+        active: document.getElementById('activePages').textContent,
+        depth: document.getElementById('maxDepth').textContent,
+        connections: document.getElementById('totalConnections').textContent
+    });
 }
 
 // Add at the top level of your script
@@ -109,10 +124,8 @@ async function initializeDashboard() {
             throw new Error('Failed to generate graph');
         }
 
-        // Update metrics only if we have valid data
-        if (data.score !== undefined) {
-            updateDashboardMetrics(data.graph, data.score);
-        }
+        // Update the stats cards with the graph data
+        updateStatsCards(data.graph);
 
         return graph;
 

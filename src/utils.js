@@ -1,7 +1,8 @@
 export {
     calculateWorkspaceScore,
     calculateMaxDepth,
-    calculateDetailedMetrics
+    calculateDetailedMetrics,
+    calculateAnalytics
 };
 
 function calculateWorkspaceScore(graph) {
@@ -125,6 +126,114 @@ function calculateDetailedMetrics(graph) {
         metrics,
         scores,
         recommendations: generateRecommendations(metrics, scores)
+    };
+}
+
+function calculateAnalytics(graph, days = 30) {
+    const { nodes, links } = graph;
+    const now = new Date();
+
+    return {
+        activity: calculateActivityData(nodes, days),
+        growth: calculateGrowthData(nodes, days),
+        contentTypes: calculateContentTypeData(nodes),
+        pageDepth: calculatePageDepthData(nodes),
+        activityTimes: calculateActivityTimeData(nodes),
+        connections: calculateConnectionData(nodes, links)
+    };
+}
+
+function calculateActivityData(nodes, days) {
+    const now = new Date();
+    const daysArray = Array.from({ length: days }, (_, i) => {
+        const date = new Date(now);
+        date.setDate(date.getDate() - (days - 1 - i));
+        return date;
+    });
+
+    const edits = daysArray.map(date => {
+        return nodes.filter(node => {
+            if (!node.lastEdited) return false;
+            const editDate = new Date(node.lastEdited);
+            return editDate.toDateString() === date.toDateString();
+        }).length;
+    });
+
+    return {
+        labels: daysArray.map(date => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+        edits: edits
+    };
+}
+
+function calculateGrowthData(nodes, days) {
+    const now = new Date();
+    const daysArray = Array.from({ length: days }, (_, i) => {
+        const date = new Date(now);
+        date.setDate(date.getDate() - (days - 1 - i));
+        return date;
+    });
+
+    const totalPages = daysArray.map(date => {
+        return nodes.filter(node => {
+            if (!node.createdTime) return false;
+            const createDate = new Date(node.createdTime);
+            return createDate <= date;
+        }).length;
+    });
+
+    return {
+        labels: daysArray.map(date => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+        totalPages: totalPages
+    };
+}
+
+function calculateContentTypeData(nodes) {
+    return {
+        pages: nodes.filter(n => n.type === 'page' && !n.isTemplate).length,
+        databases: nodes.filter(n => n.type === 'database').length,
+        templates: nodes.filter(n => n.isTemplate).length,
+        other: nodes.filter(n => !['page', 'database'].includes(n.type) && !n.isTemplate).length
+    };
+}
+
+function calculatePageDepthData(nodes) {
+    const depths = nodes.map(n => n.depth || 0);
+    const maxDepth = Math.max(...depths);
+    const depthCounts = Array.from({ length: maxDepth + 1 }, (_, i) => {
+        return depths.filter(d => d === i).length;
+    });
+
+    return {
+        labels: Array.from({ length: maxDepth + 1 }, (_, i) => `Level ${i}`),
+        counts: depthCounts
+    };
+}
+
+function calculateActivityTimeData(nodes) {
+    const hours = Array.from({ length: 24 }, (_, i) => i);
+    const activityCounts = hours.map(hour => {
+        return nodes.filter(node => {
+            if (!node.lastEdited) return false;
+            const editDate = new Date(node.lastEdited);
+            return editDate.getHours() === hour;
+        }).length;
+    });
+
+    return {
+        labels: hours.map(h => `${h}:00`),
+        counts: activityCounts
+    };
+}
+
+function calculateConnectionData(nodes, links) {
+    const connectionPoints = nodes.map(node => {
+        const incoming = links.filter(l => l.target === node.id).length;
+        const outgoing = links.filter(l => l.source === node.id).length;
+        return { x: incoming, y: outgoing };
+    });
+
+    return {
+        points: connectionPoints
     };
 }
 

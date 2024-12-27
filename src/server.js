@@ -300,5 +300,32 @@ app.get('/api/metrics', async (req, res) => {
     }
 });
 
+// Analytics Page
+app.get('/analytics', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'analytics.html'));
+});
+
+// Analytics API endpoint
+app.get('/api/analytics', async (req, res) => {
+    try {
+        if (!req.session.notionToken) {
+            return res.status(401).json({ error: 'No authentication token found' });
+        }
+
+        const notion = new Client({
+            auth: req.session.notionToken
+        });
+
+        const days = parseInt(req.query.days) || 30;
+        const graph = await fetchWorkspaceData(notion);
+        const analytics = calculateAnalytics(graph, days);
+
+        res.json(analytics);
+    } catch (error) {
+        console.error('Error fetching analytics:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

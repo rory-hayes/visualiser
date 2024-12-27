@@ -262,6 +262,69 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Workspace Health -->
+                    <div class="metric-row mb-8">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3 class="text-base font-medium text-gray-900">Workspace Health</h3>
+                                <button class="text-sm text-indigo-600 hover:text-indigo-700 mt-1 see-more" 
+                                        data-target="health-details">
+                                    See details
+                                </button>
+                            </div>
+                            <div class="text-2xl font-semibold text-gray-900" id="healthScore">--</div>
+                        </div>
+                        <div class="metric-detail bg-gray-50 rounded-lg mt-0 p-0" id="health-details">
+                            <div class="p-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <!-- Content Health -->
+                                    <div>
+                                        <div class="text-sm text-gray-500">Content Health</div>
+                                        <div class="mt-1 space-y-2">
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Empty Pages</span>
+                                                <span id="emptyPages" class="font-medium">--</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Broken Links</span>
+                                                <span id="brokenLinks" class="font-medium">--</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Duplicate Content</span>
+                                                <span id="duplicateContent" class="font-medium">--</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- Maintenance -->
+                                    <div>
+                                        <div class="text-sm text-gray-500">Maintenance</div>
+                                        <div class="mt-1 space-y-2">
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Orphaned Pages</span>
+                                                <span id="orphanedPages" class="font-medium">--</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Stale Content</span>
+                                                <span id="staleContent" class="font-medium">--</span>
+                                            </div>
+                                            <div class="flex justify-between">
+                                                <span class="text-sm">Inconsistent Naming</span>
+                                                <span id="inconsistentNaming" class="font-medium">--</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- Health Alerts -->
+                                <div class="mt-4">
+                                    <div class="text-sm text-gray-500 mb-2">Health Alerts</div>
+                                    <div id="healthAlerts" class="space-y-2">
+                                        <!-- Alerts will be populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

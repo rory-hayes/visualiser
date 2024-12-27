@@ -26,23 +26,73 @@ function calculateWorkspaceScore(graph) {
 
 function calculateMaxDepth(nodes) {
     if (!nodes || nodes.length === 0) return 0;
-    const visited = new Set();
-    
-    function getNodeDepth(node) {
-        if (visited.has(node.id)) return 0;
-        visited.add(node.id);
-        
-        const parents = nodes.filter(n => 
-            n.children?.includes(node.id) || 
-            n.childPages?.includes(node.id) ||
-            n.childDatabases?.includes(node.id)
-        );
-        
-        if (parents.length === 0) return 1;
-        return 1 + Math.max(...parents.map(parent => getNodeDepth(parent)));
+    // Create a map of parent-child relationships
+    const childrenMap = new Map();
+    nodes.forEach(node => {
+        // Check all possible parent references
+        const parentId = node.parent_id || node.parent || node.parentId;
+        if (parentId) {
+            if (!childrenMap.has(parentId)) {
+                childrenMap.set(parentId, new Set());
+            }
+            childrenMap.get(parentId).add(node.id);
+        }
+    });
+
+    console.log('Parent-child relationships:', Object.fromEntries(childrenMap));
+
+    // Keep track of calculated depths to avoid recalculation
+    const depthCache = new Map();
+
+    function calculateNodeDepth(nodeId, visited = new Set()) {
+        // Prevent infinite loops
+        if (visited.has(nodeId)) {
+            console.warn('Circular reference detected for node:', nodeId);
+            return 0;
+        }
+
+        // Return cached depth if available
+        if (depthCache.has(nodeId)) {
+            return depthCache.get(nodeId);
+        }
+
+        visited.add(nodeId);
+
+        // If node has no children, it's at depth 0
+        if (!childrenMap.has(nodeId)) {
+            depthCache.set(nodeId, 0);
+            return 0;
+        }
+
+        // Calculate max depth of children
+        const childDepths = Array.from(childrenMap.get(nodeId))
+            .map(childId => calculateNodeDepth(childId, new Set(visited)));
+
+        const maxChildDepth = Math.max(...childDepths, 0);
+        const depth = maxChildDepth + 1;
+
+        depthCache.set(nodeId, depth);
+        return depth;
     }
-    
-    return Math.max(...nodes.map(node => getNodeDepth(node)));
+
+    // Find root nodes (nodes with no parents)
+    const rootNodes = nodes.filter(node => {
+        const parentId = node.parent_id || node.parent || node.parentId;
+        return !parentId;
+    });
+
+    console.log('Root nodes:', rootNodes.map(n => ({ id: n.id, title: n.title })));
+
+    // Calculate max depth starting from each root node
+    const depths = rootNodes.map(node => calculateNodeDepth(node.id));
+    const maxDepth = Math.max(...depths, 0);
+
+    console.log('Calculated depths:', {
+        byNode: Object.fromEntries(depthCache),
+        maxDepth: maxDepth
+    });
+
+    return maxDepth;
 }
 
 function calculateDetailedMetrics(graph) {
@@ -609,4 +659,18 @@ function hashContent(content) {
     return content.split('')
         .reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0)
         .toString(36);
+}
+
+// Add this helper function to debug node structure
+function logNodeStructure(nodes) {
+    const structure = {};
+    nodes.forEach(node => {
+        structure[node.id] = {
+            title: node.title,
+            parent: node.parent_id || node.parent || node.parentId,
+            type: node.type,
+            hasChildren: !!(node.children?.length || node.childPages?.length || node.childDatabases?.length)
+        };
+    });
+    console.log('Node structure:', structure);
 }

@@ -86,20 +86,21 @@ async function fetchMissingParents(notion, missingParentIds) {
 
 // Main data fetching function
 export async function fetchWorkspaceData(notion) {
+    console.log('Starting to fetch workspace data...');
     try {
         if (!notion) {
             throw new Error('Notion client is required');
         }
 
         // Initial data fetch
-        const results = await fetchAllPages(notion);
-        console.log('Raw Notion data sample:', results.slice(0, 2));
+        const pages = await fetchAllPages(notion);
+        console.log('Fetched pages:', pages.length);
 
         // Track missing parents
         const missingParentIds = new Set();
-        results.forEach(page => {
+        pages.forEach(page => {
             const parentId = page.parent?.page_id || page.parent?.database_id;
-            if (parentId && !results.some(p => p.id === parentId)) {
+            if (parentId && !pages.some(p => p.id === parentId)) {
                 missingParentIds.add(parentId);
             }
         });
@@ -113,7 +114,7 @@ export async function fetchWorkspaceData(notion) {
         }
 
         // Combine all nodes
-        const allNodes = [...results, ...additionalNodes];
+        const allNodes = [...pages, ...additionalNodes];
 
         // Create graph structure with improved type detection
         const graph = {

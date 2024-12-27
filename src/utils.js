@@ -16,61 +16,6 @@ export function calculateWorkspaceScore(graph) {
     return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-function calculateConnectivityScore(nodes, links) {
-    if (nodes.length === 0) return 0;
-    const avgConnectionsPerNode = links.length / nodes.length;
-    return Math.min(100, avgConnectionsPerNode * 20); // Scales with connections per node
-}
-
-function calculateActivityScore(nodes) {
-    if (nodes.length === 0) return 0;
-    const now = new Date();
-    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-    
-    const activeNodes = nodes.filter(n => 
-        n.lastEdited && new Date(n.lastEdited) >= thirtyDaysAgo
-    ).length;
-    
-    return (activeNodes / nodes.length) * 100;
-}
-
-function calculateStructureScore(nodes) {
-    if (nodes.length === 0) return 0;
-    const maxDepth = Math.max(...nodes.map(n => n.depth || 0));
-    // Optimal depth is between 3-5 levels
-    const depthScore = maxDepth >= 3 && maxDepth <= 5 ? 100 : 
-        Math.max(0, 100 - Math.abs(maxDepth - 4) * 15);
-    
-    return depthScore;
-}
-
-export function calculateMaxDepth(nodes) {
-    if (!nodes || nodes.length === 0) return 0;
-    
-    // Track visited nodes to prevent infinite loops
-    const visited = new Set();
-    
-    function getNodeDepth(node) {
-        if (visited.has(node.id)) return 0;
-        visited.add(node.id);
-        
-        // Find all parent references to this node
-        const parents = nodes.filter(n => 
-            n.children?.includes(node.id) || 
-            n.childPages?.includes(node.id) ||
-            n.childDatabases?.includes(node.id)
-        );
-        
-        if (parents.length === 0) return 1;
-        
-        // Calculate max depth through all possible parent paths
-        return 1 + Math.max(...parents.map(parent => getNodeDepth(parent)));
-    }
-    
-    // Calculate depth for each node and find the maximum
-    return Math.max(...nodes.map(node => getNodeDepth(node)));
-}
-
 export function calculateDetailedMetrics(graph) {
     const { nodes, links } = graph;
     const now = new Date();
@@ -141,10 +86,10 @@ export function calculateDetailedMetrics(graph) {
 
     // Calculate component scores with more precise weighting
     const scores = {
-        structure: calculateStructureScore(nodes, metrics),
-        activity: calculateActivityScore(nodes, metrics),
-        connectivity: calculateConnectivityScore(nodes, links, metrics),
-        content: calculateContentScore(nodes, links, metrics)
+        structure: calculateDetailedStructureScore(nodes, metrics),
+        activity: calculateDetailedActivityScore(nodes, metrics),
+        connectivity: calculateDetailedConnectivityScore(nodes, links, metrics),
+        content: calculateDetailedContentScore(nodes, links, metrics)
     };
 
     return {
@@ -154,6 +99,102 @@ export function calculateDetailedMetrics(graph) {
         scores,
         recommendations: generateRecommendations(metrics, scores)
     };
+}
+
+// Helper functions for basic workspace score
+function calculateConnectivityScore(nodes, links) {
+    if (nodes.length === 0) return 0;
+    const avgConnectionsPerNode = links.length / nodes.length;
+    return Math.min(100, avgConnectionsPerNode * 20);
+}
+
+function calculateActivityScore(nodes) {
+    if (nodes.length === 0) return 0;
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+    const activeNodes = nodes.filter(n => 
+        n.lastEdited && new Date(n.lastEdited) >= thirtyDaysAgo
+    ).length;
+    return (activeNodes / nodes.length) * 100;
+}
+
+function calculateStructureScore(nodes) {
+    if (nodes.length === 0) return 0;
+    const maxDepth = Math.max(...nodes.map(n => n.depth || 0));
+    const depthScore = maxDepth >= 3 && maxDepth <= 5 ? 100 : 
+        Math.max(0, 100 - Math.abs(maxDepth - 4) * 15);
+    return depthScore;
+}
+
+// Helper functions for detailed metrics
+function calculateDetailedStructureScore(nodes, metrics) {
+    if (nodes.length === 0) return 0;
+    const depthScore = calculateDepthScore(metrics.maxDepth);
+    const hierarchyScore = calculateHierarchyScore(metrics);
+    const organizationScore = calculateOrganizationScore(metrics);
+    return Math.round(
+        depthScore * 0.4 +
+        hierarchyScore * 0.3 +
+        organizationScore * 0.3
+    );
+}
+
+function calculateDetailedActivityScore(nodes, metrics) {
+    if (nodes.length === 0) return 0;
+    const recentActivityScore = (metrics.last30Days / metrics.totalPages) * 100;
+    const staleScore = Math.max(0, 100 - (metrics.stalePages / metrics.totalPages) * 200);
+    const archiveScore = Math.max(0, 100 - Math.abs(metrics.archivedPages / metrics.totalPages - 0.1) * 300);
+    return Math.round(
+        recentActivityScore * 0.5 +
+        staleScore * 0.3 +
+        archiveScore * 0.2
+    );
+}
+
+function calculateDetailedConnectivityScore(nodes, links, metrics) {
+    if (nodes.length === 0) return 0;
+    const avgLinksScore = Math.min(100, metrics.avgLinks * 25);
+    const isolationScore = Math.max(0, 100 - (metrics.isolatedPages / metrics.totalPages) * 200);
+    const bidirectionalScore = (metrics.bidirectionalLinks / metrics.totalLinks) * 100;
+    return Math.round(
+        avgLinksScore * 0.4 +
+        isolationScore * 0.4 +
+        bidirectionalScore * 0.2
+    );
+}
+
+function calculateDetailedContentScore(nodes, links, metrics) {
+    if (nodes.length === 0) return 0;
+    const richContentScore = (metrics.richContentPages / metrics.totalPages) * 100;
+    const emptyScore = Math.max(0, 100 - (metrics.emptyPages / metrics.totalPages) * 200);
+    const templateScore = Math.max(0, 100 - Math.abs(metrics.templatePages / metrics.totalPages - 0.1) * 300);
+    return Math.round(
+        richContentScore * 0.4 +
+        emptyScore * 0.4 +
+        templateScore * 0.2
+    );
+}
+
+// Utility functions
+export function calculateMaxDepth(nodes) {
+    if (!nodes || nodes.length === 0) return 0;
+    const visited = new Set();
+    
+    function getNodeDepth(node) {
+        if (visited.has(node.id)) return 0;
+        visited.add(node.id);
+        
+        const parents = nodes.filter(n => 
+            n.children?.includes(node.id) || 
+            n.childPages?.includes(node.id) ||
+            n.childDatabases?.includes(node.id)
+        );
+        
+        if (parents.length === 0) return 1;
+        return 1 + Math.max(...parents.map(parent => getNodeDepth(parent)));
+    }
+    
+    return Math.max(...nodes.map(node => getNodeDepth(node)));
 }
 
 function countRecentEdits(nodes, days) {
@@ -175,22 +216,71 @@ function getMostRecentEdit(nodes) {
     return dates.length ? Math.max(...dates) : null;
 }
 
-function calculateContentScore(nodes, links) {
-    if (nodes.length === 0) return 0;
+function calculateOverallScore(scores) {
+    // Weighted average with validation
+    const weights = {
+        structure: 0.3,
+        activity: 0.3,
+        connectivity: 0.25,
+        content: 0.15
+    };
 
-    const dbRatio = nodes.filter(n => n.type === 'database').length / nodes.length;
-    const templateRatio = nodes.filter(n => n.isTemplate).length / nodes.length;
-    const linkedDbRatio = nodes.filter(n => 
-        n.type === 'database' && 
-        links.some(l => l.source === n.id || l.target === n.id)
-    ).length / Math.max(1, nodes.filter(n => n.type === 'database').length);
+    let totalScore = 0;
+    let totalWeight = 0;
 
-    // Score based on optimal ratios
-    const dbScore = Math.min(100, 100 - Math.abs(dbRatio - 0.15) * 200); // Optimal: 15% databases
-    const templateScore = Math.min(100, 100 - Math.abs(templateRatio - 0.1) * 200); // Optimal: 10% templates
-    const dbConnectionScore = linkedDbRatio * 100;
+    Object.entries(weights).forEach(([key, weight]) => {
+        if (typeof scores[key] === 'number' && !isNaN(scores[key])) {
+            totalScore += scores[key] * weight;
+            totalWeight += weight;
+        }
+    });
 
-    return Math.round((dbScore * 0.4 + templateScore * 0.3 + dbConnectionScore * 0.3));
+    return Math.round(totalWeight > 0 ? totalScore / totalWeight : 0);
+}
+
+function countBidirectionalLinks(links) {
+    const linkPairs = new Set();
+    let count = 0;
+
+    links.forEach(link => {
+        const pair = [link.source, link.target].sort().join('-');
+        if (linkPairs.has(pair)) {
+            count++;
+        } else {
+            linkPairs.add(pair);
+        }
+    });
+
+    return count;
+}
+
+function calculateDepthScore(maxDepth) {
+    // Optimal depth is between 3-5 levels
+    if (maxDepth >= 3 && maxDepth <= 5) return 100;
+    if (maxDepth < 3) return Math.max(0, 60 + maxDepth * 13.33);
+    return Math.max(0, 100 - (maxDepth - 5) * 15);
+}
+
+function calculateHierarchyScore(metrics) {
+    const rootRatio = metrics.rootPages / metrics.totalPages;
+    const subpageRatio = metrics.subpageCount / metrics.totalPages;
+
+    // Ideal: 5-15% root pages, rest should be well-distributed
+    const rootScore = Math.max(0, 100 - Math.abs(rootRatio - 0.1) * 500);
+    const distributionScore = subpageRatio * 100;
+
+    return (rootScore + distributionScore) / 2;
+}
+
+function calculateOrganizationScore(metrics) {
+    const templateRatio = metrics.templatePages / metrics.totalPages;
+    const dbRatio = metrics.databases / metrics.totalPages;
+
+    // Ideal: 5-10% templates, 10-20% databases
+    const templateScore = Math.max(0, 100 - Math.abs(templateRatio - 0.075) * 800);
+    const dbScore = Math.max(0, 100 - Math.abs(dbRatio - 0.15) * 500);
+
+    return (templateScore + dbScore) / 2;
 }
 
 function generateRecommendations(metrics, scores) {
@@ -239,87 +329,4 @@ function generateRecommendations(metrics, scores) {
     }
 
     return recommendations;
-}
-
-function calculateOverallScore(scores) {
-    // Weighted average with validation
-    const weights = {
-        structure: 0.3,
-        activity: 0.3,
-        connectivity: 0.25,
-        content: 0.15
-    };
-
-    let totalScore = 0;
-    let totalWeight = 0;
-
-    Object.entries(weights).forEach(([key, weight]) => {
-        if (typeof scores[key] === 'number' && !isNaN(scores[key])) {
-            totalScore += scores[key] * weight;
-            totalWeight += weight;
-        }
-    });
-
-    return Math.round(totalWeight > 0 ? totalScore / totalWeight : 0);
-}
-
-function countBidirectionalLinks(links) {
-    const linkPairs = new Set();
-    let count = 0;
-
-    links.forEach(link => {
-        const pair = [link.source, link.target].sort().join('-');
-        if (linkPairs.has(pair)) {
-            count++;
-        } else {
-            linkPairs.add(pair);
-        }
-    });
-
-    return count;
-}
-
-function calculateStructureScore(nodes, metrics) {
-    if (nodes.length === 0) return 0;
-
-    // Calculate individual structure metrics
-    const depthScore = calculateDepthScore(metrics.maxDepth);
-    const hierarchyScore = calculateHierarchyScore(metrics);
-    const organizationScore = calculateOrganizationScore(metrics);
-
-    // Weighted average of structure components
-    return Math.round(
-        depthScore * 0.4 +
-        hierarchyScore * 0.3 +
-        organizationScore * 0.3
-    );
-}
-
-function calculateDepthScore(maxDepth) {
-    // Optimal depth is between 3-5 levels
-    if (maxDepth >= 3 && maxDepth <= 5) return 100;
-    if (maxDepth < 3) return Math.max(0, 60 + maxDepth * 13.33);
-    return Math.max(0, 100 - (maxDepth - 5) * 15);
-}
-
-function calculateHierarchyScore(metrics) {
-    const rootRatio = metrics.rootPages / metrics.totalPages;
-    const subpageRatio = metrics.subpageCount / metrics.totalPages;
-
-    // Ideal: 5-15% root pages, rest should be well-distributed
-    const rootScore = Math.max(0, 100 - Math.abs(rootRatio - 0.1) * 500);
-    const distributionScore = subpageRatio * 100;
-
-    return (rootScore + distributionScore) / 2;
-}
-
-function calculateOrganizationScore(metrics) {
-    const templateRatio = metrics.templatePages / metrics.totalPages;
-    const dbRatio = metrics.databases / metrics.totalPages;
-
-    // Ideal: 5-10% templates, 10-20% databases
-    const templateScore = Math.max(0, 100 - Math.abs(templateRatio - 0.075) * 800);
-    const dbScore = Math.max(0, 100 - Math.abs(dbRatio - 0.15) * 500);
-
-    return (templateScore + dbScore) / 2;
 }

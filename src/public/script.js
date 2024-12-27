@@ -16,8 +16,7 @@ let currentGraphData = null;
 function updateStatsCards(data) {
     console.log('Updating stats cards with data:', data);
     
-    // Check if we're getting valid data
-    if (!data || !data.nodes) {
+    if (!data || !data.graph || !data.metrics) {
         console.error('Invalid data received in updateStatsCards:', data);
         return;
     }
@@ -25,34 +24,29 @@ function updateStatsCards(data) {
     // Store the data globally so we can access it later if needed
     currentGraphData = data;
 
-    // Update workspace score (assuming it's a 0-100 scale)
+    const { metrics } = data;
+    
+    // Update workspace score
     document.getElementById('workspaceScore').textContent = 
-        typeof data.score === 'number' ? Math.round(data.score) : '--';
+        typeof metrics.score === 'number' ? metrics.score.toString() : '--';
     
     // Update total pages
     document.getElementById('totalPages').textContent = 
-        (data.nodes?.length || 0).toString();
+        metrics.totalPages.toString();
     
     // Update active pages
     document.getElementById('activePages').textContent = 
-        (data.nodes?.filter(n => n.lastEdited && 
-            (Date.now() - new Date(n.lastEdited).getTime()) < 30 * 24 * 60 * 60 * 1000)?.length || 0).toString();
+        metrics.activePages.toString();
     
     // Update max depth
     document.getElementById('maxDepth').textContent = 
-        (Math.max(...(data.nodes?.map(n => n.depth || 0) || [0]), 0)).toString();
+        metrics.maxDepth.toString();
     
     // Update total connections
     document.getElementById('totalConnections').textContent = 
-        (data.links?.length || 0).toString();
+        metrics.totalConnections.toString();
 
-    console.log('Stats cards updated with values:', {
-        score: document.getElementById('workspaceScore').textContent,
-        pages: document.getElementById('totalPages').textContent,
-        active: document.getElementById('activePages').textContent,
-        depth: document.getElementById('maxDepth').textContent,
-        connections: document.getElementById('totalConnections').textContent
-    });
+    console.log('Stats cards updated with values:', metrics);
 }
 
 // Add at the top level of your script
@@ -109,26 +103,8 @@ async function initializeDashboard() {
 
         const data = await response.json();
         
-        // Validate data structure
-        if (!data || !data.graph || !Array.isArray(data.graph.nodes) || !Array.isArray(data.graph.links)) {
-            console.error('Invalid data structure:', data);
-            throw new Error('Invalid data structure received from server');
-        }
-
-        console.log('Received graph data:', {
-            nodes: data.graph.nodes.length,
-            links: data.graph.links.length,
-            score: data.score
-        });
-
-        visualization.innerHTML = '';
-        
-        // Update stats before generating graph
-        updateStatsCards({
-            nodes: data.graph.nodes,
-            links: data.graph.links,
-            score: data.score
-        });
+        // Update stats with the complete data object
+        updateStatsCards(data);
         
         const graph = generateGraph(visualization, data.graph);
         if (!graph) {

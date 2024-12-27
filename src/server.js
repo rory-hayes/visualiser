@@ -182,26 +182,30 @@ app.get('/api/data', async (req, res) => {
             });
         }
 
-        // Calculate score only if we have valid graph data
-        const score = calculateWorkspaceScore(graph);
-
-        console.log('Sending graph data:', {
-            nodes: graph.nodes.length,
-            links: graph.links.length,
-            hasScore: !!score
-        });
-
+        // Calculate metrics
+        const workspaceMetrics = {
+            score: calculateWorkspaceScore(graph),
+            totalPages: graph.nodes.length,
+            activePages: graph.nodes.filter(n => {
+                if (!n.lastEdited) return false;
+                const lastEdit = new Date(n.lastEdited);
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                return lastEdit >= thirtyDaysAgo;
+            }).length,
+            maxDepth: calculateMaxDepth(graph.nodes),
+            totalConnections: graph.links.length
+        };
+        
         res.json({
             graph,
-            score
+            metrics: workspaceMetrics,
+            score: workspaceMetrics.score
         });
 
     } catch (error) {
         console.error('API error:', error);
-        res.status(500).json({ 
-            error: error.message || 'Internal server error',
-            details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
+        res.status(500).json({ error: error.message });
     }
 });
 

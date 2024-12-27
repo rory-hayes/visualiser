@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { fetchWorkspaceData } from './fetchData.js';
 import { parseDataToGraph } from './parseData.js';
-import { calculateWorkspaceScore, calculateMaxDepth, calculateDetailedMetrics } from './utils.js';
+import { calculateWorkspaceScore, calculateMaxDepth, calculateDetailedMetrics, calculateWorkspaceHealth } from './utils.js';
 import { Client } from '@notionhq/client';
 import session from 'express-session';
 import axios from 'axios';
@@ -255,43 +255,15 @@ app.get('/api/metrics', async (req, res) => {
         });
 
         const metrics = calculateDetailedMetrics(graph);
-        console.log('Calculated metrics:', metrics);
+        const health = calculateWorkspaceHealth(graph);
 
         res.json({
             workspaceScore: metrics.workspaceScore,
             lastUpdated: metrics.lastUpdated,
             totalContent: metrics.metrics.totalPages,
-            scores: {
-                structure: metrics.scores.structure,
-                activity: metrics.scores.activity,
-                connectivity: metrics.scores.connectivity,
-                content: metrics.scores.content
-            },
-            metrics: {
-                // Structure metrics
-                maxDepth: metrics.metrics.maxDepth,
-                rootPages: metrics.metrics.rootPages,
-                pages: metrics.metrics.pages,
-                databases: metrics.metrics.databases,
-
-                // Activity metrics
-                last7Days: metrics.metrics.last7Days,
-                last30Days: metrics.metrics.last30Days,
-                activePages: metrics.metrics.activePages,
-                stalePages: metrics.metrics.stalePages,
-
-                // Connectivity metrics
-                totalLinks: metrics.metrics.totalLinks,
-                avgLinks: metrics.metrics.avgLinks,
-                connectedPages: metrics.metrics.connectedPages,
-                isolatedPages: metrics.metrics.isolatedPages,
-
-                // Content metrics
-                totalDatabases: metrics.metrics.totalDatabases,
-                linkedDatabases: metrics.metrics.linkedDatabases,
-                docPages: metrics.metrics.docPages,
-                templatePages: metrics.metrics.templatePages
-            },
+            scores: metrics.scores,
+            metrics: metrics.metrics,
+            health: health,
             recommendations: metrics.recommendations
         });
     } catch (error) {

@@ -79,6 +79,26 @@ function updateMetrics(data) {
     document.getElementById('templatePages').textContent = 
         data.metrics.templatePages || '--';
 
+    // Update health monitoring section
+    if (data.health) {
+        document.getElementById('healthScore').textContent = data.health.score;
+        document.getElementById('emptyPages').textContent = data.health.metrics.emptyPages;
+        document.getElementById('brokenLinks').textContent = data.health.metrics.brokenLinks;
+        document.getElementById('duplicateContent').textContent = data.health.metrics.duplicateContent;
+        document.getElementById('orphanedPages').textContent = data.health.metrics.orphanedPages;
+        document.getElementById('staleContent').textContent = data.health.metrics.staleContent;
+        document.getElementById('inconsistentNaming').textContent = data.health.metrics.inconsistentNaming;
+
+        // Update health alerts
+        const alertsContainer = document.getElementById('healthAlerts');
+        alertsContainer.innerHTML = data.health.alerts.map(alert => `
+            <div class="flex items-center p-2 rounded ${getAlertColorClass(alert.type)}">
+                ${getAlertIcon(alert.type)}
+                <span class="ml-2">${alert.message}</span>
+            </div>
+        `).join('');
+    }
+
     console.log('Metrics updated successfully');
 }
 
@@ -146,4 +166,23 @@ function hideLoading() {
             el.textContent = '--';
         }
     });
+}
+
+function getAlertColorClass(type) {
+    switch (type) {
+        case 'critical': return 'bg-red-100 text-red-800';
+        case 'warning': return 'bg-yellow-100 text-yellow-800';
+        default: return 'bg-blue-100 text-blue-800';
+    }
+}
+
+function getAlertIcon(type) {
+    const iconClass = type === 'critical' ? 'text-red-500' : 
+                     type === 'warning' ? 'text-yellow-500' : 
+                     'text-blue-500';
+    return `
+        <svg class="w-5 h-5 ${iconClass}" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9 7a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 8a1 1 0 100-2 1 1 0 000 2z"/>
+        </svg>
+    `;
 } 

@@ -2,7 +2,8 @@ export {
     calculateWorkspaceScore,
     calculateMaxDepth,
     calculateDetailedMetrics,
-    calculateAnalytics
+    calculateAnalytics,
+    calculateWorkspaceHealth
 };
 
 function calculateWorkspaceScore(graph) {
@@ -444,4 +445,164 @@ function generateRecommendations(metrics, scores) {
     }
 
     return recommendations;
+}
+
+function calculateWorkspaceHealth(graph) {
+    const { nodes, links } = graph;
+    const now = new Date();
+
+    const healthMetrics = {
+        // Content Health
+        emptyPages: nodes.filter(n => !n.content || n.content.length === 0).length,
+        brokenLinks: links.filter(l => 
+            !nodes.some(n => n.id === l.source) || 
+            !nodes.some(n => n.id === l.target)
+        ).length,
+        duplicateContent: findDuplicateContent(nodes),
+
+        // Maintenance
+        orphanedPages: nodes.filter(n => 
+            !links.some(l => l.source === n.id || l.target === n.id)
+        ).length,
+        staleContent: nodes.filter(n => {
+            if (!n.lastEdited) return true;
+            const daysSinceEdit = (now - new Date(n.lastEdited)) / (1000 * 60 * 60 * 24);
+            return daysSinceEdit > 90;
+        }).length,
+        inconsistentNaming: findInconsistentNaming(nodes)
+    };
+
+    // Calculate health score
+    const healthScore = calculateHealthScore(healthMetrics, nodes.length);
+
+    // Generate health alerts
+    const alerts = generateHealthAlerts(healthMetrics, nodes.length);
+
+    return {
+        score: healthScore,
+        metrics: healthMetrics,
+        alerts
+    };
+}
+
+function findDuplicateContent(nodes) {
+    const contentMap = new Map();
+    let duplicates = 0;
+
+    nodes.forEach(node => {
+        if (!node.content) return;
+        const contentHash = hashContent(node.content);
+        if (contentMap.has(contentHash)) {
+            duplicates++;
+        } else {
+            contentMap.set(contentHash, node.id);
+        }
+    });
+
+    return duplicates;
+}
+
+function findInconsistentNaming(nodes) {
+    const namingPatterns = {
+        camelCase: /^[a-z][a-zA-Z0-9]*$/,
+        kebabCase: /^[a-z][a-z0-9-]*$/,
+        snakeCase: /^[a-z][a-z0-9_]*$/
+    };
+
+    let inconsistentCount = 0;
+    const dominantPattern = findDominantNamingPattern(nodes);
+
+    nodes.forEach(node => {
+        if (!node.name) return;
+        if (!namingPatterns[dominantPattern].test(node.name)) {
+            inconsistentCount++;
+        }
+    });
+
+    return inconsistentCount;
+}
+
+function findDominantNamingPattern(nodes) {
+    const patterns = {
+        camelCase: 0,
+        kebabCase: 0,
+        snakeCase: 0
+    };
+
+    nodes.forEach(node => {
+        if (!node.name) return;
+        if (/^[a-z][a-zA-Z0-9]*$/.test(node.name)) patterns.camelCase++;
+        if (/^[a-z][a-z0-9-]*$/.test(node.name)) patterns.kebabCase++;
+        if (/^[a-z][a-z0-9_]*$/.test(node.name)) patterns.snakeCase++;
+    });
+
+    return Object.entries(patterns)
+        .reduce((a, b) => a[1] > b[1] ? a : b)[0];
+}
+
+function calculateHealthScore(metrics, totalPages) {
+    const weights = {
+        emptyPages: 0.2,
+        brokenLinks: 0.2,
+        duplicateContent: 0.15,
+        orphanedPages: 0.15,
+        staleContent: 0.15,
+        inconsistentNaming: 0.15
+    };
+
+    let score = 100;
+
+    // Deduct points based on issues
+    Object.entries(metrics).forEach(([key, value]) => {
+        const ratio = value / totalPages;
+        const deduction = ratio * 100 * weights[key];
+        score -= deduction;
+    });
+
+    return Math.max(0, Math.round(score));
+}
+
+function generateHealthAlerts(metrics, totalPages) {
+    const alerts = [];
+    const thresholds = {
+        emptyPages: 0.1,
+        brokenLinks: 0.05,
+        duplicateContent: 0.1,
+        orphanedPages: 0.15,
+        staleContent: 0.2,
+        inconsistentNaming: 0.15
+    };
+
+    Object.entries(metrics).forEach(([key, value]) => {
+        const ratio = value / totalPages;
+        if (ratio > thresholds[key]) {
+            alerts.push(generateAlert(key, value, ratio));
+        }
+    });
+
+    return alerts;
+}
+
+function generateAlert(issue, count, ratio) {
+    const messages = {
+        emptyPages: `${count} empty pages detected (${(ratio * 100).toFixed(1)}% of workspace)`,
+        brokenLinks: `${count} broken links found`,
+        duplicateContent: `${count} pages with duplicate content`,
+        orphanedPages: `${count} orphaned pages without connections`,
+        staleContent: `${count} pages haven't been updated in 90+ days`,
+        inconsistentNaming: `${count} pages with inconsistent naming patterns`
+    };
+
+    return {
+        type: ratio > 0.25 ? 'critical' : ratio > 0.15 ? 'warning' : 'info',
+        message: messages[issue],
+        issue
+    };
+}
+
+function hashContent(content) {
+    // Simple hash function for content comparison
+    return content.split('')
+        .reduce((hash, char) => ((hash << 5) - hash) + char.charCodeAt(0), 0)
+        .toString(36);
 }

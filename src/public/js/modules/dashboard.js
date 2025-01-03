@@ -19,6 +19,9 @@ export class Dashboard {
                 throw new Error('Visualization container not found');
             }
 
+            // Show loading state for stats cards
+            this.showStatsLoading();
+
             // Load data first
             this.data = await this.loadData();
             
@@ -103,5 +106,20 @@ export class Dashboard {
                 </div>
             `;
         }
+    }
+
+    showStatsLoading() {
+        const statCards = document.querySelectorAll('[id^="workspace"], [id^="total"], [id^="active"], [id^="max"], [id^="total"]');
+        statCards.forEach(card => {
+            if (card.tagName === 'DIV') {
+                card.innerHTML = `
+                    <div class="animate-pulse flex space-x-4">
+                        <div class="flex-1 space-y-4 py-1">
+                            <div class="h-4 bg-gray-200 rounded w-3/4"></div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
     }
 } 

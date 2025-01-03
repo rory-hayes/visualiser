@@ -937,16 +937,18 @@ function initializeSearchAndFilters() {
     const searchInput = document.getElementById('pageSearch');
     const filterButton = document.querySelector('#filterDropdown button');
     const filterPanel = document.getElementById('filterControls');
-    const filters = document.querySelectorAll('select.filter-control');
+    const filters = document.querySelectorAll('.filter-control');
 
     // Toggle filter panel
-    filterButton?.addEventListener('click', () => {
+    filterButton?.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent event from bubbling up
         filterPanel.classList.toggle('hidden');
     });
 
     // Close filter panel when clicking outside
     document.addEventListener('click', (event) => {
-        if (!event.target.closest('#filterDropdown')) {
+        const filterDropdown = document.getElementById('filterDropdown');
+        if (!filterDropdown.contains(event.target)) {
             filterPanel.classList.add('hidden');
         }
     });
@@ -963,7 +965,10 @@ function initializeSearchAndFilters() {
 
     // Filter change handlers
     filters.forEach(filter => {
-        filter.addEventListener('change', applyFilters);
+        filter.addEventListener('change', () => {
+            filterPanel.classList.add('hidden'); // Hide panel after selection
+            applyFilters();
+        });
     });
 }
 
@@ -987,6 +992,13 @@ function applyFilters() {
     const activityFilter = document.getElementById('activityFilter').value;
     const depthFilter = document.getElementById('depthFilter').value;
     const connectionsFilter = document.getElementById('connectionsFilter').value;
+
+    console.log('Applying filters:', {
+        type: typeFilter,
+        activity: activityFilter,
+        depth: depthFilter,
+        connections: connectionsFilter
+    });
 
     const nodes = graph.nodes();
     nodes.forEach(node => {

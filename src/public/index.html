@@ -60,9 +60,14 @@
             </div>
         </div>
         <div class="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
-            <img class="h-56 w-full object-cover sm:h-72 md:h-96 lg:w-full lg:h-full" 
-                 src="/images/dashboard-preview.png" 
-                 alt="Dashboard Preview">
+            <div class="relative h-56 w-full sm:h-72 md:h-96 lg:w-full lg:h-full bg-gray-50 rounded-bl-3xl overflow-hidden">
+                <!-- Sample Network Visualization -->
+                <div class="absolute inset-0 bg-gradient-to-br from-indigo-50 to-white">
+                    <svg id="preview-graph" class="w-full h-full"></svg>
+                </div>
+                <!-- Overlay Gradient -->
+                <div class="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent lg:via-white/20 lg:to-transparent"></div>
+            </div>
         </div>
     </div>
 

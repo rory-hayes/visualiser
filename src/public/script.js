@@ -78,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 let graphCleanup;
+let currentGraph = null; // Store the current graph instance
 
 async function initializeDashboard() {
     try {
@@ -94,7 +95,6 @@ async function initializeDashboard() {
         if (!response.ok) {
             const errorData = await response.json();
             if (response.status === 401) {
-                // Redirect to auth if token is invalid or missing
                 window.location.href = '/auth';
                 return;
             }
@@ -102,16 +102,12 @@ async function initializeDashboard() {
         }
 
         const data = await response.json();
-        
-        // Update stats with the complete data object
         updateStatsCards(data);
         
-        const graph = generateGraph(visualization, data.graph);
-        if (!graph) {
-            throw new Error('Failed to generate graph');
-        }
+        currentGraph = generateGraph(visualization, data.graph);
+        initializeSearchAndFilters(); // Initialize search and filters after graph is created
 
-        return graph;
+        return currentGraph;
 
     } catch (error) {
         console.error('Dashboard initialization error:', error);
@@ -934,31 +930,38 @@ fetch('/api/workspace-data')
 
 // Initialize search and filter functionality
 function initializeSearchAndFilters() {
+    console.log('Initializing search and filters');
     const searchInput = document.getElementById('pageSearch');
     const filterButton = document.querySelector('#filterDropdown button');
     const filterPanel = document.getElementById('filterControls');
-    const filters = document.querySelectorAll('.filter-control');
+    const filters = document.querySelectorAll('select[id$="Filter"]');
+
+    if (!searchInput || !filterButton || !filterPanel) {
+        console.error('Search/filter elements not found');
+        return;
+    }
 
     // Toggle filter panel
-    filterButton?.addEventListener('click', (e) => {
-        e.stopPropagation(); // Prevent event from bubbling up
+    filterButton.addEventListener('click', (e) => {
+        e.stopPropagation();
         filterPanel.classList.toggle('hidden');
     });
 
     // Close filter panel when clicking outside
     document.addEventListener('click', (event) => {
         const filterDropdown = document.getElementById('filterDropdown');
-        if (!filterDropdown.contains(event.target)) {
+        if (filterDropdown && !filterDropdown.contains(event.target)) {
             filterPanel.classList.add('hidden');
         }
     });
 
     // Search functionality with debounce
     let searchTimeout;
-    searchInput?.addEventListener('input', (e) => {
+    searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
             const searchTerm = e.target.value.toLowerCase();
+            console.log('Searching for:', searchTerm);
             filterNodes(searchTerm);
         }, 300);
     });
@@ -966,41 +969,45 @@ function initializeSearchAndFilters() {
     // Filter change handlers
     filters.forEach(filter => {
         filter.addEventListener('change', () => {
-            filterPanel.classList.add('hidden'); // Hide panel after selection
+            console.log('Filter changed:', filter.id, filter.value);
+            filterPanel.classList.add('hidden');
             applyFilters();
         });
     });
 }
 
 function filterNodes(searchTerm) {
-    if (!graph) return;
+    if (!currentGraph || !currentGraph.nodes) {
+        console.error('Graph not initialized');
+        return;
+    }
 
-    const nodes = graph.nodes();
+    const nodes = currentGraph.nodes;
+    console.log('Filtering nodes with term:', searchTerm);
+
     nodes.forEach(node => {
-        const title = node.title?.toLowerCase() || '';
+        const title = (node.title || node.name || '').toLowerCase();
         const matches = title.includes(searchTerm);
         node.hidden = searchTerm && !matches;
+        console.log(`Node "${title}": ${matches ? 'visible' : 'hidden'}`);
     });
 
     updateGraphVisibility();
 }
 
 function applyFilters() {
-    if (!graph) return;
+    if (!currentGraph || !currentGraph.nodes) {
+        console.error('Graph not initialized');
+        return;
+    }
 
     const typeFilter = document.getElementById('typeFilter').value;
     const activityFilter = document.getElementById('activityFilter').value;
     const depthFilter = document.getElementById('depthFilter').value;
     const connectionsFilter = document.getElementById('connectionsFilter').value;
 
-    console.log('Applying filters:', {
-        type: typeFilter,
-        activity: activityFilter,
-        depth: depthFilter,
-        connections: connectionsFilter
-    });
+    const nodes = currentGraph.nodes;
 
-    const nodes = graph.nodes();
     nodes.forEach(node => {
         let visible = true;
 
@@ -1067,8 +1074,14 @@ function applyFilters() {
 }
 
 function updateGraphVisibility() {
-    // Update graph visualization based on hidden nodes
-    // Implementation depends on your graph visualization library
-    // This is a placeholder for the actual implementation
-    graph.refresh();
+    if (!currentGraph || !currentGraph.update) {
+        console.error('Graph update function not available');
+        return;
+    }
+
+    // Update the graph visualization
+    currentGraph.update({
+        nodes: currentGraph.nodes.filter(n => !n.hidden),
+        links: currentGraph.links
+    });
 }

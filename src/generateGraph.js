@@ -13,99 +13,122 @@ export function generateGraph(container, data) {
             throw new Error('D3 not found');
         }
 
-        // Configuration for force simulation
-        const forceConfig = {
-            charge: -1000,      // Repulsion strength
-            linkDistance: 100,  // Desired link length
-            centerForce: 0.1,   // Strength of centering force
-            collideRadius: 50   // Node collision radius
-        };
+        // Validate and prepare data
+        const nodes = data.nodes.map(node => ({
+            ...node,
+            id: node.id,
+            name: node.name || 'Untitled',
+            type: node.type || 'page'
+        }));
 
-        const width = container.offsetWidth;
-        const height = container.offsetHeight;
+        const links = data.links.map(link => ({
+            source: typeof link.source === 'object' ? link.source.id : link.source,
+            target: typeof link.target === 'object' ? link.target.id : link.target
+        }));
 
-        // Create SVG container
+        // Set up dimensions
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        // Clear existing content
+        d3.select(container).selectAll("*").remove();
+
+        // Create SVG with zoom support
         const svg = d3.select(container)
             .append('svg')
             .attr('width', width)
-            .attr('height', height);
+            .attr('height', height)
+            .attr('viewBox', [0, 0, width, height]);
+
+        const g = svg.append('g');
 
         // Add zoom behavior
         const zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
-            .on('zoom', (event) => {
-                g.attr('transform', event.transform);
-            });
+            .scaleExtent([0.2, 4])
+            .on('zoom', (event) => g.attr('transform', event.transform));
 
         svg.call(zoom);
 
-        // Create a group for the graph
-        const g = svg.append('g');
-
-        // Create force simulation
-        const simulation = d3.forceSimulation(data.nodes)
-            .force('link', d3.forceLink(data.links)
+        // Create force simulation with improved forces
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(forceConfig.linkDistance))
+                .distance(d => {
+                    // Adjust link distances based on node types
+                    if (d.source.type === 'workspace') return 200;
+                    if (d.source.type === 'database' || d.target.type === 'database') return 150;
+                    return 100;
+                }))
             .force('charge', d3.forceManyBody()
-                .strength(forceConfig.charge))
-            .force('center', d3.forceCenter(width / 2, height / 2)
-                .strength(forceConfig.centerForce))
-            .force('collide', d3.forceCollide()
-                .radius(forceConfig.collideRadius));
+                .strength(d => {
+                    // Adjust repulsion forces based on node type
+                    if (d.type === 'workspace') return -1000;
+                    if (d.type === 'database') return -500;
+                    return -300;
+                }))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide()
+                .radius(d => nodeSize[d.type] * 1.5)) // Prevent node overlap
+            .force('x', d3.forceX(width / 2).strength(0.1))
+            .force('y', d3.forceY(height / 2).strength(0.1));
 
-        // Create hierarchical layout for initial positions
-        const hierarchy = d3.stratify()
-            .id(d => d.id)
-            .parentId(d => d.parent_id)(data.nodes);
-
-        const treeLayout = d3.tree()
-            .size([width - 100, height - 100]);
-
-        const treeNodes = treeLayout(hierarchy);
-
-        // Use tree layout for initial positions
-        data.nodes.forEach(node => {
-            const treeNode = treeNodes.descendants().find(n => n.data.id === node.id);
-            if (treeNode) {
-                node.x = treeNode.x;
-                node.y = treeNode.y;
-            }
-        });
-
-        // Create links
+        // Create links with proper styling
         const link = g.append('g')
+            .attr('class', 'links')
             .selectAll('line')
-            .data(data.links)
+            .data(links)
             .join('line')
-            .attr('stroke', d => d.type === 'parent-child' ? '#666' : '#999')
-            .attr('stroke-width', d => d.type === 'parent-child' ? 2 : 1)
+            .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('marker-end', 'url(#arrow)');
+            .attr('stroke-width', d => {
+                // Thicker lines for database connections
+                return d.source.type === 'database' || d.target.type === 'database' ? 2 : 1;
+            });
 
-        // Create nodes
+        // Create node groups
         const node = g.append('g')
-            .selectAll('circle')
-            .data(data.nodes)
+            .attr('class', 'nodes')
+            .selectAll('g')
+            .data(nodes)
             .join('g')
-            .call(drag(simulation));
+            .call(d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended));
 
-        // Add node circles with different styles based on type
+        // Add circles to nodes
         node.append('circle')
-            .attr('r', d => getNodeRadius(d))
-            .attr('fill', d => getNodeColor(d))
+            .attr('r', d => nodeSize[d.type])
+            .attr('fill', d => nodeColors[d.type])
             .attr('stroke', '#fff')
-            .attr('stroke-width', 2);
+            .attr('stroke-width', 2)
+            .style('cursor', d => d.url ? 'pointer' : 'default');
 
-        // Add node labels
+        // Add labels with improved positioning
         node.append('text')
-            .text(d => d.title)
-            .attr('x', d => getNodeRadius(d) + 5)
-            .attr('y', 3)
-            .attr('font-size', '12px')
-            .attr('font-family', 'Inter, sans-serif');
+            .attr('dx', d => nodeSize[d.type] + 5)
+            .attr('dy', '.35em')
+            .text(d => d.name)
+            .style('font-size', '12px')
+            .style('fill', '#333')
+            .each(function(d) {
+                // Truncate long labels
+                const text = d3.select(this);
+                if (this.getComputedTextLength() > 150) {
+                    let name = d.name;
+                    while (this.getComputedTextLength() > 150) {
+                        name = name.slice(0, -1);
+                        text.text(name + '...');
+                    }
+                }
+            });
 
-        // Update positions on tick
+        // Enhanced tooltips
+        node.on('mouseover', showTooltip)
+            .on('mouseout', hideTooltip)
+            .on('click', handleNodeClick);
+
+        // Update force simulation on tick
         simulation.on('tick', () => {
             link
                 .attr('x1', d => d.source.x)
@@ -113,29 +136,76 @@ export function generateGraph(container, data) {
                 .attr('x2', d => d.target.x)
                 .attr('y2', d => d.target.y);
 
-            node
-                .attr('transform', d => `translate(${d.x},${d.y})`);
+            node.attr('transform', d => `translate(${d.x},${d.y})`);
         });
 
-        // Helper functions for node styling
-        function getNodeRadius(node) {
-            switch (node.type) {
-                case 'workspace': return 15;
-                case 'database': return 10;
-                default: return 7;
-            }
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
         }
 
-        function getNodeColor(node) {
-            switch (node.type) {
-                case 'workspace': return '#4F46E5';
-                case 'database': return '#059669';
-                case 'template': return '#D97706';
-                default: return '#6366F1';
-            }
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
         }
 
-        return simulation;
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        function showTooltip(event, d) {
+            const tooltip = d3.select('body')
+                .append('div')
+                .attr('class', 'tooltip')
+                .style('position', 'absolute')
+                .style('background', 'white')
+                .style('padding', '10px')
+                .style('border-radius', '5px')
+                .style('box-shadow', '0 0 10px rgba(0,0,0,0.1)')
+                .style('pointer-events', 'none')
+                .style('z-index', 1000)
+                .style('opacity', 0);
+
+            tooltip.html(`
+                <div class="p-3">
+                    <h3 class="font-bold text-gray-900">${d.name}</h3>
+                    <p class="text-sm text-gray-600">Type: ${d.type}</p>
+                    ${d.lastEdited ? `<p class="text-sm text-gray-600">Last edited: ${formatDate(d.lastEdited)}</p>` : ''}
+                    ${d.url ? '<p class="text-xs text-blue-600 mt-1">Click to open in Notion</p>' : ''}
+                </div>
+            `)
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY - 10) + 'px')
+                .transition()
+                .duration(200)
+                .style('opacity', 1);
+        }
+
+        function hideTooltip() {
+            d3.selectAll('.tooltip')
+                .transition()
+                .duration(200)
+                .style('opacity', 0)
+                .remove();
+        }
+
+        function handleNodeClick(event, d) {
+            if (d.url) window.open(d.url, '_blank');
+        }
+
+        return {
+            simulation,
+            svg,
+            update: (newData) => {
+                simulation.nodes(newData.nodes);
+                simulation.force('link').links(newData.links);
+                simulation.alpha(1).restart();
+            }
+        };
 
     } catch (error) {
         console.error('Error in generateGraph:', error);

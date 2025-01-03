@@ -931,3 +931,132 @@ fetch('/api/workspace-data')
     .catch(error => {
         console.error('Error fetching workspace data:', error);
     });
+
+// Initialize search and filter functionality
+function initializeSearchAndFilters() {
+    const searchInput = document.getElementById('pageSearch');
+    const filterButton = document.querySelector('#filterDropdown button');
+    const filterPanel = document.getElementById('filterControls');
+    const filters = document.querySelectorAll('select.filter-control');
+
+    // Toggle filter panel
+    filterButton?.addEventListener('click', () => {
+        filterPanel.classList.toggle('hidden');
+    });
+
+    // Close filter panel when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('#filterDropdown')) {
+            filterPanel.classList.add('hidden');
+        }
+    });
+
+    // Search functionality with debounce
+    let searchTimeout;
+    searchInput?.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const searchTerm = e.target.value.toLowerCase();
+            filterNodes(searchTerm);
+        }, 300);
+    });
+
+    // Filter change handlers
+    filters.forEach(filter => {
+        filter.addEventListener('change', applyFilters);
+    });
+}
+
+function filterNodes(searchTerm) {
+    if (!graph) return;
+
+    const nodes = graph.nodes();
+    nodes.forEach(node => {
+        const title = node.title?.toLowerCase() || '';
+        const matches = title.includes(searchTerm);
+        node.hidden = searchTerm && !matches;
+    });
+
+    updateGraphVisibility();
+}
+
+function applyFilters() {
+    if (!graph) return;
+
+    const typeFilter = document.getElementById('typeFilter').value;
+    const activityFilter = document.getElementById('activityFilter').value;
+    const depthFilter = document.getElementById('depthFilter').value;
+    const connectionsFilter = document.getElementById('connectionsFilter').value;
+
+    const nodes = graph.nodes();
+    nodes.forEach(node => {
+        let visible = true;
+
+        // Type filter
+        if (typeFilter && node.type !== typeFilter) {
+            visible = false;
+        }
+
+        // Activity filter
+        if (visible && activityFilter) {
+            const lastEdited = new Date(node.lastEdited);
+            const now = new Date();
+            const daysDiff = (now - lastEdited) / (1000 * 60 * 60 * 24);
+
+            switch (activityFilter) {
+                case 'recent':
+                    visible = daysDiff <= 7;
+                    break;
+                case 'active':
+                    visible = daysDiff <= 30;
+                    break;
+                case 'stale':
+                    visible = daysDiff > 90;
+                    break;
+            }
+        }
+
+        // Depth filter
+        if (visible && depthFilter) {
+            const depth = node.depth || 0;
+            switch (depthFilter) {
+                case 'root':
+                    visible = depth === 0;
+                    break;
+                case 'shallow':
+                    visible = depth <= 2;
+                    break;
+                case 'deep':
+                    visible = depth > 4;
+                    break;
+            }
+        }
+
+        // Connections filter
+        if (visible && connectionsFilter) {
+            const connectionCount = (node.incomingLinks?.length || 0) + (node.outgoingLinks?.length || 0);
+            switch (connectionsFilter) {
+                case 'none':
+                    visible = connectionCount === 0;
+                    break;
+                case 'few':
+                    visible = connectionCount <= 2;
+                    break;
+                case 'many':
+                    visible = connectionCount > 5;
+                    break;
+            }
+        }
+
+        node.hidden = !visible;
+    });
+
+    updateGraphVisibility();
+}
+
+function updateGraphVisibility() {
+    // Update graph visualization based on hidden nodes
+    // Implementation depends on your graph visualization library
+    // This is a placeholder for the actual implementation
+    graph.refresh();
+}

@@ -38,178 +38,76 @@
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <!-- Key Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-            <!-- Workspace Score -->
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500 group relative">
-                    Workspace Score
-                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
-                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
-                        Overall health score based on connectivity (40%), 
-                        activity (30%), and structure (30%) of your workspace
-                    </div>
-                </div>
-                <div class="mt-1">
-                    <div id="workspaceScore" class="text-2xl font-bold text-indigo-600">--</div>
-                    <div class="text-xs text-gray-500">Overall health</div>
-                </div>
-            </div>
-            <!-- Total Pages -->
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500 group relative">
-                    Total Pages
-                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
-                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
-                        Total number of pages and databases in your workspace
-                    </div>
-                </div>
-                <div class="mt-1">
-                    <div id="totalPages" class="text-2xl font-bold text-gray-900">--</div>
-                    <div class="text-xs text-gray-500">Including databases</div>
-                </div>
-            </div>
-            <!-- Active Pages -->
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500 group relative">
-                    Active Pages
-                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
-                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
-                        Number of pages that have been edited in the last 30 days
-                    </div>
-                </div>
-                <div class="mt-1">
-                    <div id="activePages" class="text-2xl font-bold text-green-600">--</div>
-                    <div class="text-xs text-gray-500">Last 30 days</div>
-                </div>
-            </div>
-            <!-- Max Depth -->
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500 group relative">
-                    Max Depth
-                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
-                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
-                        Maximum number of nested levels in your page hierarchy
-                    </div>
-                </div>
-                <div class="mt-1">
-                    <div id="maxDepth" class="text-2xl font-bold text-gray-900">--</div>
-                    <div class="text-xs text-gray-500">Page hierarchy</div>
-                </div>
-            </div>
-            <!-- Connections -->
-            <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-sm font-medium text-gray-500 group relative">
-                    Connections
-                    <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
-                        absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
-                        Total number of links and relationships between pages
-                    </div>
-                </div>
-                <div class="mt-1">
-                    <div id="totalConnections" class="text-2xl font-bold text-gray-900">--</div>
-                    <div class="text-xs text-gray-500">Page links</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Add this temporarily for debugging -->
-        <button onclick="console.log('Current data:', window.lastReceivedData)" 
-                class="mb-4 px-4 py-2 bg-gray-200 rounded">
-            Debug Data
-        </button>
-
-        <!-- Main Visualization Area -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="p-4 border-b border-gray-200">
-                <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-medium text-gray-900">Workspace Visualization</h2>
-                    <div class="flex items-center space-x-4">
-                        <!-- Layout Controls -->
-                        <select id="layoutSelect" class="text-sm border-gray-300 rounded-md">
-                            <option value="force">Network View</option>
-                            <option value="tree">Hierarchy View</option>
-                        </select>
-                        <!-- Zoom Controls -->
-                        <div class="flex space-x-2">
-                            <button id="zoomIn" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+    <!-- Search and Filter Controls -->
+    <div class="fixed top-20 left-0 right-0 z-10 bg-white shadow-md p-4">
+        <div class="max-w-7xl mx-auto">
+            <div class="search-filter-container">
+                <div class="flex gap-4 items-start">
+                    <!-- Search Input -->
+                    <div class="flex-1">
+                        <div class="relative">
+                            <input type="text" 
+                                   id="pageSearch" 
+                                   placeholder="Search pages..." 
+                                   class="w-full p-2 pr-10 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                            <div class="absolute inset-y-0 right-0 flex items-center pr-3">
+                                <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
-                            </button>
-                            <button id="zoomOut" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                                </svg>
-                            </button>
-                            <button id="resetZoom" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
-                            </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-            <div id="visualization" class="w-full" style="height: calc(100vh - 300px);"></div>
-        </div>
-    </div>
-
-    <!-- Metrics Modal -->
-    <div id="metricsModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
-        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-            <div class="flex justify-between items-center pb-3">
-                <h3 class="text-xl font-bold">Workspace Metrics</h3>
-                <button class="modal-close text-gray-400 hover:text-gray-500">×</button>
-            </div>
-            <div class="mt-4 space-y-6">
-                <!-- Structure Metrics -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-gray-800 mb-3">Structure</h4>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <p class="text-sm text-gray-500">Page Depth</p>
-                            <p id="metricsDepth" class="text-lg font-semibold">--</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-500">Root Pages</p>
-                            <p id="metricsRootPages" class="text-lg font-semibold">--</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Activity Metrics -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-gray-800 mb-3">Activity</h4>
-                    <div class="space-y-2">
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500">Last 7 days</span>
-                            <span id="metricsLast7Days" class="font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500">Last 30 days</span>
-                            <span id="metricsLast30Days" class="font-semibold">--</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-sm text-gray-500">Inactive (90+ days)</span>
-                            <span id="metricsInactive" class="font-semibold">--</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Connectivity Metrics -->
-                <div class="bg-gray-50 rounded-lg p-4">
-                    <h4 class="font-semibold text-gray-800 mb-3">Connectivity</h4>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <p class="text-sm text-gray-500">Avg. Connections</p>
-                            <p id="metricsAvgConnections" class="text-lg font-semibold">--</p>
-                        </div>
-                        <div>
-                            <p class="text-sm text-gray-500">Isolated Pages</p>
-                            <p id="metricsIsolatedPages" class="text-lg font-semibold">--</p>
+                    
+                    <!-- Filters Dropdown Button -->
+                    <div class="relative" id="filterDropdown">
+                        <button class="bg-white border rounded-lg px-4 py-2 flex items-center gap-2 hover:bg-gray-50">
+                            <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                            </svg>
+                            Filters
+                        </button>
+                        
+                        <!-- Filter Controls Panel -->
+                        <div id="filterControls" class="hidden absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-lg border p-4 space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Content Type</label>
+                                <select id="typeFilter" class="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">All Types</option>
+                                    <option value="page">Pages</option>
+                                    <option value="database">Databases</option>
+                                    <option value="template">Templates</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Activity</label>
+                                <select id="activityFilter" class="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">All Activity</option>
+                                    <option value="recent">Last 7 days</option>
+                                    <option value="active">Last 30 days</option>
+                                    <option value="stale">Inactive (90+ days)</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Page Depth</label>
+                                <select id="depthFilter" class="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">All Levels</option>
+                                    <option value="root">Root Level</option>
+                                    <option value="shallow">Shallow (≤2 levels)</option>
+                                    <option value="deep">Deep (>4 levels)</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Connections</label>
+                                <select id="connectionsFilter" class="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">All Connections</option>
+                                    <option value="none">No connections</option>
+                                    <option value="few">Few (≤2)</option>
+                                    <option value="many">Many (>5)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -217,7 +115,189 @@
         </div>
     </div>
 
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="script.js"></script>
+    <!-- Add padding to account for fixed search bar -->
+    <div class="pt-24">
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Key Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+                <!-- Workspace Score -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm font-medium text-gray-500 group relative">
+                        Workspace Score
+                        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                            absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                            Overall health score based on connectivity (40%), 
+                            activity (30%), and structure (30%) of your workspace
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <div id="workspaceScore" class="text-2xl font-bold text-indigo-600">--</div>
+                        <div class="text-xs text-gray-500">Overall health</div>
+                    </div>
+                </div>
+                <!-- Total Pages -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm font-medium text-gray-500 group relative">
+                        Total Pages
+                        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                            absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                            Total number of pages and databases in your workspace
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <div id="totalPages" class="text-2xl font-bold text-gray-900">--</div>
+                        <div class="text-xs text-gray-500">Including databases</div>
+                    </div>
+                </div>
+                <!-- Active Pages -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm font-medium text-gray-500 group relative">
+                        Active Pages
+                        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                            absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                            Number of pages that have been edited in the last 30 days
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <div id="activePages" class="text-2xl font-bold text-green-600">--</div>
+                        <div class="text-xs text-gray-500">Last 30 days</div>
+                    </div>
+                </div>
+                <!-- Max Depth -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm font-medium text-gray-500 group relative">
+                        Max Depth
+                        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                            absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                            Maximum number of nested levels in your page hierarchy
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <div id="maxDepth" class="text-2xl font-bold text-gray-900">--</div>
+                        <div class="text-xs text-gray-500">Page hierarchy</div>
+                    </div>
+                </div>
+                <!-- Connections -->
+                <div class="bg-white rounded-lg shadow p-4">
+                    <div class="text-sm font-medium text-gray-500 group relative">
+                        Connections
+                        <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 
+                            absolute z-10 bg-black text-white text-xs rounded p-2 w-48 -bottom-20 left-0">
+                            Total number of links and relationships between pages
+                        </div>
+                    </div>
+                    <div class="mt-1">
+                        <div id="totalConnections" class="text-2xl font-bold text-gray-900">--</div>
+                        <div class="text-xs text-gray-500">Page links</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add this temporarily for debugging -->
+            <button onclick="console.log('Current data:', window.lastReceivedData)" 
+                    class="mb-4 px-4 py-2 bg-gray-200 rounded">
+                Debug Data
+            </button>
+
+            <!-- Main Visualization Area -->
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-4 border-b border-gray-200">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-lg font-medium text-gray-900">Workspace Visualization</h2>
+                        <div class="flex items-center space-x-4">
+                            <!-- Layout Controls -->
+                            <select id="layoutSelect" class="text-sm border-gray-300 rounded-md">
+                                <option value="force">Network View</option>
+                                <option value="tree">Hierarchy View</option>
+                            </select>
+                            <!-- Zoom Controls -->
+                            <div class="flex space-x-2">
+                                <button id="zoomIn" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                    </svg>
+                                </button>
+                                <button id="zoomOut" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                                    </svg>
+                                </button>
+                                <button id="resetZoom" class="p-2 text-gray-600 hover:text-gray-900 rounded-md hover:bg-gray-100">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="visualization" class="w-full" style="height: calc(100vh - 300px);"></div>
+            </div>
+        </div>
+
+        <!-- Metrics Modal -->
+        <div id="metricsModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+            <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+                <div class="flex justify-between items-center pb-3">
+                    <h3 class="text-xl font-bold">Workspace Metrics</h3>
+                    <button class="modal-close text-gray-400 hover:text-gray-500">×</button>
+                </div>
+                <div class="mt-4 space-y-6">
+                    <!-- Structure Metrics -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-800 mb-3">Structure</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-sm text-gray-500">Page Depth</p>
+                                <p id="metricsDepth" class="text-lg font-semibold">--</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Root Pages</p>
+                                <p id="metricsRootPages" class="text-lg font-semibold">--</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Activity Metrics -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-800 mb-3">Activity</h4>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-500">Last 7 days</span>
+                                <span id="metricsLast7Days" class="font-semibold">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-500">Last 30 days</span>
+                                <span id="metricsLast30Days" class="font-semibold">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm text-gray-500">Inactive (90+ days)</span>
+                                <span id="metricsInactive" class="font-semibold">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Connectivity Metrics -->
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-800 mb-3">Connectivity</h4>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <p class="text-sm text-gray-500">Avg. Connections</p>
+                                <p id="metricsAvgConnections" class="text-lg font-semibold">--</p>
+                            </div>
+                            <div>
+                                <p class="text-sm text-gray-500">Isolated Pages</p>
+                                <p id="metricsIsolatedPages" class="text-lg font-semibold">--</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="script.js"></script>
+    </div>
 </body>
 </html>

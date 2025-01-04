@@ -4,6 +4,7 @@ import { Filters } from './modules/filters.js';
 import { Graph } from './modules/graph.js';
 import { Stats } from './modules/stats.js';
 import { initializePreviewGraph } from './preview-graph.js';
+import { InsightsPanel } from './components/InsightsPanel.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const isLandingPage = window.location.pathname === '/';
@@ -28,4 +29,10 @@ function initializeLandingPage() {
 async function initializeDashboard() {
     const dashboard = new Dashboard();
     await dashboard.initialize();
+
+    const insightsContainer = document.getElementById('aiInsights');
+    if (insightsContainer) {
+        const insightsPanel = new InsightsPanel(insightsContainer);
+        await insightsPanel.initialize();
+    }
 } 

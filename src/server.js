@@ -9,6 +9,7 @@ import { calculateWorkspaceScore, calculateMaxDepth, calculateDetailedMetrics, c
 import { Client } from '@notionhq/client';
 import session from 'express-session';
 import axios from 'axios';
+import { AIInsightsService } from './services/aiService.js';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -310,6 +311,19 @@ app.get('/api/analytics', async (req, res) => {
             error: error.message,
             stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
+    }
+});
+
+const aiService = new AIInsightsService();
+
+app.get('/api/insights', async (req, res) => {
+    try {
+        const workspaceData = await fetchWorkspaceData(req.user.notionToken);
+        const insights = await aiService.generateWorkspaceInsights(workspaceData);
+        res.json(insights);
+    } catch (error) {
+        console.error('Error fetching insights:', error);
+        res.status(500).json({ error: 'Failed to generate insights' });
     }
 });
 

@@ -32,14 +32,15 @@ console.log('Environment check:', {
 const requiredEnvVars = [
     'NOTION_CLIENT_ID',
     'NOTION_CLIENT_SECRET',
-    'OPENAI_API_KEY',
     'SESSION_SECRET'
 ];
 
 requiredEnvVars.forEach(varName => {
     if (!process.env[varName]) {
         console.error(`Missing required environment variable: ${varName}`);
-        process.exit(1);
+        if (varName !== 'OPENAI_API_KEY') {
+            process.exit(1);
+        }
     }
 });
 

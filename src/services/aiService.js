@@ -16,136 +16,247 @@ export class AIInsightsService {
 
     async generateWorkspaceInsights(workspaceData) {
         if (!this.enabled) {
-            return {
-                insights: "AI features are currently disabled. Please configure OpenAI API key.",
-                recommendations: [],
-                trends: null
-            };
+            return this.getDefaultInsights();
         }
+
         const processedData = processWorkspaceData(workspaceData);
         
         try {
-            const [insights, recommendations, trends] = await Promise.all([
+            const [structureAnalysis, recommendations, trends] = await Promise.all([
                 this.analyzeWorkspaceStructure(processedData),
                 this.generateRecommendations(processedData),
                 this.analyzeTrends(processedData)
             ]);
 
             return {
-                insights,
+                structureAnalysis,
                 recommendations,
-                trends
+                trends,
+                summary: await this.generateExecutiveSummary(structureAnalysis, recommendations, trends)
             };
         } catch (error) {
             console.error('Error generating AI insights:', error);
-            throw error;
+            return this.getDefaultInsights(error);
         }
     }
 
     async analyzeWorkspaceStructure(data) {
-        const prompt = this.createStructureAnalysisPrompt(data);
+        const prompt = `As a Notion workspace optimization expert, analyze this workspace:
+
+        WORKSPACE METRICS:
+        - Total Pages: ${data.totalPages}
+        - Max Depth: ${data.maxDepth}
+        - Avg Connections: ${data.avgConnections}
+        - Active Pages: ${data.activePages}
+        
+        CONTENT DISTRIBUTION:
+        Pages by Type:
+        ${JSON.stringify(data.contentDistribution.byType, null, 2)}
+        
+        Hierarchy Depth:
+        ${JSON.stringify(data.contentDistribution.byDepth, null, 2)}
+        
+        ACTIVITY PATTERNS:
+        - Peak Activity: ${JSON.stringify(data.activityPatterns.peakActivityTimes)}
+        - Edit Frequency: ${JSON.stringify(data.activityPatterns.editFrequency)}
+        - Database Usage: ${JSON.stringify(data.databaseMetrics)}
+
+        Provide a comprehensive analysis focusing on:
+        1. Information Architecture
+            - Evaluate page hierarchy and navigation flow
+            - Assess database structure and relations
+            - Identify potential structural bottlenecks
+        
+        2. Workspace Efficiency
+            - Content organization best practices
+            - Database vs. page usage optimization
+            - Template utilization opportunities
+        
+        3. Collaboration Patterns
+            - Team workspace usage patterns
+            - Content accessibility and findability
+            - Knowledge sharing effectiveness
+        
+        4. Growth Scalability
+            - Current structure sustainability
+            - Potential bottlenecks as workspace grows
+            - Areas needing restructuring
+        
+        Format as JSON:
+        {
+            "architecture": {
+                "score": number,
+                "strengths": string[],
+                "weaknesses": string[],
+                "notionSpecificTips": string[]
+            },
+            "efficiency": {
+                "score": number,
+                "currentPractices": string[],
+                "improvementAreas": string[],
+                "notionFeatureSuggestions": string[]
+            },
+            "collaboration": {
+                "score": number,
+                "patterns": string[],
+                "bottlenecks": string[],
+                "notionCollaborationTips": string[]
+            },
+            "scalability": {
+                "score": number,
+                "sustainableElements": string[],
+                "riskAreas": string[],
+                "growthRecommendations": string[]
+            }
+        }`;
+
         const completion = await this.openai.chat.completions.create({
             model: "gpt-4",
-            messages: [{ 
-                role: "user", 
-                content: prompt 
-            }],
+            messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
+            response_format: { type: "json_object" }
         });
 
-        return completion.choices[0].message.content;
+        return JSON.parse(completion.choices[0].message.content);
     }
 
     async generateRecommendations(data) {
-        const prompt = this.createRecommendationsPrompt(data);
+        const prompt = `As a Notion workspace consultant, provide actionable recommendations:
+
+        CURRENT STATE:
+        ${JSON.stringify(data.structuralMetrics, null, 2)}
+        
+        ACTIVITY PATTERNS:
+        ${JSON.stringify(data.activityPatterns, null, 2)}
+
+        DATABASES:
+        ${JSON.stringify(data.databaseMetrics, null, 2)}
+
+        Provide specific, Notion-focused recommendations for:
+        1. Immediate Optimizations (Next 7 Days)
+        2. Short-term Improvements (Next 30 Days)
+        3. Long-term Strategy (90+ Days)
+
+        For each recommendation:
+        - Use specific Notion features and capabilities
+        - Consider built-in templates and database types
+        - Include step-by-step implementation guides
+        - Estimate effort and impact
+        - Consider team adoption factors
+
+        Format as JSON array:
+        [{
+            "timeframe": "immediate" | "short-term" | "long-term",
+            "category": "structure" | "efficiency" | "collaboration" | "automation",
+            "title": string,
+            "description": string,
+            "notionFeatures": string[],
+            "implementation": {
+                "steps": string[],
+                "estimatedTime": string,
+                "prerequisiteSetup": string[]
+            },
+            "impact": {
+                "score": number,
+                "benefits": string[],
+                "metrics": string[]
+            },
+            "effort": {
+                "level": "easy" | "medium" | "complex",
+                "teamFactors": string[],
+                "resourceNeeds": string[]
+            }
+        }]`;
+
         const completion = await this.openai.chat.completions.create({
             model: "gpt-4",
-            messages: [{ 
-                role: "user", 
-                content: prompt 
-            }],
+            messages: [{ role: "user", content: prompt }],
             temperature: 0.7,
+            response_format: { type: "json_object" }
         });
 
-        // Parse the response into an array of recommendations
         return JSON.parse(completion.choices[0].message.content);
     }
 
     async analyzeTrends(data) {
         const historicalData = await this.getHistoricalData(data);
-        return this.predictionService.predictGrowth(historicalData);
+        
+        return {
+            growth: this.calculateGrowthTrends(historicalData),
+            activity: this.calculateActivityTrends(historicalData),
+            structure: this.calculateStructuralTrends(historicalData)
+        };
     }
 
-    createStructureAnalysisPrompt(data) {
-        return `As an AI workspace analyst, analyze this Notion workspace data and provide valuable insights:
+    async generateExecutiveSummary(structure, recommendations, trends) {
+        const prompt = `Create a concise executive summary based on:
+        
+        STRUCTURE ANALYSIS:
+        ${JSON.stringify(structure, null, 2)}
+        
+        RECOMMENDATIONS:
+        ${JSON.stringify(recommendations, null, 2)}
+        
+        TRENDS:
+        ${JSON.stringify(trends, null, 2)}
 
-        WORKSPACE METRICS:
-        - Total Pages: ${data.totalPages}
-        - Max Depth: ${data.maxDepth}
-        - Average Connections: ${data.avgConnections}
-        - Active Pages (Last 30 days): ${data.activePages}
-        
-        CONTENT DISTRIBUTION:
-        ${JSON.stringify(data.contentDistribution.byType, null, 2)}
-        
-        PAGE HIERARCHY:
-        - Depth Distribution: ${JSON.stringify(data.contentDistribution.byDepth, null, 2)}
-        
-        ACTIVITY PATTERNS:
-        - Peak Activity Hours: ${JSON.stringify(data.activityPatterns.peakActivityTimes)}
-        - Recent Edit Frequency: ${JSON.stringify(data.activityPatterns.editFrequency)}
+        Provide a brief, high-level overview focusing on:
+        1. Key Strengths
+        2. Critical Issues
+        3. Priority Actions
+        4. Growth Trajectory
 
-        Please provide a comprehensive analysis focusing on:
-        1. Workspace Organization:
-           - Evaluate the hierarchy structure
-           - Identify potential organizational bottlenecks
-           - Assess content distribution efficiency
-        
-        2. Usage Patterns:
-           - Analyze activity patterns and their implications
-           - Identify peak productivity periods
-           - Highlight underutilized areas
-        
-        3. Connectivity Analysis:
-           - Evaluate page relationships and connections
-           - Identify isolated content
-           - Suggest potential linking opportunities
-        
-        4. Growth and Scaling:
-           - Assess workspace scalability
-           - Identify potential growth challenges
-           - Suggest structural improvements
+        Format as a concise paragraph.`;
 
-        Format the response in clear, concise paragraphs with specific, actionable insights.`;
+        const completion = await this.openai.chat.completions.create({
+            model: "gpt-4",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.7
+        });
+
+        return completion.choices[0].message.content;
     }
 
-    createRecommendationsPrompt(data) {
-        return `Based on the following Notion workspace analysis, provide specific, actionable recommendations:
+    calculateGrowthTrends(historicalData) {
+        // Implement growth trend analysis
+        return {
+            pageGrowth: this.calculatePageGrowthRate(historicalData),
+            contentExpansion: this.analyzeContentExpansion(historicalData),
+            projectedGrowth: this.projectFutureGrowth(historicalData)
+        };
+    }
 
-        CURRENT STATE:
-        ${JSON.stringify(data.structuralMetrics, null, 2)}
-        
-        ACTIVITY METRICS:
-        ${JSON.stringify(data.activityPatterns, null, 2)}
+    calculateActivityTrends(historicalData) {
+        // Implement activity trend analysis
+        return {
+            dailyActivity: this.analyzeDailyActivity(historicalData),
+            peakTimes: this.analyzePeakTimes(historicalData),
+            userEngagement: this.analyzeUserEngagement(historicalData)
+        };
+    }
 
-        Generate 5 specific recommendations focusing on:
-        1. Improving workspace organization and findability
-        2. Enhancing content connectivity and relationships
-        3. Optimizing page hierarchy and depth
-        4. Boosting workspace efficiency and usability
-        5. Preparing for future growth and scaling
+    calculateStructuralTrends(historicalData) {
+        // Implement structural trend analysis
+        return {
+            depthChanges: this.analyzeDepthChanges(historicalData),
+            connectivityTrends: this.analyzeConnectivityTrends(historicalData),
+            organizationalShifts: this.analyzeOrganizationalShifts(historicalData)
+        };
+    }
 
-        For each recommendation:
-        - Provide a clear, actionable step
-        - Explain the expected benefit
-        - Include implementation guidance
-        
-        Format as a JSON array of objects with structure:
-        {
-            "recommendation": "The specific action to take",
-            "benefit": "Expected improvement or outcome",
-            "implementation": "How to implement this change"
-        }`;
+    getDefaultInsights(error = null) {
+        return {
+            structureAnalysis: {
+                efficiency: { score: 0, analysis: "AI analysis unavailable" },
+                structure: { score: 0, analysis: "AI analysis unavailable" },
+                usage: { score: 0, analysis: "AI analysis unavailable" },
+                issues: error ? [error.message] : ["AI service is disabled"],
+                growthPotential: { score: 0, analysis: "AI analysis unavailable" }
+            },
+            recommendations: [],
+            trends: null,
+            summary: "AI insights are currently unavailable. Please check your configuration."
+        };
     }
 
     async getHistoricalData(data) {

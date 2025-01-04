@@ -24,14 +24,58 @@ class InsightsPage {
 
     renderInsights(data) {
         // Structure Analysis
-        this.structureContainer.innerHTML = `
-            <div class="prose">
-                ${data.insights}
+        this.structureContainer.innerHTML = this.renderStructureAnalysis(data.structureAnalysis);
+        
+        // Recommendations
+        this.recommendationsContainer.innerHTML = this.renderRecommendations(data.recommendations);
+        
+        // Trends
+        if (data.trends) {
+            this.renderTrendsChart(data.trends);
+        }
+    }
+
+    renderStructureAnalysis(analysis) {
+        return `
+            <div class="space-y-6">
+                <div class="prose">
+                    <h3 class="text-lg font-semibold">Executive Summary</h3>
+                    <p class="text-gray-600">${analysis.summary}</p>
+                </div>
+                
+                ${Object.entries(analysis)
+                    .filter(([key]) => key !== 'summary' && key !== 'issues')
+                    .map(([category, data]) => `
+                        <div class="border-t pt-4">
+                            <h4 class="font-medium text-gray-900 capitalize">${category}</h4>
+                            <div class="mt-2 flex items-center">
+                                <div class="w-16 h-16 rounded-full border-4 border-indigo-200 flex items-center justify-center">
+                                    <span class="text-xl font-bold text-indigo-600">${data.score}</span>
+                                </div>
+                                <p class="ml-4 text-gray-600">${data.analysis}</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                
+                ${analysis.issues.length > 0 ? `
+                    <div class="border-t pt-4">
+                        <h4 class="font-medium text-gray-900">Identified Issues</h4>
+                        <ul class="mt-2 space-y-2">
+                            ${analysis.issues.map(issue => `
+                                <li class="flex items-start">
+                                    <span class="text-red-500 mr-2">•</span>
+                                    <span class="text-gray-600">${issue}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
             </div>
         `;
+    }
 
-        // Recommendations
-        this.recommendationsContainer.innerHTML = data.recommendations
+    renderRecommendations(recommendations) {
+        return recommendations
             .map(rec => `
                 <div class="flex items-start space-x-3">
                     <svg class="h-5 w-5 text-indigo-500 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -45,11 +89,6 @@ class InsightsPage {
                 </div>
             `)
             .join('');
-
-        // Trends Chart
-        if (data.trends) {
-            this.renderTrendsChart(data.trends);
-        }
     }
 
     renderError(error) {

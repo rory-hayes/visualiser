@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Insights - Notion Visualizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex-shrink-0">
+                    <span class="text-xl font-bold text-gray-800">Notion Visualizer</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/redirect.html" class="text-gray-600 hover:text-gray-900 px-4 py-2 text-sm font-medium">
+                        Dashboard
+                    </a>
+                    <a href="/metrics" class="text-gray-600 hover:text-gray-900 px-4 py-2 text-sm font-medium">
+                        Metrics
+                    </a>
+                    <a href="/analytics" class="text-gray-600 hover:text-gray-900 px-4 py-2 text-sm font-medium">
+                        Analytics
+                    </a>
+                    <a href="/insights" class="text-indigo-600 hover:text-indigo-900 px-4 py-2 text-sm font-medium">
+                        AI Insights
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">AI Workspace Insights</h1>
+            <p class="mt-2 text-gray-600">Advanced analysis and recommendations for your Notion workspace</p>
+        </div>
+
+        <!-- AI Insights Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Structure Analysis -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Workspace Structure</h2>
+                <div id="structureInsights" class="prose text-gray-600">
+                    <div class="animate-pulse">
+                        <div class="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
+                        <div class="h-4 bg-gray-200 rounded w-5/6 mb-3"></div>
+                        <div class="h-4 bg-gray-200 rounded w-2/3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Recommendations</h2>
+                <div id="recommendationsInsights" class="space-y-4">
+                    <div class="animate-pulse">
+                        <div class="h-4 bg-gray-200 rounded w-full mb-3"></div>
+                        <div class="h-4 bg-gray-200 rounded w-5/6 mb-3"></div>
+                        <div class="h-4 bg-gray-200 rounded w-4/5"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Growth Trends -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">Growth Trends</h2>
+                <div id="trendsInsights" class="h-64">
+                    <!-- Chart will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script type="module" src="/js/insights.js"></script>
+</body>
+</html> 

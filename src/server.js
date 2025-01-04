@@ -317,7 +317,11 @@ app.get('/api/insights', async (req, res) => {
             throw new Error('Authentication required');
         }
 
-        const workspaceData = await fetchWorkspaceData(req.user.notionToken);
+        const notion = new Client({
+            auth: req.session.notionToken
+        });
+
+        const workspaceData = await fetchWorkspaceData(notion);
         console.log('Workspace data fetched, generating insights...');
 
         const insights = await aiService.generateWorkspaceInsights(workspaceData);
@@ -331,6 +335,11 @@ app.get('/api/insights', async (req, res) => {
             details: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
+});
+
+// Insights Page
+app.get('/insights', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'insights.html'));
 });
 
 // Start the Server

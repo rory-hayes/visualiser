@@ -28,6 +28,21 @@ console.log('Environment check:', {
     redirectUri: REDIRECT_URI
 });
 
+// Verify required environment variables
+const requiredEnvVars = [
+    'NOTION_CLIENT_ID',
+    'NOTION_CLIENT_SECRET',
+    'OPENAI_API_KEY',
+    'SESSION_SECRET'
+];
+
+requiredEnvVars.forEach(varName => {
+    if (!process.env[varName]) {
+        console.error(`Missing required environment variable: ${varName}`);
+        process.exit(1);
+    }
+});
+
 const app = express();
 
 let graphCache = null; // Cache to store graph data temporarily
@@ -92,50 +107,24 @@ app.get('/auth', (req, res) => {
 // Callback Endpoint for OAuth
 app.get('/callback', async (req, res) => {
     const { code } = req.query;
-
-    if (!code) {
-        console.error('No code received from Notion');
-        return res.redirect('/redirect?error=No authorization code received');
-    }
-
+    
     try {
-        console.log('Received auth code:', code);
-        
-        // Get access token from Notion OAuth
-        const tokenResponse = await axios.post('https://api.notion.com/v1/oauth/token', {
+        const response = await axios.post('https://api.notion.com/v1/oauth/token', {
             grant_type: 'authorization_code',
-            code: code,
+            code,
             redirect_uri: REDIRECT_URI
         }, {
             auth: {
                 username: CLIENT_ID,
                 password: CLIENT_SECRET
-            },
-            headers: {
-                'Content-Type': 'application/json'
             }
         });
 
-        console.log('Token response received:', {
-            success: !!tokenResponse.data.access_token,
-            workspace_name: tokenResponse.data.workspace_name
-        });
-
-        // Store the access token in session
-        req.session.notionToken = tokenResponse.data.access_token;
-        
-        // Save session explicitly
-        req.session.save((err) => {
-            if (err) {
-                console.error('Session save error:', err);
-                return res.redirect('/redirect?error=Session storage failed');
-            }
-            res.redirect('/redirect');
-        });
-
+        req.session.notionToken = response.data.access_token;
+        res.redirect('/redirect.html');
     } catch (error) {
-        console.error('Callback error:', error.response?.data || error.message);
-        res.redirect(`/redirect?error=${encodeURIComponent('Authentication failed')}`);
+        console.error('OAuth error:', error);
+        res.status(500).send('Authentication failed');
     }
 });
 

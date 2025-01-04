@@ -4,14 +4,24 @@ import { processWorkspaceData } from '../utils/dataProcessing.js';
 export class AIInsightsService {
     constructor() {
         if (!process.env.OPENAI_API_KEY) {
-            throw new Error('OPENAI_API_KEY is required');
+            console.error('OPENAI_API_KEY is not set. AI features will be disabled.');
+            this.enabled = false;
+            return;
         }
+        this.enabled = true;
         this.openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY
         });
     }
 
     async generateWorkspaceInsights(workspaceData) {
+        if (!this.enabled) {
+            return {
+                insights: "AI features are currently disabled. Please configure OpenAI API key.",
+                recommendations: [],
+                trends: null
+            };
+        }
         const processedData = processWorkspaceData(workspaceData);
         
         try {

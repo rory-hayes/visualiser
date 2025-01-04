@@ -20,6 +20,18 @@ export class InsightsPanel {
     }
 
     render() {
+        if (!this.insights || this.insights.error) {
+            this.container.innerHTML = `
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-4">AI Insights</h2>
+                    <div class="text-gray-600">
+                        ${this.insights?.error || 'AI insights are currently unavailable. Please check your configuration.'}
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
         this.container.innerHTML = `
             <div class="bg-white rounded-lg shadow-lg p-6">
                 <h2 class="text-xl font-bold text-gray-900 mb-4">AI Insights</h2>

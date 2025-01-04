@@ -30,9 +30,13 @@ async function initializeDashboard() {
     const dashboard = new Dashboard();
     await dashboard.initialize();
 
+    // Initialize AI Insights
+    console.log('Initializing AI components...');
     const insightsContainer = document.getElementById('aiInsights');
     if (insightsContainer) {
         const insightsPanel = new InsightsPanel(insightsContainer);
         await insightsPanel.initialize();
+    } else {
+        console.error('AI Insights container not found');
     }
 } 

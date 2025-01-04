@@ -312,12 +312,24 @@ const aiService = new AIInsightsService();
 
 app.get('/api/insights', async (req, res) => {
     try {
+        console.log('Fetching AI insights...');
+        if (!req.session?.notionToken) {
+            throw new Error('Authentication required');
+        }
+
         const workspaceData = await fetchWorkspaceData(req.user.notionToken);
+        console.log('Workspace data fetched, generating insights...');
+
         const insights = await aiService.generateWorkspaceInsights(workspaceData);
+        console.log('Insights generated successfully');
+
         res.json(insights);
     } catch (error) {
         console.error('Error fetching insights:', error);
-        res.status(500).json({ error: 'Failed to generate insights' });
+        res.status(500).json({ 
+            error: 'Failed to generate insights',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 });
 

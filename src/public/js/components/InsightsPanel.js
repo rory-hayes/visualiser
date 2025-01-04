@@ -5,11 +5,14 @@ export class InsightsPanel {
     }
 
     async initialize() {
+        console.log('Initializing AI Insights Panel');
         try {
             await this.fetchInsights();
             this.render();
+            console.log('AI Insights loaded:', this.insights);
         } catch (error) {
             console.error('Failed to initialize insights:', error);
+            this.renderError(error);
         }
     }
 
@@ -77,6 +80,19 @@ export class InsightsPanel {
     }
 
     renderTrendsChart() {
-        // Implement chart rendering using Chart.js or D3.js
+        // TODO: Implement chart rendering using Chart.js or D3.js
+        return '<div class="text-gray-500">Trend visualization coming soon...</div>';
+    }
+
+    renderError(error) {
+        this.container.innerHTML = `
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold text-gray-900 mb-4">AI Insights</h2>
+                <div class="text-red-600 bg-red-50 p-4 rounded-lg">
+                    <p class="font-semibold">Error loading insights</p>
+                    <p class="text-sm mt-1">${error.message}</p>
+                </div>
+            </div>
+        `;
     }
 } 

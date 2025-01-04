@@ -77,46 +77,75 @@ export class AIInsightsService {
     }
 
     createStructureAnalysisPrompt(data) {
-        return `Analyze this Notion workspace structure and provide detailed insights:
-            
-            Workspace Statistics:
-            - Total Pages: ${data.totalPages}
-            - Max Depth: ${data.maxDepth}
-            - Avg Connections: ${data.avgConnections}
-            
-            Content Distribution:
-            - By Type: ${JSON.stringify(data.contentDistribution.byType)}
-            - By Depth: ${JSON.stringify(data.contentDistribution.byDepth)}
-            
-            Activity Patterns:
-            - Peak Times: ${JSON.stringify(data.activityPatterns.peakActivityTimes)}
-            - Edit Frequency: ${JSON.stringify(data.activityPatterns.editFrequency)}
-            
-            Provide insights about:
-            1. Organization efficiency
-            2. Content structure health
-            3. Usage patterns
-            4. Potential bottlenecks
-            5. Areas for improvement`;
+        return `As an AI workspace analyst, analyze this Notion workspace data and provide valuable insights:
+
+        WORKSPACE METRICS:
+        - Total Pages: ${data.totalPages}
+        - Max Depth: ${data.maxDepth}
+        - Average Connections: ${data.avgConnections}
+        - Active Pages (Last 30 days): ${data.activePages}
+        
+        CONTENT DISTRIBUTION:
+        ${JSON.stringify(data.contentDistribution.byType, null, 2)}
+        
+        PAGE HIERARCHY:
+        - Depth Distribution: ${JSON.stringify(data.contentDistribution.byDepth, null, 2)}
+        
+        ACTIVITY PATTERNS:
+        - Peak Activity Hours: ${JSON.stringify(data.activityPatterns.peakActivityTimes)}
+        - Recent Edit Frequency: ${JSON.stringify(data.activityPatterns.editFrequency)}
+
+        Please provide a comprehensive analysis focusing on:
+        1. Workspace Organization:
+           - Evaluate the hierarchy structure
+           - Identify potential organizational bottlenecks
+           - Assess content distribution efficiency
+        
+        2. Usage Patterns:
+           - Analyze activity patterns and their implications
+           - Identify peak productivity periods
+           - Highlight underutilized areas
+        
+        3. Connectivity Analysis:
+           - Evaluate page relationships and connections
+           - Identify isolated content
+           - Suggest potential linking opportunities
+        
+        4. Growth and Scaling:
+           - Assess workspace scalability
+           - Identify potential growth challenges
+           - Suggest structural improvements
+
+        Format the response in clear, concise paragraphs with specific, actionable insights.`;
     }
 
     createRecommendationsPrompt(data) {
-        return `Based on this Notion workspace data, generate specific, actionable recommendations:
-            
-            Workspace Metrics:
-            ${JSON.stringify(data.structuralMetrics, null, 2)}
-            
-            Recent Activity:
-            ${JSON.stringify(data.activityPatterns, null, 2)}
-            
-            Generate 5 specific recommendations to improve:
-            1. Workspace organization
-            2. Content accessibility
-            3. Collaboration efficiency
-            4. Information architecture
-            5. Overall workspace health
-            
-            Format the response as a JSON array of strings.`;
+        return `Based on the following Notion workspace analysis, provide specific, actionable recommendations:
+
+        CURRENT STATE:
+        ${JSON.stringify(data.structuralMetrics, null, 2)}
+        
+        ACTIVITY METRICS:
+        ${JSON.stringify(data.activityPatterns, null, 2)}
+
+        Generate 5 specific recommendations focusing on:
+        1. Improving workspace organization and findability
+        2. Enhancing content connectivity and relationships
+        3. Optimizing page hierarchy and depth
+        4. Boosting workspace efficiency and usability
+        5. Preparing for future growth and scaling
+
+        For each recommendation:
+        - Provide a clear, actionable step
+        - Explain the expected benefit
+        - Include implementation guidance
+        
+        Format as a JSON array of objects with structure:
+        {
+            "recommendation": "The specific action to take",
+            "benefit": "Expected improvement or outcome",
+            "implementation": "How to implement this change"
+        }`;
     }
 
     async getHistoricalData(data) {

@@ -38,6 +38,9 @@ const requiredEnvVars = [
 requiredEnvVars.forEach(varName => {
     if (!process.env[varName]) {
         console.error(`Missing required environment variable: ${varName}`);
+        if (varName === 'SESSION_SECRET') {
+            console.error('Please generate a secure SESSION_SECRET using: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+        }
         if (varName !== 'OPENAI_API_KEY') {
             process.exit(1);
         }
@@ -73,13 +76,14 @@ app.use((req, res, next) => {
 
 // Add session middleware before your routes
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    secret: process.env.SESSION_SECRET,
     resave: true,
     saveUninitialized: true,
     cookie: { 
         secure: process.env.NODE_ENV === 'production',
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        httpOnly: true
+        httpOnly: true,
+        sameSite: 'lax'  // Protect against CSRF
     }
 }));
 

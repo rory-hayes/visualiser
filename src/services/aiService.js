@@ -215,4 +215,33 @@ export class AIInsightsService {
             trends: null
         };
     }
+
+    async generateHexReport(workspaceId) {
+        if (!this.enabled) {
+            throw new Error('AI features are disabled due to missing API key');
+        }
+
+        try {
+            const response = await fetch('https://visualiser-xhjh.onrender.com/generate-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${process.env.HEX_API_KEY}`
+                },
+                body: JSON.stringify({
+                    workspace_id: workspaceId,
+                    timestamp: new Date().toISOString()
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error generating Hex report:', error);
+            throw error;
+        }
+    }
 } 

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workspace Visualizer</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/metrics.html">Metrics</a>
+            <a href="/analytics.html">Analytics</a>
+            <a href="/visualizer.html" class="active">Visualizer</a>
+        </nav>
+    </header>
+
+    <main class="container">
+        <h1>Workspace Visualizer</h1>
+        
+        <div class="visualizer-container">
+            <div class="input-section">
+                <input type="text" id="workspaceId" placeholder="Enter Workspace ID">
+                <button id="generateReport" class="primary-button">Generate Report</button>
+            </div>
+
+            <div id="loadingSpinner" class="spinner-container" style="display: none;">
+                <div class="spinner"></div>
+                <p>Generating report, please wait...</p>
+            </div>
+
+            <div id="reportResults" class="results-container">
+                <!-- Results will be displayed here -->
+            </div>
+        </div>
+    </main>
+
+    <script src="/js/visualizer.js"></script>
+</body>
+</html> 

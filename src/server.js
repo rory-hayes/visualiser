@@ -342,5 +342,29 @@ app.get('/insights', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'insights.html'));
 });
 
+// Visualizer Page
+app.get('/visualizer', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'visualizer.html'));
+});
+
+// Add this new route to your existing routes
+app.post('/api/generate-report', async (req, res) => {
+    try {
+        const { workspaceId } = req.body;
+        
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'Workspace ID is required' });
+        }
+
+        const aiService = new AIInsightsService();
+        const report = await aiService.generateHexReport(workspaceId);
+        
+        res.json(report);
+    } catch (error) {
+        console.error('Error generating report:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

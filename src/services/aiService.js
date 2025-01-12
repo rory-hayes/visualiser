@@ -19,20 +19,19 @@ export class AIInsightsService {
             return this.getDefaultInsights();
         }
 
-        const processedData = processWorkspaceData(workspaceData);
-        
         try {
-            const [structureAnalysis, recommendations, trends] = await Promise.all([
-                this.analyzeWorkspaceStructure(processedData),
-                this.generateRecommendations(processedData),
-                this.analyzeTrends(processedData)
-            ]);
+            console.log('Processing workspace data for insights...');
+            const processedData = processWorkspaceData(workspaceData);
+            
+            // Generate insights sequentially to handle dependencies
+            const structureAnalysis = await this.analyzeWorkspaceStructure(processedData);
+            const recommendations = await this.generateRecommendations(processedData, structureAnalysis);
+            const trends = await this.analyzeTrends(processedData);
 
             return {
-                structureAnalysis,
-                recommendations,
-                trends,
-                summary: await this.generateExecutiveSummary(structureAnalysis, recommendations, trends)
+                insights: structureAnalysis,
+                recommendations: recommendations,
+                trends: trends
             };
         } catch (error) {
             console.error('Error generating AI insights:', error);
@@ -41,232 +40,179 @@ export class AIInsightsService {
     }
 
     async analyzeWorkspaceStructure(data) {
-        const prompt = `As a Notion workspace optimization expert, analyze this workspace:
+        const prompt = `As an AI workspace analyst, provide a detailed analysis of this Notion workspace:
 
-        WORKSPACE METRICS:
-        - Total Pages: ${data.totalPages}
-        - Max Depth: ${data.maxDepth}
-        - Avg Connections: ${data.avgConnections}
-        - Active Pages: ${data.activePages}
+        METRICS:
+        - Total Pages: ${data.totalPages || 0}
+        - Max Depth: ${data.maxDepth || 0}
+        - Avg Connections: ${data.avgConnections || 0}
+        - Active Pages: ${data.activePages || 0}
         
-        CONTENT DISTRIBUTION:
-        Pages by Type:
-        ${JSON.stringify(data.contentDistribution.byType, null, 2)}
+        CONTENT TYPES:
+        ${JSON.stringify(data.contentDistribution?.byType || {}, null, 2)}
         
-        Hierarchy Depth:
-        ${JSON.stringify(data.contentDistribution.byDepth, null, 2)}
+        HIERARCHY:
+        ${JSON.stringify(data.contentDistribution?.byDepth || {}, null, 2)}
         
-        ACTIVITY PATTERNS:
-        - Peak Activity: ${JSON.stringify(data.activityPatterns.peakActivityTimes)}
-        - Edit Frequency: ${JSON.stringify(data.activityPatterns.editFrequency)}
-        - Database Usage: ${JSON.stringify(data.databaseMetrics)}
+        ACTIVITY:
+        - Peak Hours: ${JSON.stringify(data.activityPatterns?.peakActivityTimes || {})}
+        - Edit Frequency: ${JSON.stringify(data.activityPatterns?.editFrequency || {})}
 
-        Provide a comprehensive analysis focusing on:
-        1. Information Architecture
-            - Evaluate page hierarchy and navigation flow
-            - Assess database structure and relations
-            - Identify potential structural bottlenecks
-        
-        2. Workspace Efficiency
-            - Content organization best practices
-            - Database vs. page usage optimization
-            - Template utilization opportunities
-        
-        3. Collaboration Patterns
-            - Team workspace usage patterns
-            - Content accessibility and findability
-            - Knowledge sharing effectiveness
-        
-        4. Growth Scalability
-            - Current structure sustainability
-            - Potential bottlenecks as workspace grows
-            - Areas needing restructuring
-        
+        Analyze:
+        1. Organization Efficiency
+        2. Content Structure
+        3. Usage Patterns
+        4. Potential Issues
+        5. Growth Potential
+
         Format as JSON:
         {
-            "architecture": {
-                "score": number,
-                "strengths": string[],
-                "weaknesses": string[],
-                "notionSpecificTips": string[]
-            },
-            "efficiency": {
-                "score": number,
-                "currentPractices": string[],
-                "improvementAreas": string[],
-                "notionFeatureSuggestions": string[]
-            },
-            "collaboration": {
-                "score": number,
-                "patterns": string[],
-                "bottlenecks": string[],
-                "notionCollaborationTips": string[]
-            },
-            "scalability": {
-                "score": number,
-                "sustainableElements": string[],
-                "riskAreas": string[],
-                "growthRecommendations": string[]
-            }
+            "efficiency": { "score": number, "analysis": string },
+            "structure": { "score": number, "analysis": string },
+            "usage": { "score": number, "analysis": string },
+            "issues": string[],
+            "growthPotential": { "score": number, "analysis": string }
         }`;
 
-        const completion = await this.openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            response_format: { type: "json_object" }
-        });
+        try {
+            const completion = await this.openai.chat.completions.create({
+                model: "gpt-4",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7,
+                response_format: { type: "json_object" }
+            });
 
-        return JSON.parse(completion.choices[0].message.content);
+            return JSON.parse(completion.choices[0].message.content);
+        } catch (error) {
+            console.error('Error in structure analysis:', error);
+            return {
+                efficiency: { score: 0, analysis: "AI analysis unavailable" },
+                structure: { score: 0, analysis: "AI analysis unavailable" },
+                usage: { score: 0, analysis: "AI analysis unavailable" },
+                issues: [error.message],
+                growthPotential: { score: 0, analysis: "AI analysis unavailable" }
+            };
+        }
     }
 
-    async generateRecommendations(data) {
-        const prompt = `As a Notion workspace consultant, provide actionable recommendations:
+    async generateRecommendations(data, structureAnalysis) {
+        const prompt = `Based on this Notion workspace data, provide actionable recommendations:
 
         CURRENT STATE:
-        ${JSON.stringify(data.structuralMetrics, null, 2)}
+        ${JSON.stringify(data.structuralMetrics || {}, null, 2)}
         
-        ACTIVITY PATTERNS:
-        ${JSON.stringify(data.activityPatterns, null, 2)}
+        ACTIVITY:
+        ${JSON.stringify(data.activityPatterns || {}, null, 2)}
 
-        DATABASES:
-        ${JSON.stringify(data.databaseMetrics, null, 2)}
+        PREVIOUS ANALYSIS:
+        ${JSON.stringify(structureAnalysis, null, 2)}
 
-        Provide specific, Notion-focused recommendations for:
-        1. Immediate Optimizations (Next 7 Days)
-        2. Short-term Improvements (Next 30 Days)
-        3. Long-term Strategy (90+ Days)
-
-        For each recommendation:
-        - Use specific Notion features and capabilities
-        - Consider built-in templates and database types
-        - Include step-by-step implementation guides
-        - Estimate effort and impact
-        - Consider team adoption factors
+        Generate recommendations for:
+        1. Organization
+        2. Content Structure
+        3. Collaboration
+        4. Information Architecture
+        5. Growth Strategy
 
         Format as JSON array:
         [{
-            "timeframe": "immediate" | "short-term" | "long-term",
-            "category": "structure" | "efficiency" | "collaboration" | "automation",
-            "title": string,
-            "description": string,
-            "notionFeatures": string[],
-            "implementation": {
-                "steps": string[],
-                "estimatedTime": string,
-                "prerequisiteSetup": string[]
-            },
-            "impact": {
-                "score": number,
-                "benefits": string[],
-                "metrics": string[]
-            },
-            "effort": {
-                "level": "easy" | "medium" | "complex",
-                "teamFactors": string[],
-                "resourceNeeds": string[]
-            }
+            "category": string,
+            "priority": "high" | "medium" | "low",
+            "recommendation": string,
+            "benefit": string,
+            "implementation": string,
+            "effort": "easy" | "medium" | "complex",
+            "impact": "high" | "medium" | "low"
         }]`;
 
-        const completion = await this.openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7,
-            response_format: { type: "json_object" }
-        });
+        try {
+            const completion = await this.openai.chat.completions.create({
+                model: "gpt-4",
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.7,
+                response_format: { type: "json_object" }
+            });
 
-        return JSON.parse(completion.choices[0].message.content);
+            const recommendations = JSON.parse(completion.choices[0].message.content);
+            return Array.isArray(recommendations) ? recommendations : [];
+        } catch (error) {
+            console.error('Error generating recommendations:', error);
+            return [];
+        }
     }
 
     async analyzeTrends(data) {
-        const historicalData = await this.getHistoricalData(data);
-        
-        return {
-            growth: this.calculateGrowthTrends(historicalData),
-            activity: this.calculateActivityTrends(historicalData),
-            structure: this.calculateStructuralTrends(historicalData)
-        };
+        try {
+            if (!data || !data.nodes || !Array.isArray(data.nodes)) {
+                console.warn('Invalid data structure for trend analysis');
+                return null;
+            }
+
+            const historicalData = data.nodes
+                .filter(node => node && node.lastEdited)
+                .map(node => ({
+                    date: new Date(node.lastEdited),
+                    type: node.type || 'unknown'
+                }))
+                .sort((a, b) => a.date - b.date);
+
+            if (historicalData.length === 0) {
+                return null;
+            }
+
+            // Calculate basic trends
+            return {
+                totalPages: data.nodes.length,
+                activePages: historicalData.filter(item => {
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    return item.date >= thirtyDaysAgo;
+                }).length,
+                growthRate: this.calculateGrowthRate(historicalData),
+                contentTypes: this.analyzeContentTypes(data.nodes)
+            };
+        } catch (error) {
+            console.error('Error in trend analysis:', error);
+            return null;
+        }
     }
 
-    async generateExecutiveSummary(structure, recommendations, trends) {
-        const prompt = `Create a concise executive summary based on:
-        
-        STRUCTURE ANALYSIS:
-        ${JSON.stringify(structure, null, 2)}
-        
-        RECOMMENDATIONS:
-        ${JSON.stringify(recommendations, null, 2)}
-        
-        TRENDS:
-        ${JSON.stringify(trends, null, 2)}
-
-        Provide a brief, high-level overview focusing on:
-        1. Key Strengths
-        2. Critical Issues
-        3. Priority Actions
-        4. Growth Trajectory
-
-        Format as a concise paragraph.`;
-
-        const completion = await this.openai.chat.completions.create({
-            model: "gpt-4",
-            messages: [{ role: "user", content: prompt }],
-            temperature: 0.7
-        });
-
-        return completion.choices[0].message.content;
+    calculateGrowthRate(historicalData) {
+        try {
+            const periods = this.groupByMonth(historicalData);
+            return Object.entries(periods).map(([month, count]) => ({
+                month,
+                count
+            }));
+        } catch (error) {
+            console.error('Error calculating growth rate:', error);
+            return [];
+        }
     }
 
-    calculateGrowthTrends(historicalData) {
-        // Implement growth trend analysis
-        return {
-            pageGrowth: this.calculatePageGrowthRate(historicalData),
-            contentExpansion: this.analyzeContentExpansion(historicalData),
-            projectedGrowth: this.projectFutureGrowth(historicalData)
-        };
+    groupByMonth(data) {
+        return data.reduce((acc, item) => {
+            const month = item.date.toISOString().slice(0, 7); // YYYY-MM format
+            acc[month] = (acc[month] || 0) + 1;
+            return acc;
+        }, {});
     }
 
-    calculateActivityTrends(historicalData) {
-        // Implement activity trend analysis
-        return {
-            dailyActivity: this.analyzeDailyActivity(historicalData),
-            peakTimes: this.analyzePeakTimes(historicalData),
-            userEngagement: this.analyzeUserEngagement(historicalData)
-        };
-    }
-
-    calculateStructuralTrends(historicalData) {
-        // Implement structural trend analysis
-        return {
-            depthChanges: this.analyzeDepthChanges(historicalData),
-            connectivityTrends: this.analyzeConnectivityTrends(historicalData),
-            organizationalShifts: this.analyzeOrganizationalShifts(historicalData)
-        };
+    analyzeContentTypes(nodes) {
+        return nodes.reduce((acc, node) => {
+            const type = node.type || 'unknown';
+            acc[type] = (acc[type] || 0) + 1;
+            return acc;
+        }, {});
     }
 
     getDefaultInsights(error = null) {
         return {
-            structureAnalysis: {
-                efficiency: { score: 0, analysis: "AI analysis unavailable" },
-                structure: { score: 0, analysis: "AI analysis unavailable" },
-                usage: { score: 0, analysis: "AI analysis unavailable" },
-                issues: error ? [error.message] : ["AI service is disabled"],
-                growthPotential: { score: 0, analysis: "AI analysis unavailable" }
-            },
+            insights: error ? 
+                `Error analyzing workspace: ${error.message}` : 
+                "AI analysis is currently unavailable.",
             recommendations: [],
-            trends: null,
-            summary: "AI insights are currently unavailable. Please check your configuration."
+            trends: null
         };
-    }
-
-    async getHistoricalData(data) {
-        // Extract historical data for trend analysis
-        const timeseriesData = data.pages.map(page => ({
-            timestamp: new Date(page.lastEdited).getTime(),
-            depth: page.depth,
-            connections: page.incomingLinks.length + page.outgoingLinks.length
-        }));
-
-        return timeseriesData.sort((a, b) => a.timestamp - b.timestamp);
     }
 } 

@@ -222,15 +222,21 @@ export class AIInsightsService {
         }
 
         try {
-            const response = await fetch('https://visualiser-xhjh.onrender.com/generate-report', {
+            const response = await fetch('https://app.hex.tech/notion/hex/21c6c24a-60e8-487c-b03a-1f04dda4f918/draft/logic', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${process.env.HEX_API_KEY}`
+                    'Authorization': `Bearer 4fe1113357488bccca1d029756edd4c6c361be53f08201a733173e2e478e012a436eb9adfb73e93dc2aa179c241b81df`
                 },
                 body: JSON.stringify({
-                    workspace_id: workspaceId,
-                    timestamp: new Date().toISOString()
+                    data: {
+                        workspace_id: workspaceId,
+                        timestamp: new Date().toISOString()
+                    },
+                    metadata: {
+                        workspace_id: workspaceId,
+                        timestamp: new Date().toISOString()
+                    }
                 })
             });
 

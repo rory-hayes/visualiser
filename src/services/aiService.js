@@ -285,16 +285,16 @@ export class AIInsightsService {
             const runData = await createRunResponse.json();
             console.log('Hex run initiated:', runData);
             
-            if (!runData.run_id) {
-                throw new Error('No run_id received from Hex API');
+            if (!runData.runId) {
+                throw new Error('No runId received from Hex API');
             }
 
             // Wait for the project run to complete
-            const result = await this.waitForHexRunCompletion(runData.run_id, projectId);
+            const result = await this.waitForHexRunCompletion(runData.runId, projectId);
 
             return {
                 success: true,
-                runId: runData.run_id,
+                runId: runData.runId,
                 status: result.status,
                 data: result.data
             };

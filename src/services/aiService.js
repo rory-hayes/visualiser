@@ -259,37 +259,46 @@ export class AIInsightsService {
                 throw new Error('Workspace ID must be a valid number');
             }
 
-            // Extract project ID and construct the URL with the number parameter
+            // Extract project ID and construct the URL for the API endpoint
             const projectId = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
-            const hexUrl = `https://app.hex.tech/notion/hex/${projectId}/latest?_input_number=${numericWorkspaceId}`;
+            const hexUrl = `https://app.hex.tech/api/v1/projects/${projectId}/runs`;
             
-            console.log('Calling Hex with URL:', hexUrl);
+            console.log('Initiating Hex run...');
 
-            // Make the request
-            const hexResponse = await fetch(hexUrl, {
-                method: 'GET',
+            // Create a new run
+            const createRunResponse = await fetch(hexUrl, {
+                method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${HEX_API_KEY}`
-                }
+                    'Authorization': `Bearer ${HEX_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    parameters: {
+                        _input_number: numericWorkspaceId
+                    }
+                })
             });
 
-            if (!hexResponse.ok) {
-                const errorText = await hexResponse.text();
+            if (!createRunResponse.ok) {
+                const errorText = await createRunResponse.text();
                 console.error('Hex API error response:', errorText);
-                throw new Error(`Hex API error: ${hexResponse.statusText}`);
+                throw new Error(`Failed to create Hex run: ${createRunResponse.statusText}`);
             }
 
-            // Parse the JSON response directly
-            const runData = await hexResponse.json();
+            // Parse the run creation response
+            const runData = await createRunResponse.json();
             console.log('Hex run initiated:', runData);
             
+            if (!runData.run_id) {
+                throw new Error('No run_id received from Hex API');
+            }
+
             // Wait for the project run to complete
-            const runId = runData.run_id;
-            const result = await this.waitForHexRunCompletion(runId, projectId);
+            const result = await this.waitForHexRunCompletion(runData.run_id, projectId);
 
             return {
                 success: true,
-                runId: runId,
+                runId: runData.run_id,
                 status: result.status,
                 data: result.data
             };

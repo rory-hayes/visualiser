@@ -358,12 +358,12 @@ app.post('/api/generate-report', async (req, res) => {
             contentType: req.headers['content-type']
         });
 
-        const { workspaceId } = req.body;
+        const { _input_number } = req.body;
         
-        if (!workspaceId) {
+        if (!_input_number) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'Workspace ID is required' 
+                error: 'Input number is required' 
             });
         }
 
@@ -371,7 +371,7 @@ app.post('/api/generate-report', async (req, res) => {
         const aiService = new AIInsightsService();
         
         // Generate report and wait for completion
-        const result = await aiService.generateReport(workspaceId);
+        const result = await aiService.generateReport(_input_number);
         
         res.json({
             success: true,

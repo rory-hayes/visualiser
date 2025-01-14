@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ workspaceId: numericWorkspaceId })
+                body: JSON.stringify({ _input_number: numericWorkspaceId })
             });
 
             const data = await response.json();

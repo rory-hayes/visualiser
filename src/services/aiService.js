@@ -312,6 +312,9 @@ export class AIInsightsService {
         const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
         let attempts = 0;
 
+        // Get the base URL from environment or default to production URL
+        const baseUrl = process.env.BASE_URL || 'https://visualiser-xhjh.onrender.com';
+
         while (attempts < maxAttempts) {
             try {
                 const response = await fetch(`https://app.hex.tech/api/v1/projects/${projectId}/runs/${runId}`, {
@@ -328,8 +331,8 @@ export class AIInsightsService {
                 console.log('Run status:', status);
 
                 if (status.status === 'COMPLETED') {
-                    // Try to fetch results from our stored results
-                    const resultsResponse = await fetch(`/api/hex-results/${runId}`);
+                    // Try to fetch results from our stored results using absolute URL
+                    const resultsResponse = await fetch(`${baseUrl}/api/hex-results/latest`);
                     
                     if (resultsResponse.ok) {
                         const results = await resultsResponse.json();

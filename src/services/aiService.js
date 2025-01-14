@@ -1,7 +1,6 @@
 import { OpenAI } from 'openai';
 import { processWorkspaceData } from '../utils/dataProcessing.js';
 
-const HEX_PROJECT_URL = 'https://app.hex.tech/notion/hex/21c6c24a-60e8-487c-b03a-1f04dda4f918/draft/logic';
 const HEX_API_KEY = '4fe1113357488bccca1d029756edd4f6c361be53f08201a733173e2e478e012a436eb9adfb73e93dc2aa179c241b81df';
 
 export class AIInsightsService {
@@ -260,8 +259,11 @@ export class AIInsightsService {
                 throw new Error('Workspace ID must be a valid number');
             }
 
-            // Construct URL with the correct endpoint format for Hex API
-            const hexUrl = `${HEX_PROJECT_URL}/api/v1/runs`;
+            // Extract project ID from the URL
+            const projectId = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
+            
+            // Construct URL with the correct API endpoint format
+            const hexUrl = `https://app.hex.tech/api/v1/projects/${projectId}/runs`;
             console.log('Calling Hex with URL:', hexUrl); // Debug log
 
             // Trigger the Hex project run
@@ -272,8 +274,8 @@ export class AIInsightsService {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    input_parameters: {
-                        input_number: numericWorkspaceId
+                    inputParams: {
+                        numeric_input_1: numericWorkspaceId
                     }
                 })
             });
@@ -296,7 +298,7 @@ export class AIInsightsService {
             
             // Wait for the project run to complete
             const runId = runData.run_id;
-            const result = await this.waitForHexRunCompletion(runId);
+            const result = await this.waitForHexRunCompletion(runId, projectId);
 
             return {
                 success: true,
@@ -310,13 +312,13 @@ export class AIInsightsService {
         }
     }
 
-    async waitForHexRunCompletion(runId, maxAttempts = 30) {
+    async waitForHexRunCompletion(runId, projectId, maxAttempts = 30) {
         const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
         let attempts = 0;
 
         while (attempts < maxAttempts) {
             try {
-                const response = await fetch(`${HEX_PROJECT_URL}/api/v1/runs/${runId}`, {
+                const response = await fetch(`https://app.hex.tech/api/v1/projects/${projectId}/runs/${runId}`, {
                     headers: {
                         'Authorization': `Bearer ${HEX_API_KEY}`
                     }
@@ -331,7 +333,7 @@ export class AIInsightsService {
 
                 if (status.status === 'COMPLETED') {
                     // Fetch the results
-                    const resultsResponse = await fetch(`${HEX_PROJECT_URL}/api/v1/runs/${runId}/results`, {
+                    const resultsResponse = await fetch(`https://app.hex.tech/api/v1/projects/${projectId}/runs/${runId}/results`, {
                         headers: {
                             'Authorization': `Bearer ${HEX_API_KEY}`
                         }

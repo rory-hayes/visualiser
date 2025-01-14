@@ -263,11 +263,11 @@ export class AIInsightsService {
             const projectId = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
             const hexUrl = `https://app.hex.tech/notion/hex/${projectId}/latest?_input_number=${numericWorkspaceId}`;
             
-            console.log('Calling Hex with URL:', hexUrl); // Debug log
+            console.log('Calling Hex with URL:', hexUrl);
 
             // Make the request
             const hexResponse = await fetch(hexUrl, {
-                method: 'GET', // Changed to GET since we're using URL parameters
+                method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${HEX_API_KEY}`
                 }
@@ -279,14 +279,8 @@ export class AIInsightsService {
                 throw new Error(`Hex API error: ${hexResponse.statusText}`);
             }
 
-            let runData;
-            try {
-                runData = await hexResponse.json();
-            } catch (error) {
-                console.error('Failed to parse Hex response:', await hexResponse.text());
-                throw new Error('Invalid response from Hex API');
-            }
-
+            // Parse the JSON response directly
+            const runData = await hexResponse.json();
             console.log('Hex run initiated:', runData);
             
             // Wait for the project run to complete

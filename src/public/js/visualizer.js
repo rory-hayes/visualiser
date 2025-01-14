@@ -1,124 +1,95 @@
-class VisualizerTool {
-    constructor() {
-        this.workspaceInput = document.getElementById('workspaceId');
-        this.generateButton = document.getElementById('generateReport');
-        this.loadingSpinner = document.getElementById('loadingSpinner');
-        this.resultsContainer = document.getElementById('reportResults');
-        
-        this.initializeEventListeners();
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    const generateReportBtn = document.getElementById('generateReport');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const reportResults = document.getElementById('reportResults');
 
-    initializeEventListeners() {
-        this.generateButton.addEventListener('click', () => this.handleGenerateReport());
-    }
-
-    async handleGenerateReport() {
-        const workspaceId = this.workspaceInput.value.trim();
-        if (!workspaceId) {
-            alert('Please enter a workspace ID');
-            return;
-        }
-
-        this.showLoading(true);
-        
+    async function handleGenerateReport() {
         try {
+            const workspaceIdInput = document.getElementById('workspaceId');
+            const workspaceId = workspaceIdInput.value.trim();
+
+            // Validate numeric input
+            const numericWorkspaceId = parseInt(workspaceId, 10);
+            if (!workspaceId || isNaN(numericWorkspaceId)) {
+                showNotification('Please enter a valid numeric Workspace ID', 'error');
+                return;
+            }
+
+            // Show loading spinner
+            loadingSpinner.style.display = 'flex';
+            generateReportBtn.disabled = true;
+            
+            // Update status message
+            reportResults.innerHTML = `
+                <div class="text-gray-600">
+                    Starting report generation...
+                </div>
+            `;
+
             const response = await fetch('/api/generate-report', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ workspaceId })
+                body: JSON.stringify({ workspaceId: numericWorkspaceId })
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            
+            if (!data.success) {
+                throw new Error(data.error || 'Failed to generate report');
             }
 
-            const data = await response.json();
-            this.displayResults(data);
+            // Show the run status and data
+            reportResults.innerHTML = `
+                <div class="space-y-4">
+                    <div class="text-green-600 font-medium">
+                        Report generation ${data.status} for workspace: ${workspaceId}
+                    </div>
+                    ${data.data ? `
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <h3 class="text-lg font-semibold mb-2">Report Results</h3>
+                            <pre class="text-sm bg-gray-50 p-4 rounded overflow-auto">
+                                ${JSON.stringify(data.data, null, 2)}
+                            </pre>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            showNotification('Report generation completed successfully');
+
         } catch (error) {
             console.error('Error generating report:', error);
-            this.displayError(error.message);
+            showNotification(error.message, 'error');
+            reportResults.innerHTML = `
+                <div class="text-red-600 font-medium">
+                    Error: ${error.message}
+                </div>
+            `;
         } finally {
-            this.showLoading(false);
+            loadingSpinner.style.display = 'none';
+            generateReportBtn.disabled = false;
         }
     }
 
-    showLoading(show) {
-        this.loadingSpinner.style.display = show ? 'flex' : 'none';
-        this.generateButton.disabled = show;
+    function showNotification(message, type = 'success') {
+        const notificationDiv = document.createElement('div');
+        notificationDiv.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg ${
+            type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        }`;
+        notificationDiv.textContent = message;
+
+        document.body.appendChild(notificationDiv);
+
+        // Remove notification after 3 seconds
+        setTimeout(() => {
+            notificationDiv.remove();
+        }, 3000);
     }
 
-    displayResults(data) {
-        // Format the results in a more readable way
-        const formattedHtml = `
-            <div class="space-y-4">
-                <div class="bg-white rounded-lg p-4 shadow">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Report Results</h3>
-                    <div class="space-y-2">
-                        ${this.formatDataSection(data)}
-                    </div>
-                </div>
-                
-                <div class="bg-white rounded-lg p-4 shadow">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-2">Metadata</h3>
-                    <div class="space-y-2">
-                        <p class="text-sm text-gray-600">
-                            <span class="font-medium">Workspace ID:</span> ${data.metadata?.workspace_id || 'N/A'}
-                        </p>
-                        <p class="text-sm text-gray-600">
-                            <span class="font-medium">Timestamp:</span> ${data.metadata?.timestamp || 'N/A'}
-                        </p>
-                    </div>
-                </div>
-            </div>
-        `;
-
-        this.resultsContainer.innerHTML = formattedHtml;
+    // Add click event listener to the Generate Report button
+    if (generateReportBtn) {
+        generateReportBtn.addEventListener('click', handleGenerateReport);
     }
-
-    formatDataSection(data) {
-        if (!data || typeof data !== 'object') {
-            return '<p class="text-gray-600">No data available</p>';
-        }
-
-        return Object.entries(data)
-            .filter(([key]) => key !== 'metadata')
-            .map(([key, value]) => {
-                return `
-                    <div class="mb-2">
-                        <p class="text-sm font-medium text-gray-900">${this.formatKey(key)}:</p>
-                        <p class="text-sm text-gray-600 ml-2">${this.formatValue(value)}</p>
-                    </div>
-                `;
-            })
-            .join('');
-    }
-
-    formatKey(key) {
-        return key.split('_')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(' ');
-    }
-
-    formatValue(value) {
-        if (typeof value === 'object' && value !== null) {
-            return `<pre class="text-xs bg-gray-50 p-2 rounded">${JSON.stringify(value, null, 2)}</pre>`;
-        }
-        return value;
-    }
-
-    displayError(message) {
-        this.resultsContainer.innerHTML = `
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-                <h3 class="text-lg font-semibold text-red-800 mb-2">Error</h3>
-                <p class="text-sm text-red-600">${message}</p>
-            </div>
-        `;
-    }
-}
-
-// Initialize the visualizer tool when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-    new VisualizerTool();
 }); 

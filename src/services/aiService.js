@@ -1,6 +1,9 @@
 import { OpenAI } from 'openai';
 import { processWorkspaceData } from '../utils/dataProcessing.js';
 
+const HEX_PROJECT_URL = 'https://app.hex.tech/notion/hex/21c6c24a-60e8-487c-b03a-1f04dda4f918/draft/logic';
+const HEX_API_KEY = '4fe1113357488bccca1d029756edd4f6c361be53f08201a733173e2e478e012a436eb9adfb73e93dc2aa179c241b81df';
+
 export class AIInsightsService {
     constructor() {
         if (!process.env.OPENAI_API_KEY) {
@@ -249,5 +252,102 @@ export class AIInsightsService {
             console.error('Error generating Hex report:', error);
             throw error;
         }
+    }
+
+    async generateReport(workspaceId) {
+        try {
+            // Convert workspaceId to number and validate
+            const numericWorkspaceId = parseInt(workspaceId, 10);
+            if (isNaN(numericWorkspaceId)) {
+                throw new Error('Workspace ID must be a valid number');
+            }
+
+            // Construct URL with the correct endpoint format for Hex runs
+            const hexUrl = `${HEX_PROJECT_URL}/runs/latest?_input_number=${numericWorkspaceId}`;
+            console.log('Calling Hex with URL:', hexUrl); // Debug log
+
+            // Trigger the Hex project run
+            const hexResponse = await fetch(hexUrl, {
+                method: 'GET', // Changed to GET as per Hex API format
+                headers: {
+                    'Authorization': `Bearer ${HEX_API_KEY}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!hexResponse.ok) {
+                const errorText = await hexResponse.text();
+                console.error('Hex API error response:', errorText);
+                throw new Error(`Hex API error: ${hexResponse.statusText}`);
+            }
+
+            const runData = await hexResponse.json();
+            
+            // Wait for the project run to complete
+            const runId = runData.run_id;
+            const result = await this.waitForHexRunCompletion(runId);
+
+            return {
+                success: true,
+                runId: runId,
+                status: result.status,
+                data: result.data
+            };
+        } catch (error) {
+            console.error('Error generating report:', error);
+            throw error;
+        }
+    }
+
+    async waitForHexRunCompletion(runId, maxAttempts = 30) {
+        const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+        let attempts = 0;
+
+        while (attempts < maxAttempts) {
+            try {
+                const response = await fetch(`${HEX_PROJECT_URL}/api/v1/run/${runId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${HEX_API_KEY}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to check run status: ${response.statusText}`);
+                }
+
+                const status = await response.json();
+
+                if (status.state === 'COMPLETED') {
+                    // Fetch the results
+                    const resultsResponse = await fetch(`${HEX_PROJECT_URL}/api/v1/run/${runId}/results`, {
+                        headers: {
+                            'Authorization': `Bearer ${HEX_API_KEY}`
+                        }
+                    });
+                    
+                    if (!resultsResponse.ok) {
+                        throw new Error('Failed to fetch results');
+                    }
+
+                    return {
+                        status: 'completed',
+                        data: await resultsResponse.json()
+                    };
+                }
+
+                if (status.state === 'FAILED') {
+                    throw new Error('Hex project run failed');
+                }
+
+                // Wait 2 seconds before next check
+                await delay(2000);
+                attempts++;
+            } catch (error) {
+                console.error('Error checking run status:', error);
+                throw error;
+            }
+        }
+
+        throw new Error('Timeout waiting for Hex project completion');
     }
 } 

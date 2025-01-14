@@ -353,16 +353,30 @@ app.post('/api/generate-report', async (req, res) => {
         const { workspaceId } = req.body;
         
         if (!workspaceId) {
-            return res.status(400).json({ error: 'Workspace ID is required' });
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Workspace ID is required' 
+            });
         }
 
+        // Initialize AI service if not already done
         const aiService = new AIInsightsService();
-        const report = await aiService.generateHexReport(workspaceId);
         
-        res.json(report);
+        // Generate report and wait for completion
+        const result = await aiService.generateReport(workspaceId);
+        
+        res.json({
+            success: true,
+            runId: result.runId,
+            status: result.status,
+            data: result.data
+        });
     } catch (error) {
-        console.error('Error generating report:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error in generate-report endpoint:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message || 'Internal server error' 
+        });
     }
 });
 

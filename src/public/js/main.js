@@ -39,4 +39,43 @@ async function initializeDashboard() {
     } else {
         console.error('AI Insights container not found');
     }
-} 
+}
+
+async function handleGenerateReport() {
+    try {
+        const workspaceId = getCurrentWorkspaceId();
+        
+        const response = await fetch('/api/generate-report', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ workspaceId })
+        });
+
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to generate report');
+        }
+
+        // Show success message to user
+        showNotification('Report generation started successfully');
+    } catch (error) {
+        console.error('Error generating report:', error);
+        showNotification('Failed to generate report: ' + error.message, 'error');
+    }
+}
+
+function showNotification(message, type = 'success') {
+    // Implement this based on your UI framework
+    // For example, you could use a toast notification
+    console.log(`${type}: ${message}`);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const generateReportBtn = document.getElementById('generate-report-btn');
+    if (generateReportBtn) {
+        generateReportBtn.addEventListener('click', handleGenerateReport);
+    }
+}); 

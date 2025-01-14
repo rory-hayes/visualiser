@@ -272,7 +272,11 @@ export class AIInsightsService {
                     'Authorization': `Bearer ${HEX_API_KEY}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({}) // Empty body for now
+                body: JSON.stringify({
+                    // parameters: {
+                    //     _input_number: numericWorkspaceId
+                    // }
+                })
             });
 
             if (!createRunResponse.ok) {
@@ -289,7 +293,7 @@ export class AIInsightsService {
                 throw new Error('No runId received from Hex API');
             }
 
-            // Wait for the project run to complete
+            // Wait for the project run to complete and get results
             const result = await this.waitForHexRunCompletion(runData.runId, projectId);
 
             return {
@@ -324,21 +328,25 @@ export class AIInsightsService {
                 console.log('Run status:', status);
 
                 if (status.status === 'COMPLETED') {
-                    // Fetch the results
-                    const resultsResponse = await fetch(`https://app.hex.tech/api/v1/projects/${projectId}/runs/${runId}/results`, {
-                        headers: {
-                            'Authorization': `Bearer ${HEX_API_KEY}`
-                        }
-                    });
+                    // Try to fetch results from our stored results
+                    const resultsResponse = await fetch(`/api/hex-results/${runId}`);
                     
-                    if (!resultsResponse.ok) {
-                        throw new Error('Failed to fetch results');
+                    if (resultsResponse.ok) {
+                        const results = await resultsResponse.json();
+                        return {
+                            status: 'completed',
+                            data: results.data
+                        };
                     }
-
-                    return {
-                        status: 'completed',
-                        data: await resultsResponse.json()
-                    };
+                    
+                    // If no results found yet, wait a bit longer
+                    if (attempts < maxAttempts - 1) {
+                        await delay(2000);
+                        attempts++;
+                        continue;
+                    }
+                    
+                    throw new Error('Run completed but results not available');
                 }
 
                 if (status.status === 'FAILED') {

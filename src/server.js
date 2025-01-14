@@ -392,16 +392,19 @@ app.post('/api/generate-report', async (req, res) => {
 // Add this endpoint to receive Hex results
 app.post('/api/hex-results', async (req, res) => {
     try {
-        const results = req.body;  // Rename from hexResults to results
-        const runId = results.runId || 'latest';
-        
-        // Store the results using the renamed store
-        hexResultsStore.set(runId, {
+        const results = req.body;
+        // Store both the data and metadata
+        hexResultsStore.set('latest', {
             timestamp: new Date(),
-            data: results
+            data: results.data,
+            metadata: results.metadata
         });
         
-        console.log('Received and stored Hex results for runId:', runId);
+        console.log('Received and stored Hex results:', {
+            dataSize: results.data?.length || 0,
+            metadata: results.metadata
+        });
+        
         res.json({ success: true });
     } catch (error) {
         console.error('Error processing Hex results:', error);

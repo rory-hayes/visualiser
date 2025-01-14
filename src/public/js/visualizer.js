@@ -76,6 +76,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (response.status === 404) {
                         // Results not ready yet
                         if (attempts++ < maxAttempts) {
+                            reportResults.innerHTML = `
+                                <div class="text-gray-600">
+                                    Waiting for results... (Attempt ${attempts}/${maxAttempts})
+                                </div>
+                            `;
                             setTimeout(poll, 10000); // Try again in 10 seconds
                             return;
                         }
@@ -86,16 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const data = await response.json();
                 if (data.success) {
-                    // Update the visualization with the results
                     updateVisualization(data.data);
-                    reportResults.innerHTML = `
-                        <div class="bg-white rounded-lg p-4 shadow-sm">
-                            <h3 class="text-lg font-semibold mb-2">Report Results</h3>
-                            <pre class="text-sm bg-gray-50 p-4 rounded overflow-auto">
-                                ${JSON.stringify(data.data, null, 2)}
-                            </pre>
-                        </div>
-                    `;
+                    showNotification('Results received successfully', 'success');
                 }
             } catch (error) {
                 console.error('Error polling for results:', error);
@@ -139,6 +136,90 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Error fetching results:', error);
             throw error;
         }
+    }
+
+    function updateVisualization(data) {
+        const reportResults = document.getElementById('reportResults');
+        
+        try {
+            // Create a formatted display of the results
+            const formattedHtml = `
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                    <h3 class="text-lg font-semibold mb-2">Analysis Results</h3>
+                    ${formatResults(data)}
+                </div>
+            `;
+            
+            reportResults.innerHTML = formattedHtml;
+        } catch (error) {
+            console.error('Error updating visualization:', error);
+            reportResults.innerHTML = `
+                <div class="text-red-600 font-medium">
+                    Error displaying results: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    function formatResults(data) {
+        if (!data) return '<p class="text-gray-600">No data available</p>';
+        
+        // Create table view for DataFrame data
+        if (Array.isArray(data)) {
+            // Get all unique columns
+            const columns = Array.from(new Set(
+                data.flatMap(row => Object.keys(row))
+            ));
+            
+            return `
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                ${columns.map(col => `
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        ${col}
+                                    </th>
+                                `).join('')}
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            ${data.map(row => `
+                                <tr>
+                                    ${columns.map(col => `
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            ${row[col] !== undefined ? row[col] : ''}
+                                        </td>
+                                    `).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 text-sm text-gray-500">
+                    Total rows: ${data.length}
+                </div>
+            `;
+        }
+        
+        // Handle metadata display
+        if (data.metadata) {
+            return `
+                <div class="space-y-4">
+                    <div class="border-b pb-2">
+                        <h4 class="font-medium">Metadata</h4>
+                        <pre class="text-sm bg-gray-50 p-2 rounded">${JSON.stringify(data.metadata, null, 2)}</pre>
+                    </div>
+                    <div class="border-b pb-2">
+                        <h4 class="font-medium">Data</h4>
+                        ${formatResults(data.data)}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Fallback for other formats
+        return `<pre class="text-sm bg-gray-50 p-4 rounded overflow-auto">${JSON.stringify(data, null, 2)}</pre>`;
     }
 
     // Add click event listener to the Generate Report button

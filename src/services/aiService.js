@@ -259,25 +259,18 @@ export class AIInsightsService {
                 throw new Error('Workspace ID must be a valid number');
             }
 
-            // Extract project ID from the URL
+            // Extract project ID and construct the URL with the number parameter
             const projectId = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
+            const hexUrl = `https://app.hex.tech/notion/hex/${projectId}/latest?_input_number=${numericWorkspaceId}`;
             
-            // Construct URL with the correct API endpoint format
-            const hexUrl = `https://app.hex.tech/api/v1/projects/${projectId}/runs`;
             console.log('Calling Hex with URL:', hexUrl); // Debug log
 
-            // Trigger the Hex project run with the correct parameter name
+            // Make the request
             const hexResponse = await fetch(hexUrl, {
-                method: 'POST',
+                method: 'GET', // Changed to GET since we're using URL parameters
                 headers: {
-                    'Authorization': `Bearer ${HEX_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    inputParams: {
-                        workspace_id: numericWorkspaceId  // Changed from numeric_input_1 to workspace_id
-                    }
-                })
+                    'Authorization': `Bearer ${HEX_API_KEY}`
+                }
             });
 
             if (!hexResponse.ok) {

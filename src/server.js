@@ -50,6 +50,7 @@ requiredEnvVars.forEach(varName => {
 const app = express();
 
 let graphCache = null; // Cache to store graph data temporarily
+const hexResults = new Map(); // Store results in memory
 
 // Get the directory name properly in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -385,6 +386,49 @@ app.post('/api/generate-report', async (req, res) => {
             success: false, 
             error: error.message || 'Internal server error' 
         });
+    }
+});
+
+// Add this endpoint to receive Hex results
+app.post('/api/hex-results', async (req, res) => {
+    try {
+        const hexResults = req.body;
+        const runId = hexResults.runId || 'latest'; // Use runId from Hex or default to 'latest'
+        
+        // Store the results
+        hexResults.set(runId, {
+            timestamp: new Date(),
+            data: hexResults
+        });
+        
+        console.log('Received and stored Hex results for runId:', runId);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error processing Hex results:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add an endpoint to fetch results
+app.get('/api/hex-results/:runId', async (req, res) => {
+    try {
+        const { runId } = req.params;
+        const results = hexResults.get(runId);
+        
+        if (!results) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Results not found' 
+            });
+        }
+        
+        res.json({
+            success: true,
+            data: results.data
+        });
+    } catch (error) {
+        console.error('Error fetching results:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

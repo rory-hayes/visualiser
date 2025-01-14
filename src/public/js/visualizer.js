@@ -40,24 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || 'Failed to generate report');
             }
 
-            // Show the run status and data
+            // Start polling for results
+            const runId = data.runId;
+            pollForResults(runId);
+
             reportResults.innerHTML = `
-                <div class="space-y-4">
-                    <div class="text-green-600 font-medium">
-                        Report generation ${data.status} for workspace: ${workspaceId}
-                    </div>
-                    ${data.data ? `
-                        <div class="bg-white rounded-lg p-4 shadow-sm">
-                            <h3 class="text-lg font-semibold mb-2">Report Results</h3>
-                            <pre class="text-sm bg-gray-50 p-4 rounded overflow-auto">
-                                ${JSON.stringify(data.data, null, 2)}
-                            </pre>
-                        </div>
-                    ` : ''}
+                <div class="text-green-600 font-medium">
+                    Report generation started. Run ID: ${runId}
+                    <div class="mt-2">Waiting for results...</div>
                 </div>
             `;
-
-            showNotification('Report generation completed successfully');
 
         } catch (error) {
             console.error('Error generating report:', error);
@@ -73,6 +65,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function pollForResults(runId) {
+        const maxAttempts = 30; // 5 minutes maximum (10 second intervals)
+        let attempts = 0;
+
+        const poll = async () => {
+            try {
+                const response = await fetch(`/api/hex-results/${runId}`);
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        // Results not ready yet
+                        if (attempts++ < maxAttempts) {
+                            setTimeout(poll, 10000); // Try again in 10 seconds
+                            return;
+                        }
+                        throw new Error('Timeout waiting for results');
+                    }
+                    throw new Error('Failed to fetch results');
+                }
+
+                const data = await response.json();
+                if (data.success) {
+                    // Update the visualization with the results
+                    updateVisualization(data.data);
+                    reportResults.innerHTML = `
+                        <div class="bg-white rounded-lg p-4 shadow-sm">
+                            <h3 class="text-lg font-semibold mb-2">Report Results</h3>
+                            <pre class="text-sm bg-gray-50 p-4 rounded overflow-auto">
+                                ${JSON.stringify(data.data, null, 2)}
+                            </pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error polling for results:', error);
+                reportResults.innerHTML = `
+                    <div class="text-red-600 font-medium">
+                        Error: ${error.message}
+                    </div>
+                `;
+            }
+        };
+
+        // Start polling
+        poll();
+    }
+
     function showNotification(message, type = 'success') {
         const notificationDiv = document.createElement('div');
         notificationDiv.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg ${
@@ -86,6 +124,21 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             notificationDiv.remove();
         }, 3000);
+    }
+
+    async function fetchResults(runId) {
+        try {
+            const response = await fetch('/api/hex-results');
+            if (!response.ok) {
+                throw new Error('Failed to fetch results');
+            }
+            const data = await response.json();
+            // Update your visualizer with the results
+            updateVisualization(data);
+        } catch (error) {
+            console.error('Error fetching results:', error);
+            throw error;
+        }
     }
 
     // Add click event listener to the Generate Report button

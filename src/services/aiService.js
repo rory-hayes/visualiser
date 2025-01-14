@@ -233,12 +233,10 @@ export class AIInsightsService {
                 },
                 body: JSON.stringify({
                     data: {
-                        workspace_id: workspaceId,
-                        timestamp: new Date().toISOString()
+                        _input_number: workspaceId,
                     },
                     metadata: {
-                        workspace_id: workspaceId,
-                        timestamp: new Date().toISOString()
+                        _input_number: workspaceId,
                     }
                 })
             });
@@ -262,17 +260,22 @@ export class AIInsightsService {
                 throw new Error('Workspace ID must be a valid number');
             }
 
-            // Construct URL with the correct endpoint format for Hex runs
-            const hexUrl = `${HEX_PROJECT_URL}/runs/latest?_input_number=${numericWorkspaceId}`;
+            // Construct URL with the correct endpoint format for Hex API
+            const hexUrl = `${HEX_PROJECT_URL}/api/v1/runs`;
             console.log('Calling Hex with URL:', hexUrl); // Debug log
 
             // Trigger the Hex project run
             const hexResponse = await fetch(hexUrl, {
-                method: 'GET', // Changed to GET as per Hex API format
+                method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${HEX_API_KEY}`,
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({
+                    input_parameters: {
+                        input_number: numericWorkspaceId
+                    }
+                })
             });
 
             if (!hexResponse.ok) {
@@ -281,7 +284,15 @@ export class AIInsightsService {
                 throw new Error(`Hex API error: ${hexResponse.statusText}`);
             }
 
-            const runData = await hexResponse.json();
+            let runData;
+            try {
+                runData = await hexResponse.json();
+            } catch (error) {
+                console.error('Failed to parse Hex response:', await hexResponse.text());
+                throw new Error('Invalid response from Hex API');
+            }
+
+            console.log('Hex run initiated:', runData);
             
             // Wait for the project run to complete
             const runId = runData.run_id;
@@ -305,7 +316,7 @@ export class AIInsightsService {
 
         while (attempts < maxAttempts) {
             try {
-                const response = await fetch(`${HEX_PROJECT_URL}/api/v1/run/${runId}`, {
+                const response = await fetch(`${HEX_PROJECT_URL}/api/v1/runs/${runId}`, {
                     headers: {
                         'Authorization': `Bearer ${HEX_API_KEY}`
                     }
@@ -316,10 +327,11 @@ export class AIInsightsService {
                 }
 
                 const status = await response.json();
+                console.log('Run status:', status);
 
-                if (status.state === 'COMPLETED') {
+                if (status.status === 'COMPLETED') {
                     // Fetch the results
-                    const resultsResponse = await fetch(`${HEX_PROJECT_URL}/api/v1/run/${runId}/results`, {
+                    const resultsResponse = await fetch(`${HEX_PROJECT_URL}/api/v1/runs/${runId}/results`, {
                         headers: {
                             'Authorization': `Bearer ${HEX_API_KEY}`
                         }
@@ -335,7 +347,7 @@ export class AIInsightsService {
                     };
                 }
 
-                if (status.state === 'FAILED') {
+                if (status.status === 'FAILED') {
                     throw new Error('Hex project run failed');
                 }
 

@@ -415,8 +415,7 @@ app.post('/api/hex-results', async (req, res) => {
 // Add an endpoint to fetch results
 app.get('/api/hex-results/:runId', async (req, res) => {
     try {
-        const { runId } = req.params;
-        const results = hexResultsStore.get(runId);
+        const results = hexResultsStore.get('latest');
         
         if (!results) {
             return res.status(404).json({ 
@@ -425,9 +424,19 @@ app.get('/api/hex-results/:runId', async (req, res) => {
             });
         }
         
+        console.log('Sending stored results:', {
+            timestamp: results.timestamp,
+            dataSize: results.data?.length || 0,
+            metadata: results.metadata
+        });
+
         res.json({
             success: true,
-            data: results.data
+            data: {
+                data: results.data,
+                metadata: results.metadata,
+                timestamp: results.timestamp
+            }
         });
     } catch (error) {
         console.error('Error fetching results:', error);

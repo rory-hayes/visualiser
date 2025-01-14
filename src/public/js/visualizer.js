@@ -71,7 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const poll = async () => {
             try {
-                const response = await fetch(`/api/hex-results/${runId}`);
+                // Always fetch from 'latest' instead of using runId
+                const response = await fetch('/api/hex-results/latest');
                 if (!response.ok) {
                     if (response.status === 404) {
                         // Results not ready yet
@@ -90,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const data = await response.json();
+                console.log('Received results:', data); // Add debug logging
+                
                 if (data.success) {
                     updateVisualization(data.data);
                     showNotification('Results received successfully', 'success');
@@ -165,54 +168,47 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!data) return '<p class="text-gray-600">No data available</p>';
         
         // Create table view for DataFrame data
-        if (Array.isArray(data)) {
+        if (Array.isArray(data.data)) {
+            const records = data.data;
             // Get all unique columns
             const columns = Array.from(new Set(
-                data.flatMap(row => Object.keys(row))
+                records.flatMap(row => Object.keys(row))
             ));
             
             return `
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                ${columns.map(col => `
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        ${col}
-                                    </th>
-                                `).join('')}
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            ${data.map(row => `
+                <div class="space-y-4">
+                    ${data.metadata ? `
+                        <div class="border-b pb-2">
+                            <h4 class="font-medium">Metadata</h4>
+                            <pre class="text-sm bg-gray-50 p-2 rounded">${JSON.stringify(data.metadata, null, 2)}</pre>
+                        </div>
+                    ` : ''}
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
                                 <tr>
                                     ${columns.map(col => `
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                            ${row[col] !== undefined ? row[col] : ''}
-                                        </td>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            ${col}
+                                        </th>
                                     `).join('')}
                                 </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="mt-4 text-sm text-gray-500">
-                    Total rows: ${data.length}
-                </div>
-            `;
-        }
-        
-        // Handle metadata display
-        if (data.metadata) {
-            return `
-                <div class="space-y-4">
-                    <div class="border-b pb-2">
-                        <h4 class="font-medium">Metadata</h4>
-                        <pre class="text-sm bg-gray-50 p-2 rounded">${JSON.stringify(data.metadata, null, 2)}</pre>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${records.map(row => `
+                                    <tr>
+                                        ${columns.map(col => `
+                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                ${row[col] !== undefined ? row[col] : ''}
+                                            </td>
+                                        `).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
                     </div>
-                    <div class="border-b pb-2">
-                        <h4 class="font-medium">Data</h4>
-                        ${formatResults(data.data)}
+                    <div class="mt-4 text-sm text-gray-500">
+                        Total rows: ${records.length}
                     </div>
                 </div>
             `;

@@ -87,6 +87,9 @@ app.use(session({
     }
 }));
 
+// Add this near the top of the file with other middleware
+app.use(express.json()); // Add this line to parse JSON bodies
+
 // Landing Page
 app.get('/', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
@@ -350,6 +353,11 @@ app.get('/visualizer', (req, res) => {
 // Add this new route to your existing routes
 app.post('/api/generate-report', async (req, res) => {
     try {
+        console.log('Received generate-report request:', {
+            body: req.body,
+            contentType: req.headers['content-type']
+        });
+
         const { workspaceId } = req.body;
         
         if (!workspaceId) {

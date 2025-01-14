@@ -265,16 +265,14 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run...');
 
-            // Create a new run with parameters directly in the body
+            // Create a new run without parameters for now
             const createRunResponse = await fetch(hexUrl, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${HEX_API_KEY}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({
-                    _input_number: numericWorkspaceId
-                })
+                body: JSON.stringify({}) // Empty body for now
             });
 
             if (!createRunResponse.ok) {

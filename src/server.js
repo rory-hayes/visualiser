@@ -50,7 +50,7 @@ requiredEnvVars.forEach(varName => {
 const app = express();
 
 let graphCache = null; // Cache to store graph data temporarily
-const hexResults = new Map(); // Store results in memory
+const hexResultsStore = new Map(); // Rename the store to avoid conflict
 
 // Get the directory name properly in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -392,13 +392,13 @@ app.post('/api/generate-report', async (req, res) => {
 // Add this endpoint to receive Hex results
 app.post('/api/hex-results', async (req, res) => {
     try {
-        const hexResults = req.body;
-        const runId = hexResults.runId || 'latest'; // Use runId from Hex or default to 'latest'
+        const results = req.body;  // Rename from hexResults to results
+        const runId = results.runId || 'latest';
         
-        // Store the results
-        hexResults.set(runId, {
+        // Store the results using the renamed store
+        hexResultsStore.set(runId, {
             timestamp: new Date(),
-            data: hexResults
+            data: results
         });
         
         console.log('Received and stored Hex results for runId:', runId);
@@ -413,7 +413,7 @@ app.post('/api/hex-results', async (req, res) => {
 app.get('/api/hex-results/:runId', async (req, res) => {
     try {
         const { runId } = req.params;
-        const results = hexResults.get(runId);
+        const results = hexResultsStore.get(runId);
         
         if (!results) {
             return res.status(404).json({ 

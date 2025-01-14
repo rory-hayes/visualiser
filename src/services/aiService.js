@@ -266,7 +266,7 @@ export class AIInsightsService {
             const hexUrl = `https://app.hex.tech/api/v1/projects/${projectId}/runs`;
             console.log('Calling Hex with URL:', hexUrl); // Debug log
 
-            // Trigger the Hex project run
+            // Trigger the Hex project run with the correct parameter name
             const hexResponse = await fetch(hexUrl, {
                 method: 'POST',
                 headers: {
@@ -275,7 +275,7 @@ export class AIInsightsService {
                 },
                 body: JSON.stringify({
                     inputParams: {
-                        numeric_input_1: numericWorkspaceId
+                        workspace_id: numericWorkspaceId  // Changed from numeric_input_1 to workspace_id
                     }
                 })
             });

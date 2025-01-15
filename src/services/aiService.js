@@ -265,10 +265,21 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Create payload with input parameters in the root
+            // Create payload exactly matching the API specification
             const payload = {
-                numeric_input_1: numericWorkspaceId,  // Move parameter to root level
-                dryRun: false
+                inputParams: {
+                    numeric_input_1: numericWorkspaceId
+                },
+                dryRun: "false",
+                updateCache: true,
+                updatePublishedResults: "false",
+                useCachedSqlResults: "true",
+                notifications: [
+                    {
+                        type: "ALL",
+                        includeSuccessScreenshot: "true"
+                    }
+                ]
             };
 
             console.log('Hex API request payload:', payload);

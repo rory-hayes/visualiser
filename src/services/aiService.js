@@ -265,21 +265,13 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Create payload exactly matching the API specification
+            // Simplified payload that doesn't try to update app results
             const payload = {
                 inputParams: {
                     numeric_input_1: numericWorkspaceId
                 },
-                dryRun: "false",
-                updateCache: true,
-                updatePublishedResults: "false",
-                useCachedSqlResults: "true",
-                notifications: [
-                    {
-                        type: "ALL",
-                        includeSuccessScreenshot: "true"
-                    }
-                ]
+                dryRun: false,
+                useCachedSqlResults: true
             };
 
             console.log('Hex API request payload:', payload);
@@ -299,8 +291,7 @@ export class AIInsightsService {
             console.log('Hex API response:', {
                 status: createRunResponse.status,
                 statusText: createRunResponse.statusText,
-                response: responseText,
-                requestPayload: payload  // Log the exact payload sent
+                response: responseText
             });
 
             if (!createRunResponse.ok) {
@@ -326,7 +317,6 @@ export class AIInsightsService {
             };
         } catch (error) {
             console.error('Error generating report:', error);
-            // Include more details in the error response
             throw new Error(`Failed to generate report: ${error.message}. Check console for details.`);
         }
     }

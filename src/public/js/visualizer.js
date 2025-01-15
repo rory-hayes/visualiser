@@ -131,6 +131,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayResults(data) {
         try {
+            // Show stats cards section
+            const statsCards = document.getElementById('statsCards');
+            statsCards.classList.remove('hidden');
+
+            // Update stats cards with the data
+            if (data.data && data.data.length > 0) {
+                const stats = data.data[0]; // Get the first row which contains all stats
+
+                // Overview
+                document.getElementById('totalBlocks').textContent = stats.total_blocks.toLocaleString();
+                document.getElementById('totalPages').textContent = stats.total_pages.toLocaleString();
+                document.getElementById('uniqueBlockTypes').textContent = stats.unique_block_types.toLocaleString();
+
+                // Depth Analysis
+                document.getElementById('maxDepth').textContent = stats.max_depth.toLocaleString();
+                document.getElementById('avgDepth').textContent = Number(stats.avg_depth).toFixed(1);
+                document.getElementById('medianDepth').textContent = Number(stats.median_depth).toFixed(1);
+                document.getElementById('maxPageDepth').textContent = stats.max_page_depth.toLocaleString();
+
+                // Block Types
+                document.getElementById('pageCount').textContent = stats.page_count.toLocaleString();
+                document.getElementById('textBlockCount').textContent = stats.text_block_count.toLocaleString();
+                document.getElementById('todoCount').textContent = stats.todo_count.toLocaleString();
+                document.getElementById('headerCount').textContent = stats.header_count.toLocaleString();
+                document.getElementById('calloutCount').textContent = stats.callout_count.toLocaleString();
+                document.getElementById('toggleCount').textContent = stats.toggle_count.toLocaleString();
+
+                // Structure Analysis
+                document.getElementById('orphanedBlocks').textContent = stats.orphaned_blocks.toLocaleString();
+                document.getElementById('leafBlocks').textContent = stats.leaf_blocks.toLocaleString();
+            }
+
             // Display the raw JSON data
             reportResults.innerHTML = `
                 <div class="bg-white rounded-lg p-4 shadow-sm">

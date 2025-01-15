@@ -329,6 +329,7 @@ export class AIInsightsService {
 
         while (attempts < maxAttempts) {
             try {
+                // First check if the Hex run is complete
                 const response = await fetch(`https://app.hex.tech/api/v1/projects/${projectId}/runs/${runId}`, {
                     headers: {
                         'Authorization': `Bearer ${HEX_API_KEY}`
@@ -343,7 +344,10 @@ export class AIInsightsService {
                 console.log('Run status:', status);
 
                 if (status.status === 'COMPLETED') {
-                    // Try to fetch results from our stored results using absolute URL
+                    // Once Hex run is complete, wait a bit and then check our API for results
+                    await delay(2000); // Give the Python script time to send results
+
+                    // Try to fetch results from our API
                     const resultsResponse = await fetch(`${baseUrl}/api/hex-results/latest`);
                     
                     if (resultsResponse.ok) {
@@ -354,7 +358,7 @@ export class AIInsightsService {
                         };
                     }
                     
-                    // If no results found yet, wait a bit longer
+                    // If no results found yet, wait and try again
                     if (attempts < maxAttempts - 1) {
                         await delay(2000);
                         attempts++;
@@ -368,7 +372,6 @@ export class AIInsightsService {
                     throw new Error('Hex project run failed');
                 }
 
-                // Wait 2 seconds before next check
                 await delay(2000);
                 attempts++;
             } catch (error) {

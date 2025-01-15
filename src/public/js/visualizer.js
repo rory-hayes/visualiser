@@ -5,7 +5,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadingSpinner = document.getElementById('loadingSpinner');
     const reportResults = document.getElementById('reportResults');
     const visualizationContainer = document.getElementById('visualization');
-    let currentGraph = null;
 
     async function handleGenerateReport() {
         try {
@@ -95,10 +94,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const data = await response.json();
-                console.log('Received results:', data); // Add debug logging
+                console.log('Received results:', data);
                 
                 if (data.success) {
-                    updateVisualization(data.data);
+                    displayResults(data);
                     showNotification('Results received successfully', 'success');
                 }
             } catch (error) {
@@ -130,105 +129,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 3000);
     }
 
-    async function fetchResults(runId) {
+    function displayResults(data) {
         try {
-            const response = await fetch('/api/hex-results');
-            if (!response.ok) {
-                throw new Error('Failed to fetch results');
-            }
-            const data = await response.json();
-            // Update your visualizer with the results
-            updateVisualization(data);
-        } catch (error) {
-            console.error('Error fetching results:', error);
-            throw error;
-        }
-    }
-
-    async function updateVisualization(data) {
-        const reportResults = document.getElementById('reportResults');
-        const visualizationContainer = document.getElementById('visualization');
-        
-        try {
-            // Clear previous visualization
-            visualizationContainer.innerHTML = '';
-            
-            // Initialize the workspace graph
-            if (Array.isArray(data.data)) {
-                currentGraph = initializeWorkspaceGraph(visualizationContainer, data.data);
-            }
-
-            // Create a formatted display of the metadata and stats
-            const formattedHtml = `
-                <div class="bg-white rounded-lg p-4 shadow-sm mt-4">
-                    <h3 class="text-lg font-semibold mb-2">Workspace Analysis</h3>
-                    ${formatResults(data)}
+            // Display the raw JSON data
+            reportResults.innerHTML = `
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                    <h3 class="text-lg font-semibold mb-2">Raw Results</h3>
+                    <pre class="text-sm bg-gray-50 p-4 rounded overflow-auto max-h-[500px]">${JSON.stringify(data, null, 2)}</pre>
                 </div>
             `;
-            
-            reportResults.innerHTML = formattedHtml;
         } catch (error) {
-            console.error('Error updating visualization:', error);
+            console.error('Error displaying results:', error);
             reportResults.innerHTML = `
                 <div class="text-red-600 font-medium">
                     Error displaying results: ${error.message}
                 </div>
             `;
         }
-    }
-
-    function formatResults(data) {
-        if (!data) return '<p class="text-gray-600">No data available</p>';
-        
-        // Create table view for DataFrame data
-        if (Array.isArray(data.data)) {
-            const records = data.data;
-            // Get all unique columns
-            const columns = Array.from(new Set(
-                records.flatMap(row => Object.keys(row))
-            ));
-            
-            return `
-                <div class="space-y-4">
-                    ${data.metadata ? `
-                        <div class="border-b pb-2">
-                            <h4 class="font-medium">Metadata</h4>
-                            <pre class="text-sm bg-gray-50 p-2 rounded">${JSON.stringify(data.metadata, null, 2)}</pre>
-                        </div>
-                    ` : ''}
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    ${columns.map(col => `
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            ${col}
-                                        </th>
-                                    `).join('')}
-                                </tr>
-                            </thead>
-                            <tbody class="bg-white divide-y divide-gray-200">
-                                ${records.map(row => `
-                                    <tr>
-                                        ${columns.map(col => `
-                                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                ${row[col] !== undefined ? row[col] : ''}
-                                            </td>
-                                        `).join('')}
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="mt-4 text-sm text-gray-500">
-                        Total rows: ${records.length}
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Fallback for other formats
-        return `<pre class="text-sm bg-gray-50 p-4 rounded overflow-auto">${JSON.stringify(data, null, 2)}</pre>`;
     }
 
     // Add click event listener to the Generate Report button

@@ -263,31 +263,44 @@ export class AIInsightsService {
             const projectId = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
             const hexUrl = `https://app.hex.tech/api/v1/projects/${projectId}/runs`;
             
-            console.log('Initiating Hex run...');
+            console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Create a new run with numeric_input_1 parameter
+            // Create payload according to Hex API specifications
+            const payload = {
+                parameters: {
+                    numeric_input_1: numericWorkspaceId
+                },
+                project_id: projectId,
+                version: 'latest'  // Add version specification
+            };
+
+            console.log('Hex API request payload:', payload);
+
             const createRunResponse = await fetch(hexUrl, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${HEX_API_KEY}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
-                body: JSON.stringify({
-                    parameters: {
-                        numeric_input_1: numericWorkspaceId
-                    }
-                })
+                body: JSON.stringify(payload)
+            });
+
+            // Log the full response for debugging
+            const responseText = await createRunResponse.text();
+            console.log('Hex API response:', {
+                status: createRunResponse.status,
+                statusText: createRunResponse.statusText,
+                response: responseText
             });
 
             if (!createRunResponse.ok) {
-                const errorText = await createRunResponse.text();
-                console.error('Hex API error response:', errorText);
-                throw new Error(`Failed to create Hex run: ${createRunResponse.statusText}`);
+                throw new Error(`Failed to create Hex run: ${createRunResponse.status} - ${responseText}`);
             }
 
-            // Parse the run creation response
-            const runData = await createRunResponse.json();
-            console.log('Hex run initiated:', runData);
+            // Parse the response as JSON
+            const runData = JSON.parse(responseText);
+            console.log('Hex run initiated successfully:', runData);
             
             if (!runData.runId) {
                 throw new Error('No runId received from Hex API');
@@ -304,7 +317,8 @@ export class AIInsightsService {
             };
         } catch (error) {
             console.error('Error generating report:', error);
-            throw error;
+            // Include more details in the error response
+            throw new Error(`Failed to generate report: ${error.message}. Check console for details.`);
         }
     }
 

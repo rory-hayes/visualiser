@@ -265,10 +265,10 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Simplified payload without update settings
+            // Create payload matching the exact Hex parameter name
             const payload = {
                 inputParams: {
-                    numeric_input_1: numericWorkspaceId
+                    "numeric_input_1": numericWorkspaceId  // Exact match with Hex project parameter name
                 },
                 dryRun: false,
                 notifications: [

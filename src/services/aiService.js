@@ -265,10 +265,10 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Updated payload with correct parameter name
+            // Updated payload to use _input_text as defined in Hex project
             const payload = {
                 inputParams: {
-                    numeric_input_1: numericWorkspaceId
+                    _input_text: numericWorkspaceId.toString()  // Using the exact parameter name from Hex
                 },
                 dryRun: false
             };

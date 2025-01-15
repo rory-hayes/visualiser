@@ -1,7 +1,11 @@
+import { initializeWorkspaceGraph } from './workspace-graph.js';
+
 document.addEventListener('DOMContentLoaded', () => {
     const generateReportBtn = document.getElementById('generateReport');
     const loadingSpinner = document.getElementById('loadingSpinner');
     const reportResults = document.getElementById('reportResults');
+    const visualizationContainer = document.getElementById('visualization');
+    let currentGraph = null;
 
     async function handleGenerateReport() {
         try {
@@ -141,14 +145,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function updateVisualization(data) {
+    async function updateVisualization(data) {
         const reportResults = document.getElementById('reportResults');
+        const visualizationContainer = document.getElementById('visualization');
         
         try {
-            // Create a formatted display of the results
+            // Clear previous visualization
+            visualizationContainer.innerHTML = '';
+            
+            // Initialize the workspace graph
+            if (Array.isArray(data.data)) {
+                currentGraph = initializeWorkspaceGraph(visualizationContainer, data.data);
+            }
+
+            // Create a formatted display of the metadata and stats
             const formattedHtml = `
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                    <h3 class="text-lg font-semibold mb-2">Analysis Results</h3>
+                <div class="bg-white rounded-lg p-4 shadow-sm mt-4">
+                    <h3 class="text-lg font-semibold mb-2">Workspace Analysis</h3>
                     ${formatResults(data)}
                 </div>
             `;

@@ -320,7 +320,7 @@ export class AIInsightsService {
         }
     }
 
-    async waitForHexRunCompletion(runId, projectId, maxAttempts = 30) {
+    async waitForHexRunCompletion(runId, projectId, maxAttempts = 60) {
         const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
         let attempts = 0;
 
@@ -340,8 +340,8 @@ export class AIInsightsService {
                             headers: {
                                 'Authorization': `Bearer ${HEX_API_KEY}`
                             },
-                            // Add timeout
-                            timeout: 10000
+                            // Increase timeout to 30 seconds
+                            timeout: 30000  // Changed from 10000 to 30000
                         });
 
                         if (response.ok) {
@@ -352,17 +352,16 @@ export class AIInsightsService {
                         // If we get a timeout or 5xx error, retry
                         if (response.status === 504 || (response.status >= 500 && response.status < 600)) {
                             console.log(`Attempt ${retryAttempts + 1}: Got status ${response.status}, retrying...`);
-                            await delay(2000 * (retryAttempts + 1)); // Exponential backoff
+                            await delay(5000 * (retryAttempts + 1)); // Increased delay between retries
                             retryAttempts++;
                             continue;
                         }
 
-                        // For other errors, throw
                         throw new Error(`Failed to check run status: ${response.statusText}`);
                     } catch (error) {
                         if (retryAttempts < maxRetries - 1) {
                             console.log(`Retry attempt ${retryAttempts + 1} failed:`, error);
-                            await delay(2000 * (retryAttempts + 1));
+                            await delay(5000 * (retryAttempts + 1));
                             retryAttempts++;
                             continue;
                         }
@@ -377,11 +376,13 @@ export class AIInsightsService {
                 console.log('Run status:', statusResponse);
 
                 if (statusResponse.status === 'COMPLETED') {
-                    // Once Hex run is complete, wait a bit and then check our API for results
-                    await delay(2000); // Give the Python script time to send results
+                    // Once Hex run is complete, wait longer for results
+                    await delay(5000); // Increased from 2000 to 5000
 
-                    // Try to fetch results from our API
-                    const resultsResponse = await fetch(`${baseUrl}/api/hex-results/latest`);
+                    // Try to fetch results from our API with increased timeout
+                    const resultsResponse = await fetch(`${baseUrl}/api/hex-results/latest`, {
+                        timeout: 30000  // 30 second timeout
+                    });
                     console.log('Results response status:', resultsResponse.status);
                     
                     if (resultsResponse.ok) {
@@ -395,9 +396,9 @@ export class AIInsightsService {
                         console.log('Failed to fetch results:', await resultsResponse.text());
                     }
                     
-                    // If no results found yet, wait and try again
+                    // If no results found yet, wait longer and try again
                     if (attempts < maxAttempts - 1) {
-                        await delay(2000);
+                        await delay(5000); // Increased from 2000 to 5000
                         attempts++;
                         continue;
                     }
@@ -407,7 +408,7 @@ export class AIInsightsService {
                     throw new Error('Hex project run failed');
                 }
 
-                await delay(2000);
+                await delay(5000); // Increased from 2000 to 5000
                 attempts++;
             } catch (error) {
                 console.error('Error checking run status:', error);

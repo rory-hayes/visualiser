@@ -268,7 +268,7 @@ export class AIInsightsService {
             // Updated payload with correct parameter name
             const payload = {
                 inputParams: {
-                    _input_number: numericWorkspaceId
+                    numeric_input_1: numericWorkspaceId
                 },
                 dryRun: false
             };

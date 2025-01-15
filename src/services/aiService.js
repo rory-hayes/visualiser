@@ -329,33 +329,70 @@ export class AIInsightsService {
 
         while (attempts < maxAttempts) {
             try {
-                // First check if the Hex run is complete
-                const response = await fetch(`https://app.hex.tech/api/v1/projects/${projectId}/runs/${runId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${HEX_API_KEY}`
-                    }
-                });
+                // First check if the Hex run is complete, with retry logic
+                let statusResponse = null;
+                let retryAttempts = 0;
+                const maxRetries = 3;
 
-                if (!response.ok) {
-                    throw new Error(`Failed to check run status: ${response.statusText}`);
+                while (retryAttempts < maxRetries) {
+                    try {
+                        const response = await fetch(`https://app.hex.tech/api/v1/projects/${projectId}/runs/${runId}`, {
+                            headers: {
+                                'Authorization': `Bearer ${HEX_API_KEY}`
+                            },
+                            // Add timeout
+                            timeout: 10000
+                        });
+
+                        if (response.ok) {
+                            statusResponse = await response.json();
+                            break;
+                        }
+
+                        // If we get a timeout or 5xx error, retry
+                        if (response.status === 504 || (response.status >= 500 && response.status < 600)) {
+                            console.log(`Attempt ${retryAttempts + 1}: Got status ${response.status}, retrying...`);
+                            await delay(2000 * (retryAttempts + 1)); // Exponential backoff
+                            retryAttempts++;
+                            continue;
+                        }
+
+                        // For other errors, throw
+                        throw new Error(`Failed to check run status: ${response.statusText}`);
+                    } catch (error) {
+                        if (retryAttempts < maxRetries - 1) {
+                            console.log(`Retry attempt ${retryAttempts + 1} failed:`, error);
+                            await delay(2000 * (retryAttempts + 1));
+                            retryAttempts++;
+                            continue;
+                        }
+                        throw error;
+                    }
                 }
 
-                const status = await response.json();
-                console.log('Run status:', status);
+                if (!statusResponse) {
+                    throw new Error('Failed to get status after retries');
+                }
 
-                if (status.status === 'COMPLETED') {
+                console.log('Run status:', statusResponse);
+
+                if (statusResponse.status === 'COMPLETED') {
                     // Once Hex run is complete, wait a bit and then check our API for results
                     await delay(2000); // Give the Python script time to send results
 
                     // Try to fetch results from our API
                     const resultsResponse = await fetch(`${baseUrl}/api/hex-results/latest`);
+                    console.log('Results response status:', resultsResponse.status);
                     
                     if (resultsResponse.ok) {
                         const results = await resultsResponse.json();
+                        console.log('Results from API:', results);
                         return {
                             status: 'completed',
                             data: results.data
                         };
+                    } else {
+                        console.log('Failed to fetch results:', await resultsResponse.text());
                     }
                     
                     // If no results found yet, wait and try again
@@ -364,11 +401,9 @@ export class AIInsightsService {
                         attempts++;
                         continue;
                     }
-                    
-                    throw new Error('Run completed but results not available');
                 }
 
-                if (status.status === 'FAILED') {
+                if (statusResponse.status === 'FAILED') {
                     throw new Error('Hex project run failed');
                 }
 

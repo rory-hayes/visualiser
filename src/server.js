@@ -89,7 +89,8 @@ app.use(session({
 }));
 
 // Add this near the top of the file with other middleware
-app.use(express.json()); // Add this line to parse JSON bodies
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Landing Page
 app.get('/', (req, res) => {

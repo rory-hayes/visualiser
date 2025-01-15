@@ -427,17 +427,13 @@ app.get('/api/hex-results/:runId', async (req, res) => {
         
         console.log('Sending stored results:', {
             timestamp: results.timestamp,
-            dataSize: results.data?.length || 0,
-            metadata: results.metadata
+            dataSize: results.data?.length || 0
         });
 
+        // Only send the data, not the metadata
         res.json({
             success: true,
-            data: {
-                data: results.data,
-                metadata: results.metadata,
-                timestamp: results.timestamp
-            }
+            data: results.data
         });
     } catch (error) {
         console.error('Error fetching results:', error);

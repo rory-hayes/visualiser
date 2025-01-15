@@ -265,18 +265,10 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Create payload matching the exact Hex parameter name
+            // Create payload with input parameters in the root
             const payload = {
-                inputParams: {
-                    "numeric_input_1": numericWorkspaceId  // Exact match with Hex project parameter name
-                },
-                dryRun: false,
-                notifications: [
-                    {
-                        type: 'ALL',
-                        includeSuccessScreenshot: false
-                    }
-                ]
+                numeric_input_1: numericWorkspaceId,  // Move parameter to root level
+                dryRun: false
             };
 
             console.log('Hex API request payload:', payload);
@@ -296,7 +288,8 @@ export class AIInsightsService {
             console.log('Hex API response:', {
                 status: createRunResponse.status,
                 statusText: createRunResponse.statusText,
-                response: responseText
+                response: responseText,
+                requestPayload: payload  // Log the exact payload sent
             });
 
             if (!createRunResponse.ok) {

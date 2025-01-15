@@ -265,13 +265,10 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Create payload according to Hex API specifications
+            // Simplified payload structure - remove 'parameters' wrapper
             const payload = {
-                parameters: {
-                    numeric_input_1: numericWorkspaceId
-                },
-                project_id: projectId,
-                version: 'latest'  // Add version specification
+                numeric_input_1: numericWorkspaceId,
+                project_id: projectId
             };
 
             console.log('Hex API request payload:', payload);

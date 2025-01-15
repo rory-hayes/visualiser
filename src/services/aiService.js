@@ -265,15 +265,12 @@ export class AIInsightsService {
             
             console.log('Initiating Hex run with workspace ID:', numericWorkspaceId);
 
-            // Create payload matching Hex API specification
+            // Simplified payload without update settings
             const payload = {
                 inputParams: {
                     numeric_input_1: numericWorkspaceId
                 },
                 dryRun: false,
-                updateCache: true,
-                useCachedSqlResults: true,
-                updatePublishedResults: false,
                 notifications: [
                     {
                         type: 'ALL',

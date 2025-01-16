@@ -399,35 +399,55 @@ app.get('/visualizer', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'visualizer.html'));
 });
 
-// Add this new route to your existing routes
+// Add Hex API integration
+const HEX_API_TOKEN = process.env.HEX_API_TOKEN;
+const HEX_PROJECT_ID = process.env.HEX_PROJECT_ID;
+
 app.post('/api/generate-report', async (req, res) => {
     try {
-        console.log('Received generate-report request:', {
-            body: req.body,
-            contentType: req.headers['content-type']
-        });
-
-        const { _input_number } = req.body;
+        const { _input_text } = req.body;
         
-        if (!_input_number) {
+        if (!_input_text) {
             return res.status(400).json({ 
                 success: false, 
-                error: 'Input number is required' 
+                error: 'Workspace ID is required' 
             });
         }
 
-        // Initialize AI service if not already done
-        const aiService = new AIInsightsService();
-        
-        // Generate report and wait for completion
-        const result = await aiService.generateReport(_input_number);
-        
+        if (!HEX_API_TOKEN || !HEX_PROJECT_ID) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Hex API configuration is missing' 
+            });
+        }
+
+        // Call Hex API to run the project
+        const hexResponse = await axios.post(
+            `https://app.hex.tech/api/v1/project/${HEX_PROJECT_ID}/run`,
+            {
+                parameters: {
+                    _input_text
+                }
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${HEX_API_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        console.log('Hex API response:', {
+            status: hexResponse.status,
+            data: hexResponse.data
+        });
+
         res.json({
             success: true,
-            runId: result.runId,
-            status: result.status,
-            data: result.data
+            runId: hexResponse.data.run_id,
+            status: hexResponse.data.status
         });
+
     } catch (error) {
         console.error('Error in generate-report endpoint:', error);
         res.status(500).json({ 

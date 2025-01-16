@@ -34,14 +34,14 @@ def validate_dataframe(df):
     if df.empty:
         logging.error("DataFrame is empty. Aborting API call.")
         return False
-    logging.info("DataFrame validated successfully.")
+    logging.info(f"DataFrame validated successfully. Shape: {df.shape}")
     return True
 
 def dataframe_to_json(df):
     try:
         # Keep original column names, don't convert to lowercase
         json_data = df.to_json(orient="records")
-        logging.info("DataFrame converted to JSON successfully.")
+        logging.info(f"DataFrame converted to JSON successfully. Length: {len(json_data)}")
         return json_data
     except Exception as e:
         logging.error(f"Error converting DataFrame to JSON: {e}")
@@ -59,7 +59,7 @@ def send_api_request(dataframe):
 
         # Convert DataFrame to JSON
         json_data = dataframe_to_json(dataframe)
-        logging.debug(f"Converted DataFrame to JSON: {json_data}")
+        logging.debug(f"Converted DataFrame to JSON: {json_data[:1000]}...")  # Log first 1000 chars
 
         # Update metadata timestamp
         METADATA["timestamp"] = datetime.datetime.now().isoformat()
@@ -74,22 +74,28 @@ def send_api_request(dataframe):
         # Log the payload data for debugging
         logging.info(f"Sending payload with {len(data_payload['data'])} records")
         logging.info(f"First record sample: {data_payload['data'][0] if data_payload['data'] else 'No data'}")
+        logging.info(f"Metadata: {data_payload['metadata']}")
 
         # Send request
-        logging.info("Sending data to API...")
+        logging.info(f"Sending data to API at {API_URL}...")
         headers = {"Content-Type": "application/json"}
         response = session.post(API_URL, headers=headers, json=data_payload)
 
         # Log the response
         logging.info(f"Response status code: {response.status_code}")
-        if response.status_code == 200:
+        logging.info(f"Response headers: {dict(response.headers)}")
+        try:
             response_data = response.json()
             logging.info(f"Response received: {response_data}")
             if response_data.get("success"):
                 logging.info("Report generated successfully.")
             else:
                 logging.warning(f"Unexpected response: {response_data}")
-        else:
+        except Exception as e:
+            logging.error(f"Error parsing response JSON: {e}")
+            logging.error(f"Raw response text: {response.text}")
+
+        if response.status_code != 200:
             logging.error(f"Failed with status code {response.status_code}: {response.text}")
 
     except requests.exceptions.RequestException as e:

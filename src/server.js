@@ -10,6 +10,7 @@ import { Client } from '@notionhq/client';
 import session from 'express-session';
 import axios from 'axios';
 import { AIInsightsService } from './services/aiService.js';
+import fs from 'fs';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -48,6 +49,52 @@ requiredEnvVars.forEach(varName => {
 });
 
 const app = express();
+
+// Initialize storage file
+const STORAGE_FILE = path.join(process.cwd(), 'hex_results.json');
+try {
+    if (!fs.existsSync(STORAGE_FILE)) {
+        fs.writeFileSync(STORAGE_FILE, JSON.stringify({}));
+        console.log('Created storage file:', STORAGE_FILE);
+    } else {
+        console.log('Storage file exists:', STORAGE_FILE);
+    }
+} catch (error) {
+    console.error('Error initializing storage file:', error);
+}
+
+// Helper functions for storage
+function saveResults(results) {
+    try {
+        const stringified = JSON.stringify(results);
+        fs.writeFileSync(STORAGE_FILE, stringified);
+        console.log('Successfully saved results to file:', {
+            fileSize: stringified.length,
+            path: STORAGE_FILE
+        });
+    } catch (error) {
+        console.error('Error saving results to file:', error);
+        throw error;
+    }
+}
+
+function loadResults() {
+    try {
+        if (!fs.existsSync(STORAGE_FILE)) {
+            console.log('Storage file does not exist:', STORAGE_FILE);
+            return {};
+        }
+        const data = fs.readFileSync(STORAGE_FILE, 'utf8');
+        console.log('Successfully loaded results from file:', {
+            fileSize: data.length,
+            path: STORAGE_FILE
+        });
+        return JSON.parse(data);
+    } catch (error) {
+        console.error('Error loading results:', error);
+        return {};
+    }
+}
 
 let graphCache = null; // Cache to store graph data temporarily
 const hexResultsStore = new Map(); // Rename the store to avoid conflict
@@ -394,25 +441,28 @@ app.post('/api/generate-report', async (req, res) => {
 app.post('/api/hex-results', async (req, res) => {
     try {
         const results = req.body;
+        console.log('Received raw request body:', JSON.stringify(req.body));
         console.log('Received Hex results:', {
             hasData: !!results.data,
             dataLength: results.data?.length,
             firstRecord: results.data?.[0],
             hasMetadata: !!results.metadata,
-            metadata: results.metadata
+            metadata: results.metadata,
+            rawResults: results
         });
 
-        // Store both the data and metadata
-        hexResultsStore.set('latest', {
+        // Store the results
+        const storedData = {
             timestamp: new Date(),
             data: results.data,
             metadata: results.metadata
-        });
+        };
+        saveResults(storedData);
         
-        console.log('Stored Hex results in hexResultsStore:', {
-            storedData: hexResultsStore.get('latest')?.data?.length || 0,
-            storedTimestamp: hexResultsStore.get('latest')?.timestamp,
-            storedMetadata: hexResultsStore.get('latest')?.metadata
+        console.log('Stored Hex results:', {
+            storedData: storedData.data?.length || 0,
+            storedTimestamp: storedData.timestamp,
+            storedMetadata: storedData.metadata
         });
 
         // Notify all connected clients
@@ -424,6 +474,7 @@ app.post('/api/hex-results', async (req, res) => {
             connectedClients.forEach(client => {
                 client.write(`data: ${eventData}\n\n`);
             });
+            console.log('Notified connected clients:', connectedClients.size);
         }
         
         res.json({ success: true });
@@ -438,22 +489,17 @@ const connectedClients = new Set();
 
 // Add SSE endpoint for streaming results
 app.get('/api/hex-results/stream', (req, res) => {
-    // Set headers for SSE
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
     });
 
-    // Send an initial message
     res.write('data: {"type":"connected"}\n\n');
-
-    // Add this client to our connected clients
     connectedClients.add(res);
 
-    // Check if we already have results
-    const results = hexResultsStore.get('latest');
-    if (results) {
+    const results = loadResults();
+    if (results && results.data) {
         const eventData = JSON.stringify({
             success: true,
             data: results.data
@@ -461,7 +507,6 @@ app.get('/api/hex-results/stream', (req, res) => {
         res.write(`data: ${eventData}\n\n`);
     }
 
-    // Remove client on connection close
     req.on('close', () => {
         connectedClients.delete(res);
     });
@@ -470,7 +515,7 @@ app.get('/api/hex-results/stream', (req, res) => {
 // Add an endpoint to fetch results
 app.get('/api/hex-results', async (req, res) => {
     try {
-        const results = hexResultsStore.get('latest');
+        const results = loadResults();
         console.log('Fetching stored results:', {
             hasResults: !!results,
             timestamp: results?.timestamp,
@@ -478,14 +523,13 @@ app.get('/api/hex-results', async (req, res) => {
             firstRecord: results?.data?.[0]
         });
         
-        if (!results) {
+        if (!results || !results.data) {
             return res.status(404).json({ 
                 success: false, 
                 error: 'Results not found' 
             });
         }
 
-        // Only send the data, not the metadata
         res.json({
             success: true,
             data: results.data
@@ -499,7 +543,7 @@ app.get('/api/hex-results', async (req, res) => {
 // Add an endpoint to fetch results by runId
 app.get('/api/hex-results/:runId', async (req, res) => {
     try {
-        const results = hexResultsStore.get('latest');
+        const results = loadResults();
         
         if (!results) {
             return res.status(404).json({ 

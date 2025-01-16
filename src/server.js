@@ -399,6 +399,11 @@ app.get('/visualizer', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'visualizer.html'));
 });
 
+// GenNotion Page
+app.get('/gennotion', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'public', 'gennotion.html'));
+});
+
 // Add Hex API integration
 const HEX_API_TOKEN = process.env.HEX_API_TOKEN;
 const HEX_PROJECT_ID = process.env.HEX_PROJECT_ID;

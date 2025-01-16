@@ -51,13 +51,13 @@ async function processWorkspace(workspaceId) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                workspaceId,
                 _input_text: workspaceId
             })
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to trigger report: ${response.statusText}`);
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to trigger report');
         }
 
         const data = await response.json();
@@ -87,21 +87,27 @@ function listenForResults() {
     eventSource = new EventSource('/api/hex-results/stream');
 
     eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'connected') {
-            console.log('Connected to results stream');
-            return;
-        }
+        try {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'connected') {
+                console.log('Connected to results stream');
+                return;
+            }
 
-        if (data.success && data.data) {
-            // Hide spinner and update status
-            showStatus('Results received!', false);
-            
-            // Display results
-            displayResults(data.data);
-            
-            // Close event source
+            if (data.success && data.data) {
+                // Hide spinner and update status
+                showStatus('Results received!', false);
+                
+                // Display results
+                displayResults(data.data);
+                
+                // Close event source
+                eventSource.close();
+            }
+        } catch (error) {
+            console.error('Error processing event data:', error);
+            showStatus('Error processing results. Please try again.', false);
             eventSource.close();
         }
     };
@@ -123,6 +129,10 @@ function displayResults(data) {
 }
 
 function formatResults(data) {
+    if (!Array.isArray(data) || data.length === 0) {
+        return '<p class="text-gray-500">No results available</p>';
+    }
+
     // Create a table to display the results
     const table = document.createElement('table');
     table.className = 'min-w-full divide-y divide-gray-200';

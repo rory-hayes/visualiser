@@ -405,8 +405,8 @@ app.get('/gennotion', (req, res) => {
 });
 
 // Add Hex API integration
-const HEX_API_TOKEN = '5b97b8d1945b14acc5c2faed5e314310438e038640df2ff475d357993d0217826b3db99144ebf236d189778cda42898e'; // Hardcoded for now
-const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918'; // Hardcoded for now
+const HEX_API_TOKEN = '5b97b8d1945b14acc5c2faed5e314310438e038640df2ff475d357993d0217826b3db99144ebf236d189778cda42898e';
+const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
 
 app.post('/api/generate-report', async (req, res) => {
     try {
@@ -431,13 +431,15 @@ app.post('/api/generate-report', async (req, res) => {
             inputText: _input_text
         });
 
-        // Call Hex API to run the project
+        // Call Hex API to run the project with properly formatted parameters
         const hexResponse = await axios.post(
             hexUrl,
             {
-                parameters: {
-                    _input_text
-                }
+                inputParams: {
+                    _input_text: _input_text
+                },
+                updatePublishedResults: false,
+                useCachedSqlResults: true
             },
             {
                 headers: {
@@ -463,10 +465,11 @@ app.post('/api/generate-report', async (req, res) => {
         console.error('Error in generate-report endpoint:', {
             error: error.message,
             response: error.response?.data,
-            status: error.response?.status
+            status: error.response?.status,
+            details: error.response?.data?.details
         });
         
-        const errorMessage = error.response?.data?.error || error.message || 'Internal server error';
+        const errorMessage = error.response?.data?.message || error.message || 'Internal server error';
         res.status(error.response?.status || 500).json({ 
             success: false, 
             error: errorMessage

@@ -240,6 +240,21 @@ export class AIInsightsService {
                 })
             });
 
+            // call to the Domain Usage / Visualiser project
+            // has more domain usage metrics
+            // const response = await fetch('https://app.hex.tech/notion/hex/4b520026-8a4f-4df8-86b3-f79798b594db/draft/logic', {
+            //     method: 'POST',
+            //     headers: {
+            //         'Content-Type': 'application/json',
+            //         'Authorization': `Bearer 4fe1113357488bccca1d029756edd4c6c361be53f08201a733173e2e478e012a436eb9adfb73e93dc2aa179c241b81df`
+            //     },
+            //     body: JSON.stringify({
+            //         data: {
+            //             domains: workspaceId,
+            //         }
+            //     })
+            // });
+
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }

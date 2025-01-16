@@ -9,12 +9,24 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleGenerateReport() {
         try {
             const workspaceIdInput = document.getElementById('workspaceId');
-            const workspaceId = workspaceIdInput.value.trim();
+            const domainsText = workspaceIdInput.value.trim();
 
-            // Validate numeric input
-            const numericWorkspaceId = parseInt(workspaceId, 10);
-            if (!workspaceId || isNaN(numericWorkspaceId)) {
-                showNotification('Please enter a valid numeric Workspace ID', 'error');
+            // Split and clean the domains
+            const domains = domainsText
+                .split(',')
+                .map(domain => domain.trim())
+                .filter(domain => domain.length > 0);
+
+            // Validate input
+            if (domains.length === 0) {
+                showNotification('Please enter at least one domain', 'error');
+                return;
+            }
+
+            // Basic domain validation
+            const invalidDomains = domains.filter(domain => !domain.includes('.'));
+            if (invalidDomains.length > 0) {
+                showNotification(`Invalid domain format: ${invalidDomains.join(', ')}`, 'error');
                 return;
             }
 
@@ -25,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update status message
             reportResults.innerHTML = `
                 <div class="text-gray-600">
-                    Starting report generation...
+                    Starting report generation for ${domains.length} domain${domains.length > 1 ? 's' : ''}...
                 </div>
             `;
 
@@ -34,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ _input_number: numericWorkspaceId })
+                body: JSON.stringify({ domains: domains.join(',') })
             });
 
             const data = await response.json();
@@ -49,7 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             reportResults.innerHTML = `
                 <div class="text-green-600 font-medium">
-                    Report generation started. Run ID: ${runId}
+                    Report generation started for ${domains.length} domain${domains.length > 1 ? 's' : ''}
+                    <div class="mt-2">Run ID: ${runId}</div>
                     <div class="mt-2">Waiting for results...</div>
                 </div>
             `;

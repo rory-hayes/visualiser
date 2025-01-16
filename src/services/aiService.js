@@ -396,7 +396,7 @@ export class AIInsightsService {
                     await delay(5000); // Increased from 2000 to 5000
 
                     // Try to fetch results from our API with increased timeout
-                    const resultsResponse = await fetch(`${baseUrl}/latest`, {
+                    const resultsResponse = await fetch(baseUrl, {
                         timeout: 30000  // 30 second timeout
                     });
                     console.log('Results response status:', resultsResponse.status);

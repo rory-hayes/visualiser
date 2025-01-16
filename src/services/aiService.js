@@ -340,7 +340,7 @@ export class AIInsightsService {
         let attempts = 0;
 
         // Get the base URL from environment or default to production URL
-        const baseUrl = process.env.BASE_URL || 'https://visualiser-xhjh.onrender.com';
+        const baseUrl = process.env.BASE_URL || 'https://visualiser-xhjh.onrender.com/api/hex-results';
 
         while (attempts < maxAttempts) {
             try {
@@ -395,7 +395,7 @@ export class AIInsightsService {
                     await delay(5000); // Increased from 2000 to 5000
 
                     // Try to fetch results from our API with increased timeout
-                    const resultsResponse = await fetch(`${baseUrl}/api/hex-results/latest`, {
+                    const resultsResponse = await fetch(`${baseUrl}/latest`, {
                         timeout: 30000  // 30 second timeout
                     });
                     console.log('Results response status:', resultsResponse.status);

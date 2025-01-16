@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 
 # Constants
-API_URL = "https://visualiser-xhjh.onrender.com/api/hex-results/latest"
+API_URL = "https://visualiser-xhjh.onrender.com/api/hex-results"
 
 # Define metadata structure
 METADATA = {

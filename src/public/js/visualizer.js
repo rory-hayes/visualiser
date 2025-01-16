@@ -88,44 +88,89 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const poll = async () => {
             try {
-                // Always fetch from 'latest' instead of using runId
-                const response = await fetch('/api/hex-results/latest');
-                if (!response.ok) {
-                    if (response.status === 404) {
-                        // Results not ready yet
-                        if (attempts++ < maxAttempts) {
-                            reportResults.innerHTML = `
-                                <div class="text-gray-600">
-                                    Waiting for results... (Attempt ${attempts}/${maxAttempts})
-                                </div>
-                            `;
-                            setTimeout(poll, 10000); // Try again in 10 seconds
-                            return;
-                        }
-                        throw new Error('Timeout waiting for results');
-                    }
-                    throw new Error('Failed to fetch results');
+                // First check the run status
+                const statusResponse = await fetch(`/api/hex-status/${runId}`);
+                const statusData = await statusResponse.json();
+                console.log('Run status:', statusData);
+
+                if (statusData.status === 'FAILED') {
+                    throw new Error('Hex project run failed');
                 }
 
-                const data = await response.json();
-                console.log('Received results:', data);
-                
-                if (data.success) {
-                    displayResults(data);
-                    showNotification('Results received successfully', 'success');
+                if (statusData.status === 'COMPLETED') {
+                    // Once completed, try to fetch results with increasing delays
+                    const resultsDelay = Math.min(attempts * 2000, 10000); // Exponential backoff up to 10s
+                    await new Promise(resolve => setTimeout(resolve, resultsDelay));
+
+                    const resultsResponse = await fetch('/api/hex-results/latest');
+                    if (!resultsResponse.ok) {
+                        if (resultsResponse.status === 404) {
+                            // Results not ready yet
+                            if (attempts++ < maxAttempts) {
+                                reportResults.innerHTML = `
+                                    <div class="text-gray-600">
+                                        <div>Run completed, waiting for results... (Attempt ${attempts}/${maxAttempts})</div>
+                                        <div class="text-sm mt-2">
+                                            <a href="${statusData.runUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800">
+                                                View run details →
+                                            </a>
+                                        </div>
+                                    </div>
+                                `;
+                                setTimeout(poll, 10000);
+                                return;
+                            }
+                            throw new Error('Timeout waiting for results. The run completed but results were not available. Please try again or check the run details.');
+                        }
+                        throw new Error(`Failed to fetch results: ${resultsResponse.statusText}`);
+                    }
+
+                    const data = await resultsResponse.json();
+                    if (data.success) {
+                        displayResults(data);
+                        showNotification('Results received successfully', 'success');
+                        return;
+                    }
+                } else {
+                    // Still running
+                    if (attempts++ < maxAttempts) {
+                        reportResults.innerHTML = `
+                            <div class="text-gray-600">
+                                <div>Processing workspace data... (Attempt ${attempts}/${maxAttempts})</div>
+                                <div class="text-sm mt-2">Status: ${statusData.status}</div>
+                                ${statusData.runUrl ? `
+                                    <div class="text-sm mt-1">
+                                        <a href="${statusData.runUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800">
+                                            View run details →
+                                        </a>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                        setTimeout(poll, 10000);
+                        return;
+                    }
+                    throw new Error('Timeout waiting for run completion');
                 }
             } catch (error) {
                 console.error('Error polling for results:', error);
                 reportResults.innerHTML = `
                     <div class="text-red-600 font-medium">
-                        Error: ${error.message}
+                        <div>Error: ${error.message}</div>
+                        ${statusData?.runUrl ? `
+                            <div class="text-sm mt-2">
+                                <a href="${statusData.runUrl}" target="_blank" class="text-indigo-600 hover:text-indigo-800">
+                                    View run details →
+                                </a>
+                            </div>
+                        ` : ''}
                     </div>
                 `;
             }
         };
 
         // Start polling
-        poll();
+        await poll();
     }
 
     function showNotification(message, type = 'success') {

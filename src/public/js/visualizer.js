@@ -9,24 +9,25 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleGenerateReport() {
         try {
             const workspaceIdInput = document.getElementById('workspaceId');
-            const domainsText = workspaceIdInput.value.trim();
+            const spaceIdsText = workspaceIdInput.value.trim();
 
-            // Split and clean the domains
-            const domains = domainsText
+            // Split and clean the space IDs
+            const spaceIds = spaceIdsText
                 .split(',')
-                .map(domain => domain.trim())
-                .filter(domain => domain.length > 0);
+                .map(id => id.trim())
+                .filter(id => id.length > 0);
 
             // Validate input
-            if (domains.length === 0) {
-                showNotification('Please enter at least one domain', 'error');
+            if (spaceIds.length === 0) {
+                showNotification('Please enter at least one Space ID', 'error');
                 return;
             }
 
-            // Basic domain validation
-            const invalidDomains = domains.filter(domain => !domain.includes('.'));
-            if (invalidDomains.length > 0) {
-                showNotification(`Invalid domain format: ${invalidDomains.join(', ')}`, 'error');
+            // UUID validation regex
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const invalidIds = spaceIds.filter(id => !uuidRegex.test(id));
+            if (invalidIds.length > 0) {
+                showNotification(`Invalid Space ID format: ${invalidIds.join(', ')}`, 'error');
                 return;
             }
 
@@ -37,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update status message
             reportResults.innerHTML = `
                 <div class="text-gray-600">
-                    Starting report generation for ${domains.length} domain${domains.length > 1 ? 's' : ''}...
+                    Starting report generation for ${spaceIds.length} space${spaceIds.length > 1 ? 's' : ''}...
                 </div>
             `;
 
@@ -46,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ domains: domains.join(',') })
+                body: JSON.stringify({ _input_number: spaceIds[0] }) // For now, just use the first ID
             });
 
             const data = await response.json();
@@ -61,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             reportResults.innerHTML = `
                 <div class="text-green-600 font-medium">
-                    Report generation started for ${domains.length} domain${domains.length > 1 ? 's' : ''}
+                    Report generation started for ${spaceIds.length} space${spaceIds.length > 1 ? 's' : ''}
                     <div class="mt-2">Run ID: ${runId}</div>
                     <div class="mt-2">Waiting for results...</div>
                 </div>

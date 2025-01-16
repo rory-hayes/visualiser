@@ -53,6 +53,10 @@ def send_api_request(dataframe):
         if not validate_dataframe(dataframe):
             return
 
+        # Log DataFrame columns and sample data
+        logging.info(f"DataFrame columns: {dataframe.columns.tolist()}")
+        logging.info(f"DataFrame sample:\n{dataframe.head()}")
+
         # Convert DataFrame to JSON
         json_data = dataframe_to_json(dataframe)
         logging.debug(f"Converted DataFrame to JSON: {json_data}")
@@ -68,7 +72,8 @@ def send_api_request(dataframe):
         }
 
         # Log the payload data for debugging
-        logging.debug(f"Prepared payload: {data_payload}")
+        logging.info(f"Sending payload with {len(data_payload['data'])} records")
+        logging.info(f"First record sample: {data_payload['data'][0] if data_payload['data'] else 'No data'}")
 
         # Send request
         logging.info("Sending data to API...")
@@ -96,6 +101,8 @@ def send_api_request(dataframe):
 if __name__ == "__main__":
     try:
         # The dataframe_2 from SQL query will be available in Hex
+        logging.info("Starting script execution")
+        logging.info(f"DataFrame info:\n{dataframe_2.info()}")
         print(dataframe_2)
         send_api_request(dataframe_2)
     except Exception as e:

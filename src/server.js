@@ -394,6 +394,14 @@ app.post('/api/generate-report', async (req, res) => {
 app.post('/api/hex-results', async (req, res) => {
     try {
         const results = req.body;
+        console.log('Received Hex results:', {
+            hasData: !!results.data,
+            dataLength: results.data?.length,
+            firstRecord: results.data?.[0],
+            hasMetadata: !!results.metadata,
+            metadata: results.metadata
+        });
+
         // Store both the data and metadata
         hexResultsStore.set('latest', {
             timestamp: new Date(),
@@ -401,9 +409,10 @@ app.post('/api/hex-results', async (req, res) => {
             metadata: results.metadata
         });
         
-        console.log('Received and stored Hex results:', {
-            dataSize: results.data?.length || 0,
-            metadata: results.metadata
+        console.log('Stored Hex results in hexResultsStore:', {
+            storedData: hexResultsStore.get('latest')?.data?.length || 0,
+            storedTimestamp: hexResultsStore.get('latest')?.timestamp,
+            storedMetadata: hexResultsStore.get('latest')?.metadata
         });
         
         res.json({ success: true });
@@ -414,6 +423,35 @@ app.post('/api/hex-results', async (req, res) => {
 });
 
 // Add an endpoint to fetch results
+app.get('/api/hex-results', async (req, res) => {
+    try {
+        const results = hexResultsStore.get('latest');
+        console.log('Fetching stored results:', {
+            hasResults: !!results,
+            timestamp: results?.timestamp,
+            dataLength: results?.data?.length || 0,
+            firstRecord: results?.data?.[0]
+        });
+        
+        if (!results) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Results not found' 
+            });
+        }
+
+        // Only send the data, not the metadata
+        res.json({
+            success: true,
+            data: results.data
+        });
+    } catch (error) {
+        console.error('Error fetching results:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add an endpoint to fetch results by runId
 app.get('/api/hex-results/:runId', async (req, res) => {
     try {
         const results = hexResultsStore.get('latest');

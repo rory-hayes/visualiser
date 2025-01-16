@@ -39,8 +39,7 @@ def validate_dataframe(df):
 
 def dataframe_to_json(df):
     try:
-        # Convert column names to lowercase to match expected format
-        df.columns = df.columns.str.lower()
+        # Keep original column names, don't convert to lowercase
         json_data = df.to_json(orient="records")
         logging.info("DataFrame converted to JSON successfully.")
         return json_data

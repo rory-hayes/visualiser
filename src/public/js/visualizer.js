@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const resultsDelay = Math.min(attempts * 2000, 10000); // Exponential backoff up to 10s
                     await new Promise(resolve => setTimeout(resolve, resultsDelay));
 
-                    const resultsResponse = await fetch('/api/hex-results/latest');
+                    const resultsResponse = await fetch(`/api/hex-results/${runId}`);
                     if (!resultsResponse.ok) {
                         if (resultsResponse.status === 404) {
                             // Results not ready yet

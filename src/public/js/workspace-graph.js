@@ -116,32 +116,34 @@ function processWorkspaceData(data) {
 
     // Process each row into nodes
     data.forEach(row => {
-        if (!row.ID) return;
+        if (!row.id) return;
 
         // Create node if it doesn't exist
-        if (!nodeMap.has(row.ID)) {
+        if (!nodeMap.has(row.id)) {
             const node = {
-                id: row.ID,
-                type: row.TYPE || 'unknown',
-                depth: row.DEPTH || 0,
-                pageDepth: row.PAGE_DEPTH || 0
+                id: row.id,
+                type: row.type.toLowerCase(),
+                depth: parseInt(row.depth) || 0,
+                pageDepth: parseInt(row.page_depth) || 0,
+                text: row.text || '',
+                spaceId: row.space_id
             };
             nodes.push(node);
-            nodeMap.set(row.ID, node);
+            nodeMap.set(row.id, node);
         }
 
         // Create parent-child links
-        if (row.PARENT_ID && nodeMap.has(row.PARENT_ID)) {
+        if (row.parent_id && nodeMap.has(row.parent_id)) {
             links.push({
-                source: row.PARENT_ID,
-                target: row.ID
+                source: row.parent_id,
+                target: row.id
             });
         }
 
         // Process ancestors for additional connections
-        if (row.ANCESTORS) {
+        if (row.ancestors) {
             try {
-                const ancestors = JSON.parse(row.ANCESTORS);
+                const ancestors = JSON.parse(row.ancestors);
                 for (let i = 0; i < ancestors.length - 1; i++) {
                     const source = ancestors[i];
                     const target = ancestors[i + 1];

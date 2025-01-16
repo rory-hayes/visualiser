@@ -11,34 +11,42 @@ logging.basicConfig(
 )
 
 # Constants
-API_URL = "https://visualiser-xhjh.onrender.com/api/hex-results/latest"  # Updated endpoint
+API_URL = "https://visualiser-xhjh.onrender.com/api/hex-results/latest"
 
-# Define the metadata structure
+# Define metadata structure
 METADATA = {
     "status": "success",
     "timestamp": None,  # Will be set when sending
     "source": "hex_report"
 }
 
+# Setup session with retry strategy
+session = requests.Session()
+retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["POST"]
+)
+session.mount("https://", HTTPAdapter(max_retries=retry_strategy))
+
 def validate_dataframe(df):
-    required_fields = [
-        'total_blocks', 'total_pages', 'unique_block_types',
-        'max_depth', 'avg_depth', 'median_depth', 'max_page_depth',
-        'page_count', 'text_block_count', 'todo_count', 'header_count',
-        'callout_count', 'toggle_count', 'orphaned_blocks', 'leaf_blocks'
-    ]
-    
     if df.empty:
         logging.error("DataFrame is empty. Aborting API call.")
         return False
-        
-    missing_fields = [field for field in required_fields if field not in df.columns]
-    if missing_fields:
-        logging.error(f"Missing required fields: {missing_fields}")
-        return False
-        
     logging.info("DataFrame validated successfully.")
     return True
+
+def dataframe_to_json(df):
+    try:
+        # Convert column names to lowercase to match expected format
+        df.columns = df.columns.str.lower()
+        json_data = df.to_json(orient="records")
+        logging.info("DataFrame converted to JSON successfully.")
+        return json_data
+    except Exception as e:
+        logging.error(f"Error converting DataFrame to JSON: {e}")
+        raise
 
 def send_api_request(dataframe):
     try:
@@ -47,17 +55,17 @@ def send_api_request(dataframe):
             return
 
         # Convert DataFrame to JSON
-        json_data = dataframe.to_json(orient="records")
+        json_data = dataframe_to_json(dataframe)
         logging.debug(f"Converted DataFrame to JSON: {json_data}")
 
         # Update metadata timestamp
         METADATA["timestamp"] = datetime.datetime.now().isoformat()
 
-        # Prepare data
+        # Prepare data payload
         data_payload = {
-            "data": json.loads(json_data),  # Parse JSON string into a Python dictionary
+            "data": json.loads(json_data),
             "metadata": METADATA,
-            "success": True  # Required by the API
+            "success": True
         }
 
         # Log the payload data for debugging
@@ -65,15 +73,7 @@ def send_api_request(dataframe):
 
         # Send request
         logging.info("Sending data to API...")
-        headers = {
-            "Content-Type": "application/json",
-        }
-
-        # Log request details
-        logging.debug(f"Request URL: {API_URL}")
-        logging.debug(f"Request headers: {headers}")
-        logging.debug(f"Request body: {json.dumps(data_payload, indent=4)}")
-
+        headers = {"Content-Type": "application/json"}
         response = session.post(API_URL, headers=headers, json=data_payload)
 
         # Log the response
@@ -81,14 +81,12 @@ def send_api_request(dataframe):
         if response.status_code == 200:
             response_data = response.json()
             logging.info(f"Response received: {response_data}")
-            if response_data.get("success") == True:
+            if response_data.get("success"):
                 logging.info("Report generated successfully.")
             else:
                 logging.warning(f"Unexpected response: {response_data}")
         else:
-            logging.error(
-                f"Failed with status code {response.status_code}: {response.text}"
-            )
+            logging.error(f"Failed with status code {response.status_code}: {response.text}")
 
     except requests.exceptions.RequestException as e:
         logging.error(f"Error during API call: {e}")
@@ -98,12 +96,8 @@ def send_api_request(dataframe):
 # Main execution
 if __name__ == "__main__":
     try:
-        # Add missing imports
-        import datetime
-        
-        # Check if the 'dataframe_2' is defined in the Hex environment
+        # The dataframe_2 from SQL query will be available in Hex
         print(dataframe_2)
-        data = dataframe_2
-        send_api_request(data)
+        send_api_request(dataframe_2)
     except Exception as e:
         logging.error(f"Error: {e}")

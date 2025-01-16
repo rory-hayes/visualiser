@@ -2,6 +2,7 @@ import { OpenAI } from 'openai';
 import { processWorkspaceData } from '../utils/dataProcessing.js';
 
 const HEX_API_KEY = '4fe1113357488bccca1d029756edd4f6c361be53f08201a733173e2e478e012a436eb9adfb73e93dc2aa179c241b81df';
+const API_URL = "https://visualiser-xhjh.onrender.com/api/hex-results";
 
 export class AIInsightsService {
     constructor() {

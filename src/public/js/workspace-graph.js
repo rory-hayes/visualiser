@@ -159,4 +159,4 @@ function processWorkspaceData(data) {
     });
 
     return { nodes, links };
-} 
+}

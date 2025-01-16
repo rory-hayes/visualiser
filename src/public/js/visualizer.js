@@ -1,7 +1,7 @@
 import { initializeWorkspaceGraph } from './workspace-graph.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const generateReportBtn = document.getElementById('generateReportBtn');
+    const generateReportBtn = document.getElementById('generateReport');
     const reportResults = document.getElementById('reportResults');
     const loadingSpinner = document.getElementById('loadingSpinner');
     const statsCards = document.getElementById('statsCards');

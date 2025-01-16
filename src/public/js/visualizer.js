@@ -1,10 +1,10 @@
 import { initializeWorkspaceGraph } from './workspace-graph.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const generateReportBtn = document.getElementById('generateReport');
-    const loadingSpinner = document.getElementById('loadingSpinner');
+    const generateReportBtn = document.getElementById('generateReportBtn');
     const reportResults = document.getElementById('reportResults');
-    const visualizationContainer = document.getElementById('visualization');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const statsCards = document.getElementById('statsCards');
 
     async function handleGenerateReport() {
         try {
@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
+            // Start the Hex run
             const response = await fetch('/api/generate-report', {
                 method: 'POST',
                 headers: {
@@ -56,14 +57,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || 'Failed to generate report');
             }
 
-            // Start polling for results
-            const runId = data.runId;
-            pollForResults(runId);
+            // Start listening for results
+            listenForResults();
 
             reportResults.innerHTML = `
                 <div class="text-green-600 font-medium">
                     Report generation started for ${spaceIds.length} space${spaceIds.length > 1 ? 's' : ''}
-                    <div class="mt-2">Run ID: ${runId}</div>
+                    <div class="mt-2">Run ID: ${data.runId}</div>
                     <div class="mt-2">Waiting for results...</div>
                 </div>
             `;
@@ -82,106 +82,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function pollForResults(runId) {
-        const maxAttempts = 30; // 5 minutes maximum (10 second intervals)
-        let attempts = 0;
-
-        const poll = async () => {
-            try {
-                const resultsResponse = await fetch('/api/hex-results');
-                if (!resultsResponse.ok) {
-                    if (resultsResponse.status === 404) {
-                        // Results not ready yet
-                        if (attempts++ < maxAttempts) {
-                            reportResults.innerHTML = `
-                                <div class="text-gray-600">
-                                    <div>Waiting for results... (Attempt ${attempts}/${maxAttempts})</div>
-                                </div>
-                            `;
-                            setTimeout(poll, 10000);
-                            return;
-                        }
-                        throw new Error('Timeout waiting for results. Please try again.');
-                    }
-                    throw new Error(`Failed to fetch results: ${resultsResponse.statusText}`);
-                }
-
-                const data = await resultsResponse.json();
-                if (data.success) {
-                    displayResults(data);
-                    showNotification('Results received successfully', 'success');
-                    return;
-                }
-            } catch (error) {
-                console.error('Error polling for results:', error);
-                reportResults.innerHTML = `
-                    <div class="text-red-600 font-medium">
-                        <div>Error: ${error.message}</div>
-                    </div>
-                `;
+    function listenForResults() {
+        const eventSource = new EventSource('/api/hex-results/stream');
+        
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.success) {
+                displayResults(data);
+                showNotification('Results received successfully', 'success');
+                eventSource.close();
             }
         };
 
-        // Start polling
-        await poll();
-    }
-
-    function showNotification(message, type = 'success') {
-        const notificationDiv = document.createElement('div');
-        notificationDiv.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg ${
-            type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-        }`;
-        notificationDiv.textContent = message;
-
-        document.body.appendChild(notificationDiv);
-
-        // Remove notification after 3 seconds
-        setTimeout(() => {
-            notificationDiv.remove();
-        }, 3000);
+        eventSource.onerror = (error) => {
+            console.error('EventSource failed:', error);
+            eventSource.close();
+            reportResults.innerHTML = `
+                <div class="text-red-600 font-medium">
+                    <div>Error: Failed to receive results. Please try again.</div>
+                </div>
+            `;
+        };
     }
 
     function displayResults(data) {
         try {
             // Show stats cards section
-            const statsCards = document.getElementById('statsCards');
             statsCards.classList.remove('hidden');
 
             // Update stats cards with the data
             if (data.data && data.data.length > 0) {
                 const stats = data.data[0]; // Get the first row which contains all stats
 
-                // Overview
-                document.getElementById('totalBlocks').textContent = stats.total_blocks.toLocaleString();
-                document.getElementById('totalPages').textContent = stats.total_pages.toLocaleString();
-                document.getElementById('uniqueBlockTypes').textContent = stats.unique_block_types.toLocaleString();
-
-                // Depth Analysis
-                document.getElementById('maxDepth').textContent = stats.max_depth.toLocaleString();
-                document.getElementById('avgDepth').textContent = Number(stats.avg_depth).toFixed(1);
-                document.getElementById('medianDepth').textContent = Number(stats.median_depth).toFixed(1);
-                document.getElementById('maxPageDepth').textContent = stats.max_page_depth.toLocaleString();
-
-                // Block Types
-                document.getElementById('pageCount').textContent = stats.page_count.toLocaleString();
-                document.getElementById('textBlockCount').textContent = stats.text_block_count.toLocaleString();
-                document.getElementById('todoCount').textContent = stats.todo_count.toLocaleString();
-                document.getElementById('headerCount').textContent = stats.header_count.toLocaleString();
-                document.getElementById('calloutCount').textContent = stats.callout_count.toLocaleString();
-                document.getElementById('toggleCount').textContent = stats.toggle_count.toLocaleString();
-
-                // Structure Analysis
-                document.getElementById('orphanedBlocks').textContent = stats.orphaned_blocks.toLocaleString();
-                document.getElementById('leafBlocks').textContent = stats.leaf_blocks.toLocaleString();
+                // Display the raw JSON data
+                reportResults.innerHTML = `
+                    <div class="bg-white rounded-lg p-4 shadow-sm">
+                        <h3 class="text-lg font-semibold mb-2">Raw Results</h3>
+                        <pre class="text-sm bg-gray-50 p-4 rounded overflow-auto max-h-[500px]">${JSON.stringify(data, null, 2)}</pre>
+                    </div>
+                `;
             }
-
-            // Display the raw JSON data
-            reportResults.innerHTML = `
-                <div class="bg-white rounded-lg p-4 shadow-sm">
-                    <h3 class="text-lg font-semibold mb-2">Raw Results</h3>
-                    <pre class="text-sm bg-gray-50 p-4 rounded overflow-auto max-h-[500px]">${JSON.stringify(data, null, 2)}</pre>
-                </div>
-            `;
         } catch (error) {
             console.error('Error displaying results:', error);
             reportResults.innerHTML = `
@@ -192,8 +132,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Add click event listener to the Generate Report button
+    // Event Listeners
     if (generateReportBtn) {
         generateReportBtn.addEventListener('click', handleGenerateReport);
+    }
+
+    function showNotification(message, type = 'info') {
+        // Implementation of showNotification...
     }
 }); 

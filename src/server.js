@@ -414,12 +414,57 @@ app.post('/api/hex-results', async (req, res) => {
             storedTimestamp: hexResultsStore.get('latest')?.timestamp,
             storedMetadata: hexResultsStore.get('latest')?.metadata
         });
+
+        // Notify all connected clients
+        if (connectedClients.size > 0) {
+            const eventData = JSON.stringify({
+                success: true,
+                data: results.data
+            });
+            connectedClients.forEach(client => {
+                client.write(`data: ${eventData}\n\n`);
+            });
+        }
         
         res.json({ success: true });
     } catch (error) {
         console.error('Error processing Hex results:', error);
         res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// Store connected SSE clients
+const connectedClients = new Set();
+
+// Add SSE endpoint for streaming results
+app.get('/api/hex-results/stream', (req, res) => {
+    // Set headers for SSE
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    // Send an initial message
+    res.write('data: {"type":"connected"}\n\n');
+
+    // Add this client to our connected clients
+    connectedClients.add(res);
+
+    // Check if we already have results
+    const results = hexResultsStore.get('latest');
+    if (results) {
+        const eventData = JSON.stringify({
+            success: true,
+            data: results.data
+        });
+        res.write(`data: ${eventData}\n\n`);
+    }
+
+    // Remove client on connection close
+    req.on('close', () => {
+        connectedClients.delete(res);
+    });
 });
 
 // Add an endpoint to fetch results

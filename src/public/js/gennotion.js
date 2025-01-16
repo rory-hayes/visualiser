@@ -1,5 +1,5 @@
 // Constants
-const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918'; // Replace with your Hex project ID
+const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
 const HEX_API_URL = 'https://app.hex.tech/api/v1';
 
 // DOM Elements

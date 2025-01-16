@@ -405,12 +405,17 @@ app.get('/gennotion', (req, res) => {
 });
 
 // Add Hex API integration
-const HEX_API_TOKEN = process.env.HEX_API_TOKEN;
-const HEX_PROJECT_ID = process.env.HEX_PROJECT_ID;
+const HEX_API_TOKEN = '5b97b8d1945b14acc5c2faed5e314310438e038640df2ff475d357993d0217826b3db99144ebf236d189778cda42898e'; // Hardcoded for now
+const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918'; // Hardcoded for now
 
 app.post('/api/generate-report', async (req, res) => {
     try {
         const { _input_text } = req.body;
+        
+        console.log('Received generate-report request:', {
+            workspaceId: _input_text,
+            projectId: HEX_PROJECT_ID
+        });
         
         if (!_input_text) {
             return res.status(400).json({ 
@@ -419,16 +424,16 @@ app.post('/api/generate-report', async (req, res) => {
             });
         }
 
-        if (!HEX_API_TOKEN || !HEX_PROJECT_ID) {
-            return res.status(500).json({ 
-                success: false, 
-                error: 'Hex API configuration is missing' 
-            });
-        }
+        const hexUrl = `https://app.hex.tech/api/v1/project/${HEX_PROJECT_ID}/run`;
+        console.log('Calling Hex API:', {
+            url: hexUrl,
+            projectId: HEX_PROJECT_ID,
+            inputText: _input_text
+        });
 
         // Call Hex API to run the project
         const hexResponse = await axios.post(
-            `https://app.hex.tech/api/v1/project/${HEX_PROJECT_ID}/run`,
+            hexUrl,
             {
                 parameters: {
                     _input_text
@@ -444,7 +449,8 @@ app.post('/api/generate-report', async (req, res) => {
 
         console.log('Hex API response:', {
             status: hexResponse.status,
-            data: hexResponse.data
+            data: hexResponse.data,
+            runId: hexResponse.data?.run_id
         });
 
         res.json({
@@ -454,10 +460,16 @@ app.post('/api/generate-report', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error in generate-report endpoint:', error);
-        res.status(500).json({ 
+        console.error('Error in generate-report endpoint:', {
+            error: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+        
+        const errorMessage = error.response?.data?.error || error.message || 'Internal server error';
+        res.status(error.response?.status || 500).json({ 
             success: false, 
-            error: error.message || 'Internal server error' 
+            error: errorMessage
         });
     }
 });

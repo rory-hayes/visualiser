@@ -286,7 +286,7 @@ function transformDataForGraph(data) {
     try {
         console.log('Transforming data for graph:', { dataLength: data.length });
         
-        // Create nodes
+        // Create nodes with more information
         const nodes = data.map(item => {
             try {
                 return {
@@ -295,7 +295,11 @@ function transformDataForGraph(data) {
                     depth: item.DEPTH,
                     pageDepth: item.PAGE_DEPTH,
                     ancestors: JSON.parse(item.ANCESTORS || '[]'),
-                    parentId: item.PARENT_ID
+                    parentId: item.PARENT_ID,
+                    spaceId: item.SPACE_ID,
+                    text: item.TEXT,
+                    // Store the original data for tooltip
+                    originalData: item
                 };
             } catch (e) {
                 console.error('Error transforming node:', { item, error: e });
@@ -419,19 +423,70 @@ function initializeGraph(data) {
             .attr('stroke-width', 1.5)
             .call(drag(simulation));
 
-        // Add tooltips
+        // Add tooltips with enhanced information
         const tooltip = d3.select('#graph-tooltip');
         
         node.on('mouseover', (event, d) => {
+            const parentNode = nodes.find(n => n.id === d.parentId);
+            const childCount = links.filter(l => l.source.id === d.id).length;
+            
+            // Calculate position relative to viewport
+            const rect = event.target.getBoundingClientRect();
+            const tooltipX = rect.x + rect.width + 10;
+            const tooltipY = rect.y;
+            
             tooltip
                 .style('display', 'block')
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 10) + 'px')
+                .style('left', `${tooltipX}px`)
+                .style('top', `${tooltipY}px`)
                 .html(`
-                    <div class="font-semibold">${d.type}</div>
-                    <div>Depth: ${d.depth}</div>
-                    <div>Page Depth: ${d.pageDepth}</div>
+                    <div class="p-2">
+                        <div class="font-bold text-gray-900 mb-1">${d.type}</div>
+                        <div class="text-sm space-y-1">
+                            <div class="flex items-center">
+                                <span class="text-gray-500">ID:</span>
+                                <span class="ml-2 font-mono text-xs">${d.id.slice(0, 8)}...</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Depth:</span>
+                                <span class="ml-2">${d.depth}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Page Depth:</span>
+                                <span class="ml-2">${d.pageDepth}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Children:</span>
+                                <span class="ml-2">${childCount}</span>
+                            </div>
+                            ${parentNode ? `
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Parent Type:</span>
+                                <span class="ml-2">${parentNode.type}</span>
+                            </div>
+                            ` : ''}
+                            ${d.text ? `
+                            <div class="mt-2 pt-2 border-t border-gray-200">
+                                <div class="text-gray-500">Content:</div>
+                                <div class="text-xs mt-1">${d.text}</div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
                 `);
+
+            // Adjust tooltip position if it goes off screen
+            const tooltipNode = tooltip.node();
+            const tooltipRect = tooltipNode.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            if (tooltipRect.right > viewportWidth) {
+                tooltip.style('left', `${rect.x - tooltipRect.width - 10}px`);
+            }
+            if (tooltipRect.bottom > viewportHeight) {
+                tooltip.style('top', `${rect.y + rect.height - tooltipRect.height}px`);
+            }
         })
         .on('mouseout', () => {
             tooltip.style('display', 'none');

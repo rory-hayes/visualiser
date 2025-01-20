@@ -198,8 +198,11 @@ function displayResults(data) {
             }
         }
 
-        if (!Array.isArray(graphData)) {
-            throw new Error('graphData is not an array');
+        // Validate graphData
+        if (!Array.isArray(graphData) || graphData.length === 0) {
+            console.error('Invalid or empty graphData:', graphData);
+            showStatus('Error: Invalid graph data received', false);
+            return;
         }
 
         // Store the extracted data for later use
@@ -209,6 +212,12 @@ function displayResults(data) {
             keyInsightsData
         };
 
+        // Clear any existing graph
+        const container = document.getElementById('graph-container');
+        if (container) {
+            container.innerHTML = '';
+        }
+
         resultsContent.innerHTML = formatResults(graphData, insightsData, keyInsightsData);
         
         // Wait for next frame to ensure container is rendered
@@ -217,28 +226,29 @@ function displayResults(data) {
                 // Scroll results into view
                 resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 
-                // Wait for scroll and any animations to complete
+                // Initialize graph with delay to ensure DOM is ready
                 setTimeout(() => {
                     try {
-                        initializeGraph(graphData); // Pass graphData instead of full data object
+                        if (!window._graphInitialized) {
+                            initializeGraph(graphData);
+                            window._graphInitialized = true;
+                        }
                         
                         // Force a resize event to ensure proper dimensions
                         window.dispatchEvent(new Event('resize'));
                     } catch (graphError) {
                         console.error('Error initializing graph:', graphError);
-                        throw graphError;
+                        showStatus('Error initializing graph visualization', false);
                     }
                 }, 500);
             } catch (scrollError) {
                 console.error('Error in scroll/animation handling:', scrollError);
-                throw scrollError;
             }
         });
     } catch (error) {
         console.error('Error in displayResults:', error);
         console.error('Data that caused error:', JSON.stringify(data, null, 2));
         showStatus('Error displaying results: ' + error.message, false);
-        throw error;
     }
 }
 
@@ -435,11 +445,24 @@ function debounce(func, wait) {
 // Transform data for D3
 function transformDataForGraph(data) {
     try {
-        console.log('Transforming data for graph:', { dataLength: data.length });
+        if (!Array.isArray(data) || data.length === 0) {
+            console.error('Invalid input data for graph transformation:', data);
+            return { nodes: [], links: [] };
+        }
+
+        console.log('Transforming data for graph:', { 
+            dataLength: data.length,
+            sampleData: data[0]
+        });
         
         // Create nodes with more information and proper date parsing
         const nodes = data.map(item => {
             try {
+                if (!item || typeof item !== 'object') {
+                    console.warn('Invalid item in data:', item);
+                    return null;
+                }
+
                 // Convert Unix epoch milliseconds to Date object with validation
                 let createdTime = null;
                 if (item.CREATED_TIME) {
@@ -500,7 +523,9 @@ function transformDataForGraph(data) {
         console.log('Transformed data:', {
             nodeCount: nodes.length,
             linkCount: links.length,
-            weekRange: getWeekRange(nodes)
+            weekRange: getWeekRange(nodes),
+            sampleNode: nodes[0],
+            sampleLink: links[0]
         });
 
         return { nodes, links };
@@ -550,13 +575,27 @@ function updateTimelinePosition(progress, nodes, links, weekRange) {
     const currentYear = weekRange.start.year + Math.floor(currentWeek / 52);
     const weekInYear = weekRange.start.week + (currentWeek % 52);
 
-    // Update tooltip with week information
-    const tooltipDate = new Date(currentYear, 0, 1 + (weekInYear - 1) * 7);
-    timelineTooltip.textContent = tooltipDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
+    // Update timeline UI
+    const timelineHandle = document.getElementById('timelineHandle');
+    const timelineProgress = document.getElementById('timelineProgress');
+    const timelineTooltip = document.getElementById('timelineTooltip');
+
+    if (timelineHandle && timelineProgress && timelineTooltip) {
+        timelineHandle.style.left = `${progress}%`;
+        timelineProgress.style.width = `${progress}%`;
+
+        // Update tooltip with week information
+        const tooltipDate = new Date(currentYear, 0, 1 + (weekInYear - 1) * 7);
+        timelineTooltip.textContent = tooltipDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    }
+
+    // Get the node and link elements from the current graph state
+    const node = d3.selectAll('.node');
+    const link = d3.selectAll('.link');
 
     // Update node visibility with transition
     node.transition()
@@ -573,7 +612,7 @@ function updateTimelinePosition(progress, nodes, links, weekRange) {
             const nodeYear = d.createdTime.getFullYear();
             const isVisible = nodeYear < currentYear || 
                             (nodeYear === currentYear && d.week <= weekInYear);
-            return isVisible ? Math.max(10, 8 + d.depth * 2) : 0;
+            return isVisible ? Math.max(12, 10 + d.depth * 3) : 0;
         });
 
     // Update link visibility
@@ -597,27 +636,128 @@ function isNodeVisible(node, currentYear, weekInYear) {
     return nodeYear < currentYear || (nodeYear === currentYear && node.week <= weekInYear);
 }
 
-function updateProgress() {
-    if (!isPlaying) return;
-    
-    currentProgress += 0.005; // Slower progression
-    if (currentProgress > 100) {
-        currentProgress = 0;
-        isPlaying = false;
-        playButton.innerHTML = `
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-        `;
-        return;
+function initializeTimeline(nodes, links, weekRange) {
+    if (!weekRange) return;
+
+    const formatDate = date => {
+        return date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    };
+
+    const timelineSlider = document.getElementById('timelineSlider');
+    const timelineHandle = document.getElementById('timelineHandle');
+    const timelineTooltip = document.getElementById('timelineTooltip');
+    const timelineProgress = document.getElementById('timelineProgress');
+    const timelineStart = document.getElementById('timelineStart');
+    const timelineEnd = document.getElementById('timelineEnd');
+
+    // Calculate start and end dates
+    const startDate = new Date(weekRange.start.year, 0, 1 + (weekRange.start.week - 1) * 7);
+    const endDate = new Date(weekRange.end.year, 0, 1 + (weekRange.end.week - 1) * 7);
+
+    // Set initial dates
+    timelineStart.textContent = formatDate(startDate);
+    timelineEnd.textContent = formatDate(endDate);
+
+    let isDragging = false;
+    let isPlaying = false;
+    let currentProgress = 0;
+
+    function handleDrag(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const rect = timelineSlider.getBoundingClientRect();
+        const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+        updateTimelinePosition(progress, nodes, links, weekRange);
+        currentProgress = progress;
     }
-    
-    // Add delay between updates
-    setTimeout(() => {
-        updateTimelinePosition(currentProgress, nodes, links, weekRange);
-        requestAnimationFrame(updateProgress);
-    }, 100); // 100ms delay between updates
+
+    function startDragging(e) {
+        isDragging = true;
+        handleDrag(e);
+        e.stopPropagation();
+    }
+
+    function stopDragging() {
+        isDragging = false;
+    }
+
+    // Add click handler for direct clicking on the slider
+    timelineSlider.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const rect = timelineSlider.getBoundingClientRect();
+        const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+        updateTimelinePosition(progress, nodes, links, weekRange);
+        currentProgress = progress;
+    });
+
+    // Mouse events
+    timelineSlider.addEventListener('mousedown', startDragging);
+    document.addEventListener('mousemove', handleDrag);
+    document.addEventListener('mouseup', stopDragging);
+
+    // Add play button
+    const playButton = document.createElement('button');
+    playButton.className = 'graph-control-button ml-2';
+    playButton.innerHTML = `
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    `;
+    timelineSlider.parentNode.insertBefore(playButton, timelineSlider);
+
+    function updateProgress() {
+        if (!isPlaying) return;
+        
+        currentProgress += 0.005; // Very slow progression
+        if (currentProgress > 100) {
+            currentProgress = 0;
+            isPlaying = false;
+            playButton.innerHTML = `
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            `;
+            return;
+        }
+        
+        // Add delay between updates
+        setTimeout(() => {
+            updateTimelinePosition(currentProgress, nodes, links, weekRange);
+            requestAnimationFrame(() => updateProgress());
+        }, 200); // 200ms delay between updates for smoother animation
+    }
+
+    playButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isPlaying) {
+            isPlaying = false;
+            playButton.innerHTML = `
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            `;
+        } else {
+            isPlaying = true;
+            playButton.innerHTML = `
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            `;
+            requestAnimationFrame(updateProgress);
+        }
+    });
+
+    // Initialize timeline at the start
+    updateTimelinePosition(0, nodes, links, weekRange);
 }
 
 // Color scale for different types

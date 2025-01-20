@@ -770,38 +770,7 @@ function initializeGraph(graphData) {
         
         // Get container and clear any existing content
         const container = document.getElementById('graph-container');
-        container.innerHTML = `
-            <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
-                <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                </button>
-                <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                    </svg>
-                </button>
-                <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                </button>
-            </div>
-            <div id="graph-tooltip" class="hidden absolute z-20 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 max-w-xs text-sm"></div>
-            <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
-                <div class="flex justify-between mb-2">
-                    <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
-                    <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
-                </div>
-                <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
-                    <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
-                    <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
-                        <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
-                    </div>
-                </div>
-            </div>
-        `;
+        container.innerHTML = '';
 
         const width = container.clientWidth;
         const height = container.clientHeight;
@@ -866,7 +835,7 @@ function initializeGraph(graphData) {
             .data(nodes)
             .join('circle')
             .attr('class', 'node')
-            .attr('r', d => Math.max(6, 15 - d.depth * 1.5))
+            .attr('r', d => Math.max(12, 15 - d.depth * 1.5))
             .attr('fill', d => colorScale(d.type))
             .attr('stroke', '#fff')
             .attr('stroke-width', 1.5)
@@ -893,33 +862,36 @@ function initializeGraph(graphData) {
             tooltip
                 .style('display', 'block')
                 .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY + 10) + 'px')
+                .style('top', (event.pageY - 10) + 'px')
                 .html(`
-                    <div class="space-y-1">
-                        <div class="font-bold text-gray-900">${d.type}</div>
-                        <div class="text-sm">
-                            <div class="flex items-center">
+                    <div class="space-y-2">
+                        <div class="font-bold text-gray-900 flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full" style="background: ${colorScale(d.type)}"></span>
+                            ${d.type}
+                        </div>
+                        <div class="text-sm space-y-1">
+                            <div class="flex items-center justify-between">
                                 <span class="text-gray-500">Created:</span>
-                                <span class="ml-2">${d.createdTime ? d.createdTime.toLocaleDateString() : 'Unknown'}</span>
+                                <span class="ml-2 font-medium">${d.createdTime ? d.createdTime.toLocaleDateString() : 'Unknown'}</span>
                             </div>
-                            <div class="flex items-center">
+                            <div class="flex items-center justify-between">
                                 <span class="text-gray-500">Depth:</span>
-                                <span class="ml-2">${d.depth}</span>
+                                <span class="ml-2 font-medium">${d.depth}</span>
                             </div>
-                            <div class="flex items-center">
+                            <div class="flex items-center justify-between">
                                 <span class="text-gray-500">Children:</span>
-                                <span class="ml-2">${childCount}</span>
+                                <span class="ml-2 font-medium">${childCount}</span>
                             </div>
                             ${parentNode ? `
-                            <div class="flex items-center">
+                            <div class="flex items-center justify-between">
                                 <span class="text-gray-500">Parent:</span>
-                                <span class="ml-2">${parentNode.type}</span>
+                                <span class="ml-2 font-medium">${parentNode.type}</span>
                             </div>
                             ` : ''}
                             ${d.text ? `
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Text:</span>
-                                <span class="ml-2">${d.text.substring(0, 50)}${d.text.length > 50 ? '...' : ''}</span>
+                            <div class="mt-2 pt-2 border-t border-gray-200">
+                                <span class="text-gray-500 block mb-1">Content:</span>
+                                <span class="text-gray-700">${d.text.substring(0, 100)}${d.text.length > 100 ? '...' : ''}</span>
                             </div>
                             ` : ''}
                         </div>
@@ -928,9 +900,24 @@ function initializeGraph(graphData) {
         })
         .on('mouseout', () => tooltip.style('display', 'none'))
         .on('mousemove', (event) => {
+            const tooltipWidth = tooltip.node().offsetWidth;
+            const tooltipHeight = tooltip.node().offsetHeight;
+            const containerRect = container.getBoundingClientRect();
+            
+            let left = event.pageX + 10;
+            let top = event.pageY - 10;
+            
+            // Adjust position if tooltip would go outside container
+            if (left + tooltipWidth > containerRect.right) {
+                left = event.pageX - tooltipWidth - 10;
+            }
+            if (top + tooltipHeight > containerRect.bottom) {
+                top = event.pageY - tooltipHeight - 10;
+            }
+            
             tooltip
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY + 10) + 'px');
+                .style('left', left + 'px')
+                .style('top', top + 'px');
         });
 
         // Update positions on tick
@@ -950,6 +937,50 @@ function initializeGraph(graphData) {
                 .attr('y', d => d.y);
         });
 
+        // Add timeline controls
+        const timelineContainer = document.createElement('div');
+        timelineContainer.className = 'timeline-container';
+        timelineContainer.innerHTML = `
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
+                <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
+            </div>
+            <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
+                <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
+                <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
+                    <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
+                </div>
+            </div>
+        `;
+        container.appendChild(timelineContainer);
+
+        // Initialize timeline if we have date information
+        if (weekRange) {
+            initializeTimeline(nodes, links, weekRange);
+        }
+
+        // Add zoom controls
+        const controlsContainer = document.createElement('div');
+        controlsContainer.className = 'graph-controls';
+        controlsContainer.innerHTML = `
+            <button class="graph-control-button" id="zoomIn" title="Zoom In">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+            </button>
+            <button class="graph-control-button" id="zoomOut" title="Zoom Out">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                </svg>
+            </button>
+            <button class="graph-control-button" id="resetZoom" title="Reset View">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </button>
+        `;
+        container.appendChild(controlsContainer);
+
         // Initialize zoom controls
         d3.select('#zoomIn').on('click', () => zoom.scaleBy(svg.transition().duration(300), 1.5));
         d3.select('#zoomOut').on('click', () => zoom.scaleBy(svg.transition().duration(300), 0.75));
@@ -965,11 +996,6 @@ function initializeGraph(graphData) {
                 .duration(300)
                 .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
         });
-
-        // Initialize timeline if we have date information
-        if (weekRange) {
-            initializeTimeline(nodes, links, weekRange);
-        }
 
         // Store graph state for timeline updates
         window._graphState = { nodes, links, node, link, label };

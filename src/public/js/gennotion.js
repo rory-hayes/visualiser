@@ -520,12 +520,13 @@ function initializeGraph(graphData) {
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
                 .distance(100))
-            .force('charge', d3.forceManyBody()
-                .strength(-500))
+            .force('charge', d3.forceManyBody().strength(-300))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30))
-            .force('x', d3.forceX(width / 2).strength(0.1))
-            .force('y', d3.forceY(height / 2).strength(0.1));
+            .force('collision', d3.forceCollide().radius(40))
+            .force('x', d3.forceX(width / 2).strength(0.05))
+            .force('y', d3.forceY(height / 2).strength(0.05))
+            .alphaDecay(0.02)
+            .velocityDecay(0.4);
 
         // Create arrow marker for links
         svg.append('defs').selectAll('marker')
@@ -589,6 +590,10 @@ function initializeGraph(graphData) {
 
         // Node hover effects
         node.on('mouseover', (event, d) => {
+            // Stop node movement during hover
+            d.fx = d.x;
+            d.fy = d.y;
+
             // Highlight connected nodes and links
             const connectedNodes = new Set();
             links.forEach(l => {
@@ -601,45 +606,61 @@ function initializeGraph(graphData) {
                 l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
             );
 
+            // Calculate tooltip position relative to container
+            const containerRect = container.getBoundingClientRect();
+            const tooltipX = event.pageX - containerRect.left;
+            const tooltipY = event.pageY - containerRect.top;
+
             // Show tooltip
-            tooltip.transition()
-                .duration(200)
-                .style('opacity', 1);
-            tooltip.html(`
-                <div class="bg-white p-3 rounded shadow-lg">
-                    <div class="font-bold text-gray-900 flex items-center gap-2">
-                        <span class="w-3 h-3 rounded-full" style="background: ${colorScale(d.type)}"></span>
-                        ${d.name}
+            tooltip
+                .style('display', 'block')
+                .style('left', `${tooltipX + 10}px`)
+                .style('top', `${tooltipY - 10}px`)
+                .html(`
+                    <div class="bg-white p-3 rounded shadow-lg">
+                        <div class="font-bold text-gray-900 flex items-center gap-2">
+                            <span class="w-3 h-3 rounded-full" style="background: ${colorScale(d.type)}"></span>
+                            ${d.name}
+                        </div>
+                        <div class="mt-2 space-y-1 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Type:</span>
+                                <span class="font-medium">${d.type}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Created:</span>
+                                <span class="font-medium">${d.createdTime?.toLocaleDateString() || 'Unknown'}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Depth:</span>
+                                <span class="font-medium">${d.depth}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-500">Connections:</span>
+                                <span class="font-medium">${connectedNodes.size}</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="mt-2 space-y-1 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">Type:</span>
-                            <span class="font-medium">${d.type}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">Created:</span>
-                            <span class="font-medium">${d.createdTime?.toLocaleDateString() || 'Unknown'}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">Depth:</span>
-                            <span class="font-medium">${d.depth}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-gray-500">Connections:</span>
-                            <span class="font-medium">${connectedNodes.size}</span>
-                        </div>
-                    </div>
-                </div>
-            `)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 10) + 'px');
+                `);
         })
-        .on('mouseout', () => {
+        .on('mouseout', (event, d) => {
+            // Release node position when not hovering
+            d.fx = null;
+            d.fy = null;
+
             node.style('opacity', 1);
             link.style('opacity', 0.6);
-            tooltip.transition()
-                .duration(500)
-                .style('opacity', 0);
+            tooltip.style('display', 'none');
+        })
+        .on('mousemove', (event) => {
+            // Update tooltip position on mouse move
+            const containerRect = container.getBoundingClientRect();
+            const tooltipX = event.pageX - containerRect.left;
+            const tooltipY = event.pageY - containerRect.top;
+            
+            tooltip
+                .style('left', `${tooltipX + 10}px`)
+                .style('top', `${tooltipY - 10}px`);
         });
 
         // Add timeline slider

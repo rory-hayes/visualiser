@@ -307,14 +307,10 @@ function formatResults(graphData, insightsData, keyInsightsData) {
             <div class="mb-8 p-4 bg-emerald-50 rounded-lg">
                 <h3 class="font-semibold text-lg text-emerald-900 mb-3">Key Insights</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    ${keyInsights.map(insight => `
+                    ${Object.entries(keyInsights[0] || {}).map(([key, value]) => `
                         <div class="bg-white p-3 rounded shadow-sm">
-                            ${Object.entries(insight).map(([key, value]) => `
-                                <div class="mb-1">
-                                    <div class="text-sm text-gray-500">${formatKey(key)}</div>
-                                    <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
-                                </div>
-                            `).join('')}
+                            <div class="text-sm text-gray-500">${formatKey(key)}</div>
+                            <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
                         </div>
                     `).join('')}
                 </div>
@@ -789,33 +785,33 @@ function initializeGraph(graphData) {
 
         // Recreate the control elements
         container.innerHTML = `
-            <div class="graph-controls">
-                <button class="graph-control-button" id="zoomIn" title="Zoom In">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
+                <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                     </svg>
                 </button>
-                <button class="graph-control-button" id="zoomOut" title="Zoom Out">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
                     </svg>
                 </button>
-                <button class="graph-control-button" id="resetZoom" title="Reset View">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                     </svg>
                 </button>
             </div>
-            <div id="graph-tooltip" class="hidden"></div>
-            <div class="timeline-container">
+            <div id="graph-tooltip" class="hidden absolute z-20 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 max-w-xs"></div>
+            <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
                 <div class="flex justify-between mb-2">
-                    <span class="text-sm text-gray-500" id="timelineStart"></span>
-                    <span class="text-sm text-gray-500" id="timelineEnd"></span>
+                    <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
+                    <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
                 </div>
-                <div class="timeline-slider" id="timelineSlider">
-                    <div class="timeline-progress" id="timelineProgress"></div>
-                    <div class="timeline-handle" id="timelineHandle">
-                        <div class="timeline-tooltip" id="timelineTooltip"></div>
+                <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
+                    <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
+                    <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
+                        <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
                     </div>
                 </div>
             </div>
@@ -851,23 +847,24 @@ function initializeGraph(graphData) {
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(d => 100 + (d.source.depth + d.target.depth) * 20) // Dynamic distance based on depth
-                .strength(0.5))
+                .distance(200) // Increased base distance
+                .strength(0.2)) // Reduced strength for more stability
             .force('charge', d3.forceManyBody()
-                .strength(d => -2000 - d.depth * 500) // Stronger repulsion for deeper nodes
-                .distanceMax(1000))
+                .strength(-800) // Reduced repulsion
+                .distanceMax(2000)
+                .theta(0.5))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(d => 20 + d.depth * 5)) // Dynamic collision radius
-            .force('x', d3.forceX(width / 2).strength(0.1))
-            .force('y', d3.forceY(height / 2).strength(0.1))
-            .alphaDecay(0.002) // Much slower cooling
-            .velocityDecay(0.3);
+            .force('collision', d3.forceCollide().radius(30)) // Fixed collision radius
+            .force('x', d3.forceX(width / 2).strength(0.05))
+            .force('y', d3.forceY(height / 2).strength(0.05))
+            .alphaDecay(0.01) // Slower cooling
+            .velocityDecay(0.4); // More friction
 
         // Create arrow marker for links with improved size
         svg.append('defs').append('marker')
             .attr('id', 'arrowhead')
             .attr('viewBox', '-5 -5 10 10')
-            .attr('refX', 25) // Adjusted to account for larger nodes
+            .attr('refX', 25)
             .attr('refY', 0)
             .attr('markerWidth', 8)
             .attr('markerHeight', 8)
@@ -884,8 +881,8 @@ function initializeGraph(graphData) {
             .join('line')
             .attr('class', 'link')
             .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.8)
-            .attr('stroke-width', 2)
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 1.5)
             .attr('marker-end', 'url(#arrowhead)');
 
         // Create nodes with improved sizing
@@ -895,54 +892,80 @@ function initializeGraph(graphData) {
             .data(nodes)
             .join('circle')
             .attr('class', 'node')
-            .attr('r', d => Math.max(12, 10 + d.depth * 3)) // Larger base size
+            .attr('r', d => Math.max(8, 6 + d.depth * 2))
             .attr('fill', d => colorScale(d.type))
             .attr('stroke', '#fff')
-            .attr('stroke-width', 2)
+            .attr('stroke-width', 1.5)
             .call(drag(simulation));
 
-        // Initialize timeline if we have date information
-        if (weekRange) {
-            initializeTimeline(nodes, links, weekRange);
-        }
+        // Add tooltips
+        const tooltip = d3.select('#graph-tooltip');
+        
+        node.on('mouseover', (event, d) => {
+            const parentNode = nodes.find(n => n.id === d.parentId);
+            const childCount = links.filter(l => l.source.id === d.id).length;
+            
+            const rect = event.target.getBoundingClientRect();
+            tooltip
+                .style('display', 'block')
+                .style('left', `${rect.x + rect.width + 10}px`)
+                .style('top', `${rect.y}px`)
+                .html(`
+                    <div class="space-y-1">
+                        <div class="font-bold text-gray-900">${d.type}</div>
+                        <div class="text-sm">
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Created:</span>
+                                <span class="ml-2">${d.createdTime ? d.createdTime.toLocaleDateString() : 'Unknown'}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Depth:</span>
+                                <span class="ml-2">${d.depth}</span>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Children:</span>
+                                <span class="ml-2">${childCount}</span>
+                            </div>
+                            ${parentNode ? `
+                            <div class="flex items-center">
+                                <span class="text-gray-500">Parent:</span>
+                                <span class="ml-2">${parentNode.type}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `);
+        })
+        .on('mouseout', () => {
+            tooltip.style('display', 'none');
+        });
 
         // Update positions on each tick with bounds checking
         simulation.on('tick', () => {
             link
-                .attr('x1', d => Math.max(0, Math.min(width, d.source.x)))
-                .attr('y1', d => Math.max(0, Math.min(height, d.source.y)))
-                .attr('x2', d => Math.max(0, Math.min(width, d.target.x)))
-                .attr('y2', d => Math.max(0, Math.min(height, d.target.y)));
+                .attr('x1', d => Math.max(20, Math.min(width - 20, d.source.x)))
+                .attr('y1', d => Math.max(20, Math.min(height - 20, d.source.y)))
+                .attr('x2', d => Math.max(20, Math.min(width - 20, d.target.x)))
+                .attr('y2', d => Math.max(20, Math.min(height - 20, d.target.y)));
 
             node
                 .attr('cx', d => Math.max(20, Math.min(width - 20, d.x)))
                 .attr('cy', d => Math.max(20, Math.min(height - 20, d.y)));
         });
 
-        // Heat up the simulation periodically to prevent sticking
-        let ticker = 0;
-        const reheat = setInterval(() => {
-            ticker++;
-            if (ticker > 200) { // Stop after 200 ticks
-                clearInterval(reheat);
-                return;
-            }
-            if (simulation.alpha() < 0.1) {
-                simulation.alpha(0.3).restart();
-            }
-        }, 100);
+        // Add zoom controls
+        d3.select('#zoomIn').on('click', (e) => {
+            e.stopPropagation();
+            zoom.scaleBy(svg.transition().duration(750), 1.2);
+        });
 
-        // Export necessary variables to window for timeline access
-        window._graphState = {
-            nodes,
-            links,
-            weekRange,
-            node,
-            link
-        };
+        d3.select('#zoomOut').on('click', (e) => {
+            e.stopPropagation();
+            zoom.scaleBy(svg.transition().duration(750), 0.8);
+        });
 
-        // Initial zoom fit
-        setTimeout(() => {
+        d3.select('#resetZoom').on('click', (e) => {
+            e.stopPropagation();
             const bounds = g.node().getBBox();
             const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
             const translate = [
@@ -952,6 +975,19 @@ function initializeGraph(graphData) {
             svg.transition()
                 .duration(750)
                 .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
+        });
+
+        // Initialize timeline
+        if (weekRange) {
+            initializeTimeline(nodes, links, weekRange);
+        }
+
+        // Store graph state
+        window._graphState = { nodes, links, weekRange, node, link };
+
+        // Initial zoom fit
+        setTimeout(() => {
+            d3.select('#resetZoom').dispatch('click');
         }, 100);
 
     } catch (error) {

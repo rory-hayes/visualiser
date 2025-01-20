@@ -100,10 +100,10 @@ function listenForResults() {
 
     eventSource.onmessage = (event) => {
         try {
-            const data = JSON.parse(event.data);
+            console.log('Raw event data received:', event.data);
             
-            // Log the event data received from the stream
-            console.log('Received event data:', data);
+            const data = JSON.parse(event.data);
+            console.log('Parsed event data:', data);
             
             if (data.type === 'connected') {
                 console.log('Connected to results stream');
@@ -111,6 +111,17 @@ function listenForResults() {
             }
 
             if (data.success && data.data) {
+                console.log('Processing successful data:', {
+                    success: data.success,
+                    hasData: !!data.data,
+                    dataStructure: {
+                        hasDataframe2: data.data?.data?.dataframe_2 ? 'yes' : 'no',
+                        hasDataframe3: data.data?.data?.dataframe_3 ? 'yes' : 'no',
+                        dataframe2Length: data.data?.data?.dataframe_2?.length,
+                        dataframe3Length: data.data?.data?.dataframe_3?.length
+                    }
+                });
+
                 // Send final results to server for logging
                 fetch('/api/log-data', {
                     method: 'POST',
@@ -121,22 +132,32 @@ function listenForResults() {
                         type: 'final-results',
                         data: data.data
                     })
+                }).catch(error => {
+                    console.error('Error logging final results:', error);
                 });
-                
-                // Log the actual results data
-                console.log('Final results data:', data.data);
                 
                 // Hide spinner and update status
                 showStatus('Results received!', false);
                 
-                // Display results
-                displayResults(data.data);
+                try {
+                    // Display results
+                    displayResults(data.data);
+                } catch (displayError) {
+                    console.error('Error in displayResults:', displayError);
+                    console.error('Data structure that caused error:', JSON.stringify(data.data, null, 2));
+                    showStatus('Error displaying results. Check console for details.', false);
+                }
                 
                 // Close event source
+                eventSource.close();
+            } else {
+                console.warn('Received data without success or data property:', data);
+                showStatus('Received incomplete data. Please try again.', false);
                 eventSource.close();
             }
         } catch (error) {
             console.error('Error processing event data:', error);
+            console.error('Raw event data that caused error:', event.data);
             showStatus('Error processing results. Please try again.', false);
             eventSource.close();
         }
@@ -144,33 +165,85 @@ function listenForResults() {
 
     eventSource.onerror = (error) => {
         console.error('EventSource error:', error);
+        console.error('EventSource readyState:', eventSource.readyState);
         showStatus('Error receiving results. Please try again.', false);
         eventSource.close();
     };
 }
 
 function displayResults(data) {
-    resultsSection.classList.remove('hidden');
-    
-    // Extract the two dataframes
-    const graphData = data.data.dataframe_2;
-    const insightsData = data.data.dataframe_3;
-    
-    resultsContent.innerHTML = formatResults(graphData, insightsData);
-    
-    // Wait for next frame to ensure container is rendered
-    requestAnimationFrame(() => {
-        // Scroll results into view
-        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try {
+        console.log('Starting displayResults with data:', {
+            hasData: !!data,
+            dataType: typeof data,
+            dataStructure: data ? Object.keys(data) : null,
+            rawData: data // Log the raw data to see its structure
+        });
+
+        resultsSection.classList.remove('hidden');
         
-        // Wait for scroll and any animations to complete
-        setTimeout(() => {
-            initializeGraph(graphData);
-            
-            // Force a resize event to ensure proper dimensions
-            window.dispatchEvent(new Event('resize'));
-        }, 500);
-    });
+        // Extract the two dataframes with proper error handling
+        let graphData, insightsData;
+        
+        if (data && typeof data === 'object') {
+            // Try different possible data structures
+            if (data.dataframe_2) {
+                graphData = data.dataframe_2;
+                insightsData = data.dataframe_3;
+            } else if (data.data && data.data.dataframe_2) {
+                graphData = data.data.dataframe_2;
+                insightsData = data.data.dataframe_3;
+            } else {
+                // If we can't find the expected structure, log it and throw an error
+                console.error('Unexpected data structure:', data);
+                throw new Error('Could not find dataframe_2 in the response data');
+            }
+        } else {
+            throw new Error('Invalid data received');
+        }
+        
+        console.log('Extracted dataframes:', {
+            graphDataLength: graphData?.length,
+            insightsDataLength: insightsData?.length,
+            graphDataSample: graphData?.[0],
+            insightsDataSample: insightsData?.[0]
+        });
+
+        if (!Array.isArray(graphData)) {
+            throw new Error('graphData is not an array');
+        }
+
+        resultsContent.innerHTML = formatResults(graphData, insightsData);
+        
+        // Wait for next frame to ensure container is rendered
+        requestAnimationFrame(() => {
+            try {
+                // Scroll results into view
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                
+                // Wait for scroll and any animations to complete
+                setTimeout(() => {
+                    try {
+                        initializeGraph(graphData);
+                        
+                        // Force a resize event to ensure proper dimensions
+                        window.dispatchEvent(new Event('resize'));
+                    } catch (graphError) {
+                        console.error('Error initializing graph:', graphError);
+                        throw graphError;
+                    }
+                }, 500);
+            } catch (scrollError) {
+                console.error('Error in scroll/animation handling:', scrollError);
+                throw scrollError;
+            }
+        });
+    } catch (error) {
+        console.error('Error in displayResults:', error);
+        console.error('Data that caused error:', JSON.stringify(data, null, 2));
+        showStatus('Error displaying results: ' + error.message, false);
+        throw error;
+    }
 }
 
 function formatResults(graphData, insightsData) {

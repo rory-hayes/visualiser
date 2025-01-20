@@ -273,6 +273,9 @@ function formatResults(graphData, insightsData) {
 
     // Format workspace insights from dataframe_3
     const workspaceInsights = insightsData && insightsData.length > 0 ? insightsData[0] : null;
+
+    // Format key insights from dataframe_4
+    const keyInsights = window._lastGraphData?.data?.dataframe_4 || [];
     
     // Create HTML output
     let html = `
@@ -287,6 +290,24 @@ function formatResults(graphData, insightsData) {
                         <div class="bg-white p-3 rounded shadow-sm">
                             <div class="text-sm text-gray-500">${formatKey(key)}</div>
                             <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+
+            ${keyInsights.length > 0 ? `
+            <div class="mb-8 p-4 bg-emerald-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-emerald-900 mb-3">Key Insights</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${keyInsights.map(insight => `
+                        <div class="bg-white p-3 rounded shadow-sm">
+                            ${Object.entries(insight).map(([key, value]) => `
+                                <div class="mb-1">
+                                    <div class="text-sm text-gray-500">${formatKey(key)}</div>
+                                    <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
+                                </div>
+                            `).join('')}
                         </div>
                     `).join('')}
                 </div>
@@ -428,25 +449,19 @@ function transformDataForGraph(data) {
                     const timestamp = Number(item.CREATED_TIME);
                     if (!isNaN(timestamp)) {
                         createdTime = new Date(timestamp);
-                        console.log('Parsed creation time:', {
-                            original: item.CREATED_TIME,
-                            timestamp: timestamp,
-                            date: createdTime
-                        });
                     }
                 }
 
                 return {
                     id: item.ID,
                     type: item.TYPE,
-                    depth: item.DEPTH,
-                    pageDepth: item.PAGE_DEPTH,
-                    ancestors: JSON.parse(item.ANCESTORS || '[]'),
+                    depth: item.DEPTH || 0,
+                    pageDepth: item.PAGE_DEPTH || 0,
+                    ancestors: item.ANCESTORS ? JSON.parse(item.ANCESTORS) : [],
                     parentId: item.PARENT_ID,
                     spaceId: item.SPACE_ID,
                     text: item.TEXT,
                     createdTime: createdTime,
-                    // Store the original data for tooltip
                     originalData: item
                 };
             } catch (e) {
@@ -455,34 +470,16 @@ function transformDataForGraph(data) {
             }
         }).filter(Boolean);
 
-        // Sort nodes by creation time
-        nodes.sort((a, b) => {
-            if (!a.createdTime) return -1;
-            if (!b.createdTime) return 1;
-            return a.createdTime - b.createdTime;
-        });
-
-        // Log node creation times for debugging
-        nodes.forEach(node => {
-            console.log('Node creation time:', {
-                id: node.id,
-                type: node.type,
-                createdTime: node.createdTime
-            });
-        });
-
-        // Create links from ancestors
+        // Create links from parent relationships
         const links = [];
         nodes.forEach(node => {
             if (node.parentId) {
-                // Only create link if both source and target exist
-                const sourceExists = nodes.some(n => n.id === node.parentId);
-                const targetExists = nodes.some(n => n.id === node.id);
-                
-                if (sourceExists && targetExists) {
+                const parentNode = nodes.find(n => n.id === node.parentId);
+                if (parentNode) {
                     links.push({
-                        source: node.parentId,
-                        target: node.id
+                        source: parentNode.id,
+                        target: node.id,
+                        value: 1
                     });
                 }
             }
@@ -580,15 +577,17 @@ function initializeGraph(data) {
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(100)
-                .strength(0.5))
+                .distance(150) // Increased distance between nodes
+                .strength(0.7)) // Increased link strength
             .force('charge', d3.forceManyBody()
-                .strength(-1000)
-                .distanceMax(500))
+                .strength(-2000) // Stronger repulsion
+                .distanceMax(800))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30))
-            .alphaDecay(0.01) // Slower cooling
-            .velocityDecay(0.3); // Less friction
+            .force('collision', d3.forceCollide().radius(40)) // Increased collision radius
+            .force('x', d3.forceX(width / 2).strength(0.1))
+            .force('y', d3.forceY(height / 2).strength(0.1))
+            .alphaDecay(0.005) // Slower cooling
+            .velocityDecay(0.4); // More friction
 
         // Create arrow marker for links
         svg.append('defs').append('marker')
@@ -715,7 +714,6 @@ function initializeGraph(data) {
             timelineEnd.textContent = formatDate(maxTime);
 
             function updateTimelinePosition(progress) {
-                console.log('Updating timeline position:', progress);
                 const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
                 
                 // Update slider UI
@@ -723,27 +721,16 @@ function initializeGraph(data) {
                 timelineProgress.style.width = `${progress}%`;
                 timelineTooltip.textContent = formatDate(currentTime);
                 
-                // Debug current state
-                console.log('Timeline update:', {
-                    currentTime: currentTime,
-                    progress: progress,
-                    minTime: minTime,
-                    maxTime: maxTime
-                });
-
                 // Update node visibility with transition
                 node.transition()
                     .duration(200)
                     .style('opacity', d => {
-                        if (!d.createdTime) return 1; // Always show nodes without creation time
-                        const isVisible = d.createdTime <= currentTime;
-                        console.log('Node visibility:', {
-                            id: d.id,
-                            createdTime: d.createdTime,
-                            currentTime: currentTime,
-                            isVisible: isVisible
-                        });
-                        return isVisible ? 1 : 0;
+                        if (!d.createdTime) return 0.3; // Semi-transparent for nodes without creation time
+                        return d.createdTime <= currentTime ? 1 : 0;
+                    })
+                    .style('r', d => {
+                        if (!d.createdTime) return 6;
+                        return d.createdTime <= currentTime ? Math.max(8, 6 + d.depth * 1.5) : 0;
                     });
 
                 // Update link visibility with transition
@@ -753,6 +740,11 @@ function initializeGraph(data) {
                         const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
                         const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
                         return (sourceVisible && targetVisible) ? 0.6 : 0;
+                    })
+                    .style('stroke-width', l => {
+                        const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
+                        const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
+                        return (sourceVisible && targetVisible) ? 1 : 0;
                     });
             }
 
@@ -812,9 +804,17 @@ function initializeGraph(data) {
             function updateProgress() {
                 if (!isPlaying) return;
                 
-                currentProgress += 0.5;
+                currentProgress += 0.1; // Reduced from 0.5 to 0.1 for slower animation
                 if (currentProgress > 100) {
                     currentProgress = 0;
+                    isPlaying = false;
+                    playButton.innerHTML = `
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    `;
+                    return;
                 }
                 
                 updateTimelinePosition(currentProgress);

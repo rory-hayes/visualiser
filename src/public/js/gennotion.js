@@ -515,27 +515,36 @@ function initializeGraph(data) {
             .attr('height', height)
             .attr('class', 'graph-svg');
 
-        // Create main group for zoom/pan
+        // Create main group for zoom/pan with a background rect to catch events
         const g = svg.append('g')
             .attr('class', 'graph-group');
+            
+        // Add a background rectangle to catch events
+        g.append('rect')
+            .attr('class', 'graph-background')
+            .attr('width', width)
+            .attr('height', height)
+            .attr('fill', 'none')
+            .attr('pointer-events', 'all');
 
-        // Add zoom behavior
+        // Add zoom behavior with bounds
         const zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on('zoom', (event) => {
                 g.attr('transform', event.transform);
             });
 
-        svg.call(zoom);
+        svg.call(zoom)
+            .on('dblclick.zoom', null); // Disable double-click zoom
 
         // Create the force simulation with adjusted parameters
         const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links).id(d => d.id).distance(150)) // Increased distance
-            .force('charge', d3.forceManyBody().strength(-1000)) // Stronger repulsion
+            .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+            .force('charge', d3.forceManyBody().strength(-500))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(40)) // Increased collision radius
-            .force('x', d3.forceX(width / 2).strength(0.1)) // Added X-axis centering
-            .force('y', d3.forceY(height / 2).strength(0.1)); // Added Y-axis centering
+            .force('collision', d3.forceCollide().radius(30))
+            .force('x', d3.forceX(width / 2).strength(0.1))
+            .force('y', d3.forceY(height / 2).strength(0.1));
 
         // Create links
         const link = g.append('g')
@@ -555,20 +564,19 @@ function initializeGraph(data) {
             .data(nodes)
             .join('circle')
             .attr('class', 'node')
-            .attr('r', d => Math.max(8, 6 + d.depth * 1.5)) // Adjusted node sizing
+            .attr('r', d => Math.max(8, 6 + d.depth * 1.5))
             .attr('fill', d => colorScale(d.type))
             .attr('stroke', '#fff')
             .attr('stroke-width', 1.5)
             .call(drag(simulation));
 
-        // Add tooltips with enhanced information
+        // Add tooltips
         const tooltip = d3.select('#graph-tooltip');
         
         node.on('mouseover', (event, d) => {
             const parentNode = nodes.find(n => n.id === d.parentId);
             const childCount = links.filter(l => l.source.id === d.id).length;
             
-            // Calculate position relative to viewport
             const rect = event.target.getBoundingClientRect();
             const tooltipX = rect.x + rect.width + 10;
             const tooltipY = rect.y;
@@ -724,9 +732,6 @@ function initializeGraph(data) {
             timelineStart.textContent = formatDate(minTime);
             timelineEnd.textContent = formatDate(maxTime);
 
-            let currentProgress = 100;
-            updateTimelinePosition(currentProgress);
-
             function updateTimelinePosition(progress) {
                 timelineHandle.style.left = `${progress}%`;
                 timelineProgress.style.width = `${progress}%`;
@@ -734,39 +739,36 @@ function initializeGraph(data) {
                 const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
                 timelineTooltip.textContent = formatDate(currentTime);
 
-                // Update node visibility with transition
-                node.transition()
-                    .duration(200)
-                    .attr('opacity', d => {
-                        if (!d.createdTime) return 0.2;
-                        return d.createdTime <= currentTime ? 1 : 0.1;
-                    });
+                // Update node visibility - show nodes created before or at current time
+                node.attr('opacity', d => {
+                    if (!d.createdTime) return 0.3; // Semi-transparent for nodes without creation time
+                    return d.createdTime <= currentTime ? 1 : 0.1;
+                });
 
-                // Update link visibility with transition
-                link.transition()
-                    .duration(200)
-                    .attr('opacity', l => {
-                        const sourceTime = l.source.createdTime;
-                        const targetTime = l.target.createdTime;
-                        if (!sourceTime || !targetTime) return 0.2;
-                        return (sourceTime <= currentTime && targetTime <= currentTime) ? 0.6 : 0.1;
-                    });
+                // Update link visibility - only show links where both nodes are visible
+                link.attr('opacity', l => {
+                    const sourceTime = l.source.createdTime;
+                    const targetTime = l.target.createdTime;
+                    if (!sourceTime || !targetTime) return 0.2;
+                    return (sourceTime <= currentTime && targetTime <= currentTime) ? 0.6 : 0.05;
+                });
             }
 
-            // Add drag behavior to timeline
+            // Add drag behavior to timeline with improved handling
             let isDragging = false;
 
             timelineSlider.addEventListener('mousedown', startDragging);
-            document.addEventListener('mousemove', drag);
+            document.addEventListener('mousemove', handleDrag);
             document.addEventListener('mouseup', stopDragging);
 
             function startDragging(e) {
                 isDragging = true;
-                drag(e);
+                handleDrag(e);
             }
 
-            function drag(e) {
+            function handleDrag(e) {
                 if (!isDragging) return;
+                e.preventDefault(); // Prevent text selection while dragging
                 
                 const rect = timelineSlider.getBoundingClientRect();
                 let progress = ((e.clientX - rect.left) / rect.width) * 100;
@@ -778,6 +780,9 @@ function initializeGraph(data) {
             function stopDragging() {
                 isDragging = false;
             }
+
+            // Initialize with all nodes visible
+            updateTimelinePosition(100);
         } else {
             // Hide timeline if no time data
             const timelineContainer = document.querySelector('.timeline-container');

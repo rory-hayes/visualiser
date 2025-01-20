@@ -182,38 +182,27 @@ function displayResults(data) {
 
         resultsSection.classList.remove('hidden');
         
-        // Extract the two dataframes with proper error handling
-        let graphData, insightsData;
+        // Extract the dataframes with proper error handling
+        let graphData, insightsData, keyInsightsData;
         
         if (data && typeof data === 'object') {
             // Try different possible data structures
-            if (data.dataframe_2) {
-                graphData = data.dataframe_2;
-                insightsData = data.dataframe_3;
-            } else if (data.data && data.data.dataframe_2) {
+            if (data.data) {
                 graphData = data.data.dataframe_2;
                 insightsData = data.data.dataframe_3;
+                keyInsightsData = data.data.dataframe_4;
             } else {
-                // If we can't find the expected structure, log it and throw an error
-                console.error('Unexpected data structure:', data);
-                throw new Error('Could not find dataframe_2 in the response data');
+                graphData = data.dataframe_2;
+                insightsData = data.dataframe_3;
+                keyInsightsData = data.dataframe_4;
             }
-        } else {
-            throw new Error('Invalid data received');
         }
-        
-        console.log('Extracted dataframes:', {
-            graphDataLength: graphData?.length,
-            insightsDataLength: insightsData?.length,
-            graphDataSample: graphData?.[0],
-            insightsDataSample: insightsData?.[0]
-        });
 
         if (!Array.isArray(graphData)) {
             throw new Error('graphData is not an array');
         }
 
-        resultsContent.innerHTML = formatResults(graphData, insightsData);
+        resultsContent.innerHTML = formatResults(graphData, insightsData, keyInsightsData);
         
         // Wait for next frame to ensure container is rendered
         requestAnimationFrame(() => {
@@ -224,7 +213,7 @@ function displayResults(data) {
                 // Wait for scroll and any animations to complete
                 setTimeout(() => {
                     try {
-                        initializeGraph(graphData);
+                        initializeGraph(data);
                         
                         // Force a resize event to ensure proper dimensions
                         window.dispatchEvent(new Event('resize'));
@@ -246,7 +235,7 @@ function displayResults(data) {
     }
 }
 
-function formatResults(graphData, insightsData) {
+function formatResults(graphData, insightsData, keyInsightsData) {
     if (!Array.isArray(graphData) || graphData.length === 0) {
         return '<p class="text-gray-500">No results available</p>';
     }
@@ -275,8 +264,9 @@ function formatResults(graphData, insightsData) {
     const workspaceInsights = insightsData && insightsData.length > 0 ? insightsData[0] : null;
 
     // Format key insights from dataframe_4
-    const keyInsights = window._lastGraphData?.data?.dataframe_4 || [];
-    
+    const keyInsights = keyInsightsData || [];
+    console.log('Key insights from dataframe_4:', keyInsights);
+
     // Create HTML output
     let html = `
         <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">

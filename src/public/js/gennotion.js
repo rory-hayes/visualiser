@@ -423,7 +423,19 @@ function transformDataForGraph(data) {
         const nodes = data.map(item => {
             try {
                 // Convert Unix epoch milliseconds to Date object
-                const createdTime = item.CREATED_TIME ? new Date(Number(item.CREATED_TIME)) : null;
+                let createdTime = null;
+                if (item.CREATED_TIME) {
+                    const timestamp = Number(item.CREATED_TIME);
+                    if (!isNaN(timestamp)) {
+                        createdTime = new Date(timestamp);
+                        console.log('Parsed creation time:', {
+                            original: item.CREATED_TIME,
+                            timestamp: timestamp,
+                            date: createdTime
+                        });
+                    }
+                }
+
                 return {
                     id: item.ID,
                     type: item.TYPE,
@@ -450,7 +462,14 @@ function transformDataForGraph(data) {
             return a.createdTime - b.createdTime;
         });
 
-        console.log('Transformed nodes:', { nodeCount: nodes.length });
+        // Log node creation times for debugging
+        nodes.forEach(node => {
+            console.log('Node creation time:', {
+                id: node.id,
+                type: node.type,
+                createdTime: node.createdTime
+            });
+        });
 
         // Create links from ancestors
         const links = [];
@@ -469,7 +488,6 @@ function transformDataForGraph(data) {
             }
         });
 
-        console.log('Created links:', { linkCount: links.length });
         return { nodes, links };
     } catch (error) {
         console.error('Error in transformDataForGraph:', error);
@@ -705,51 +723,64 @@ function initializeGraph(data) {
                 timelineProgress.style.width = `${progress}%`;
                 timelineTooltip.textContent = formatDate(currentTime);
                 
-                console.log('Current time:', currentTime);
-
-                // Update node visibility
-                node.style('opacity', d => {
-                    const isVisible = !d.createdTime || d.createdTime <= currentTime;
-                    return isVisible ? 1 : 0.1;
+                // Debug current state
+                console.log('Timeline update:', {
+                    currentTime: currentTime,
+                    progress: progress,
+                    minTime: minTime,
+                    maxTime: maxTime
                 });
 
-                // Update link visibility
-                link.style('opacity', l => {
-                    const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
-                    const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
-                    return (sourceVisible && targetVisible) ? 0.6 : 0.1;
-                });
+                // Update node visibility with transition
+                node.transition()
+                    .duration(200)
+                    .style('opacity', d => {
+                        if (!d.createdTime) return 1; // Always show nodes without creation time
+                        const isVisible = d.createdTime <= currentTime;
+                        console.log('Node visibility:', {
+                            id: d.id,
+                            createdTime: d.createdTime,
+                            currentTime: currentTime,
+                            isVisible: isVisible
+                        });
+                        return isVisible ? 1 : 0;
+                    });
+
+                // Update link visibility with transition
+                link.transition()
+                    .duration(200)
+                    .style('opacity', l => {
+                        const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
+                        const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
+                        return (sourceVisible && targetVisible) ? 0.6 : 0;
+                    });
             }
 
             let isDragging = false;
 
             function startDragging(e) {
-                console.log('Started dragging');
                 isDragging = true;
                 handleDrag(e);
-                e.stopPropagation(); // Prevent event from bubbling up
+                e.stopPropagation();
             }
 
             function handleDrag(e) {
                 if (!isDragging) return;
                 e.preventDefault();
-                e.stopPropagation(); // Prevent event from bubbling up
+                e.stopPropagation();
                 
                 const rect = timelineSlider.getBoundingClientRect();
                 const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-                console.log('Dragging progress:', progress);
                 updateTimelinePosition(progress);
             }
 
             function stopDragging() {
-                console.log('Stopped dragging');
                 isDragging = false;
             }
 
             // Add click handler for direct clicking on the slider
             timelineSlider.addEventListener('click', (e) => {
-                console.log('Timeline clicked');
-                e.stopPropagation(); // Prevent event from bubbling up
+                e.stopPropagation();
                 const rect = timelineSlider.getBoundingClientRect();
                 const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
                 updateTimelinePosition(progress);
@@ -761,10 +792,9 @@ function initializeGraph(data) {
             document.addEventListener('mouseup', stopDragging);
 
             // Initialize timeline at the start
-            console.log('Initializing timeline at start');
             updateTimelinePosition(0);
 
-            // Add a play button functionality
+            // Add play button with smoother animation
             const playButton = document.createElement('button');
             playButton.className = 'graph-control-button ml-2';
             playButton.innerHTML = `
@@ -777,11 +807,23 @@ function initializeGraph(data) {
 
             let isPlaying = false;
             let playInterval;
+            let currentProgress = 0;
+
+            function updateProgress() {
+                if (!isPlaying) return;
+                
+                currentProgress += 0.5;
+                if (currentProgress > 100) {
+                    currentProgress = 0;
+                }
+                
+                updateTimelinePosition(currentProgress);
+                requestAnimationFrame(updateProgress);
+            }
 
             playButton.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent event from bubbling up
+                e.stopPropagation();
                 if (isPlaying) {
-                    clearInterval(playInterval);
                     isPlaying = false;
                     playButton.innerHTML = `
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
@@ -796,14 +838,8 @@ function initializeGraph(data) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                     `;
-                    let progress = parseFloat(timelineHandle.style.left) || 0;
-                    playInterval = setInterval(() => {
-                        progress += 0.5;
-                        if (progress > 100) {
-                            progress = 0;
-                        }
-                        updateTimelinePosition(progress);
-                    }, 50);
+                    currentProgress = parseFloat(timelineHandle.style.left) || 0;
+                    requestAnimationFrame(updateProgress);
                 }
             });
         } else {

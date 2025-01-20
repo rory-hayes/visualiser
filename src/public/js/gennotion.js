@@ -254,21 +254,21 @@ function formatResults(data) {
 
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
-                <div id="graph-container" class="w-full h-[600px] bg-gray-50 rounded-lg relative">
-                    <div id="graph-tooltip" class="hidden absolute bg-white p-2 rounded shadow-lg border text-sm"></div>
-                    <div class="absolute top-4 right-4 space-y-2">
-                        <button id="zoomIn" class="bg-white p-2 rounded shadow hover:bg-gray-100">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div id="graph-container" class="w-full h-[600px] relative">
+                    <div id="graph-tooltip" class="hidden absolute"></div>
+                    <div class="graph-controls">
+                        <button id="zoomIn" class="graph-control-button" title="Zoom In">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                             </svg>
                         </button>
-                        <button id="zoomOut" class="bg-white p-2 rounded shadow hover:bg-gray-100">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button id="zoomOut" class="graph-control-button" title="Zoom Out">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
                             </svg>
                         </button>
-                        <button id="resetZoom" class="bg-white p-2 rounded shadow hover:bg-gray-100">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button id="resetZoom" class="graph-control-button" title="Reset View">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
                         </button>

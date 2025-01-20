@@ -480,14 +480,8 @@ const colorScale = d3.scaleOrdinal()
 // Initialize the graph visualization
 function initializeGraph(data) {
     try {
-        // Store data for resize handling
         window._lastGraphData = data;
         
-        console.log('Initializing graph with data:', { 
-            dataLength: data.length,
-            sampleNode: data[0] 
-        });
-
         const { nodes, links } = transformDataForGraph(data);
         
         if (nodes.length === 0) {
@@ -495,51 +489,62 @@ function initializeGraph(data) {
             return;
         }
 
-        // Clear existing graph and all its contents
+        // Get container and clear any existing content
         const container = document.getElementById('graph-container');
-        const existingSvg = container.querySelector('svg');
-        if (existingSvg) {
-            existingSvg.remove();
-        }
-
-        if (!container) {
-            console.error('Graph container not found');
-            return;
-        }
+        container.innerHTML = ''; // Clear all existing content
 
         const width = container.clientWidth;
         const height = container.clientHeight;
-        console.log('Container dimensions:', { width, height });
 
-        // Create new SVG with a clean slate
-        const svg = d3.select('#graph-container')
+        // Create new SVG
+        const svg = d3.select(container)
             .append('svg')
-            .attr('width', width)
-            .attr('height', height)
-            .attr('class', 'graph-svg')
-            .style('position', 'absolute')
-            .style('top', 0)
-            .style('left', 0);
+            .attr('width', '100%')
+            .attr('height', '100%')
+            .attr('viewBox', [0, 0, width, height])
+            .attr('class', 'graph-svg');
 
-        // Create main group for zoom/pan
+        // Create single container group for all graph elements
         const g = svg.append('g')
-            .attr('class', 'graph-group');
+            .attr('class', 'graph-container');
 
-        // Add zoom behavior
+        // Initialize zoom behavior
         const zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
+            .scaleExtent([0.2, 3])
             .on('zoom', (event) => {
                 g.attr('transform', event.transform);
             });
 
-        svg.call(zoom);
+        // Apply zoom to SVG and disable double-click zoom
+        svg.call(zoom)
+           .on('dblclick.zoom', null);
 
-        // Create the force simulation
+        // Create simulation with adjusted forces
         const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links).id(d => d.id).distance(100))
-            .force('charge', d3.forceManyBody().strength(-500))
+            .force('link', d3.forceLink(links)
+                .id(d => d.id)
+                .distance(100)
+                .strength(0.5))
+            .force('charge', d3.forceManyBody()
+                .strength(-1000)
+                .distanceMax(500))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30));
+            .force('collision', d3.forceCollide().radius(30))
+            .alphaDecay(0.01) // Slower cooling
+            .velocityDecay(0.3); // Less friction
+
+        // Create arrow marker for links
+        svg.append('defs').append('marker')
+            .attr('id', 'arrowhead')
+            .attr('viewBox', '-5 -5 10 10')
+            .attr('refX', 20)
+            .attr('refY', 0)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M -5,-5 L 5,0 L -5,5')
+            .attr('fill', '#999');
 
         // Create links
         const link = g.append('g')
@@ -550,7 +555,8 @@ function initializeGraph(data) {
             .attr('class', 'link')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 1);
+            .attr('stroke-width', 1)
+            .attr('marker-end', 'url(#arrowhead)');
 
         // Create nodes
         const node = g.append('g')
@@ -624,7 +630,7 @@ function initializeGraph(data) {
                 .attr('cy', d => d.y);
         });
 
-        // Initialize timeline if we have creation times
+        // Initialize timeline
         const times = nodes.map(n => n.createdTime).filter(Boolean);
         if (times.length > 0) {
             const minTime = new Date(Math.min(...times));
@@ -658,18 +664,28 @@ function initializeGraph(data) {
                 timelineProgress.style.width = `${progress}%`;
                 timelineTooltip.textContent = formatDate(currentTime);
 
-                // Update node visibility
-                nodes.forEach(d => {
+                // Update node and link visibility based on creation time
+                node.each(d => {
                     d.visible = !d.createdTime || d.createdTime <= currentTime;
                 });
 
-                // Update visual elements
-                node.style('display', d => d.visible ? null : 'none');
-                link.style('display', l => {
-                    const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
-                    const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
-                    return sourceVisible && targetVisible ? null : 'none';
-                });
+                node.transition()
+                    .duration(200)
+                    .style('opacity', d => d.visible ? 1 : 0)
+                    .style('pointer-events', d => d.visible ? 'auto' : 'none');
+
+                link.transition()
+                    .duration(200)
+                    .style('opacity', l => {
+                        const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
+                        const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
+                        return sourceVisible && targetVisible ? 0.6 : 0;
+                    })
+                    .style('pointer-events', l => {
+                        const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
+                        const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
+                        return sourceVisible && targetVisible ? 'auto' : 'none';
+                    });
             }
 
             let isDragging = false;
@@ -697,7 +713,7 @@ function initializeGraph(data) {
             document.addEventListener('mouseup', stopDragging);
 
             // Initialize with all nodes visible
-            updateTimelinePosition(100);
+            updateTimelinePosition(0); // Start from beginning
         } else {
             const timelineContainer = document.querySelector('.timeline-container');
             if (timelineContainer) {

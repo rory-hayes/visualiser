@@ -246,28 +246,51 @@ function formatResults(data) {
 
 // Transform data for D3
 function transformDataForGraph(data) {
-    // Create nodes
-    const nodes = data.map(item => ({
-        id: item.ID,
-        type: item.TYPE,
-        depth: item.DEPTH,
-        pageDepth: item.PAGE_DEPTH,
-        ancestors: JSON.parse(item.ANCESTORS),
-        parentId: item.PARENT_ID
-    }));
+    try {
+        console.log('Transforming data for graph:', { dataLength: data.length });
+        
+        // Create nodes
+        const nodes = data.map(item => {
+            try {
+                return {
+                    id: item.ID,
+                    type: item.TYPE,
+                    depth: item.DEPTH,
+                    pageDepth: item.PAGE_DEPTH,
+                    ancestors: JSON.parse(item.ANCESTORS || '[]'),
+                    parentId: item.PARENT_ID
+                };
+            } catch (e) {
+                console.error('Error transforming node:', { item, error: e });
+                return null;
+            }
+        }).filter(Boolean);
 
-    // Create links from ancestors
-    const links = [];
-    nodes.forEach(node => {
-        if (node.parentId) {
-            links.push({
-                source: node.parentId,
-                target: node.id
-            });
-        }
-    });
+        console.log('Transformed nodes:', { nodeCount: nodes.length });
 
-    return { nodes, links };
+        // Create links from ancestors
+        const links = [];
+        nodes.forEach(node => {
+            if (node.parentId) {
+                // Only create link if both source and target exist
+                const sourceExists = nodes.some(n => n.id === node.parentId);
+                const targetExists = nodes.some(n => n.id === node.id);
+                
+                if (sourceExists && targetExists) {
+                    links.push({
+                        source: node.parentId,
+                        target: node.id
+                    });
+                }
+            }
+        });
+
+        console.log('Created links:', { linkCount: links.length });
+        return { nodes, links };
+    } catch (error) {
+        console.error('Error in transformDataForGraph:', error);
+        return { nodes: [], links: [] };
+    }
 }
 
 // Color scale for different types
@@ -277,118 +300,146 @@ const colorScale = d3.scaleOrdinal()
 
 // Initialize the graph visualization
 function initializeGraph(data) {
-    const { nodes, links } = transformDataForGraph(data);
-    
-    // Clear existing graph
-    d3.select('#graph-container svg').remove();
-
-    // Create SVG container
-    const container = document.getElementById('graph-container');
-    const width = container.clientWidth;
-    const height = container.clientHeight;
-
-    const svg = d3.select('#graph-container')
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height);
-
-    // Add zoom behavior
-    const zoom = d3.zoom()
-        .scaleExtent([0.1, 4])
-        .on('zoom', (event) => {
-            g.attr('transform', event.transform);
+    try {
+        console.log('Initializing graph with data:', { 
+            dataLength: data.length,
+            sampleNode: data[0] 
         });
 
-    svg.call(zoom);
+        const { nodes, links } = transformDataForGraph(data);
+        
+        if (nodes.length === 0) {
+            console.error('No valid nodes to display');
+            return;
+        }
 
-    // Create main group for zoom/pan
-    const g = svg.append('g');
+        // Clear existing graph
+        d3.select('#graph-container svg').remove();
 
-    // Create the force simulation
-    const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id).distance(100))
-        .force('charge', d3.forceManyBody().strength(-300))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(30));
+        // Create SVG container
+        const container = document.getElementById('graph-container');
+        if (!container) {
+            console.error('Graph container not found');
+            return;
+        }
 
-    // Create links
-    const link = g.append('g')
-        .selectAll('line')
-        .data(links)
-        .join('line')
-        .attr('stroke', '#999')
-        .attr('stroke-opacity', 0.6)
-        .attr('stroke-width', 1);
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        console.log('Container dimensions:', { width, height });
 
-    // Create nodes
-    const node = g.append('g')
-        .selectAll('circle')
-        .data(nodes)
-        .join('circle')
-        .attr('r', d => 10 + d.depth * 2)
-        .attr('fill', d => colorScale(d.type))
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 1.5)
-        .call(drag(simulation));
+        const svg = d3.select('#graph-container')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+            .attr('class', 'graph-svg');
 
-    // Add tooltips
-    const tooltip = d3.select('#graph-tooltip');
-    
-    node.on('mouseover', (event, d) => {
-        tooltip
-            .style('display', 'block')
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 10) + 'px')
-            .html(`
-                <div class="font-semibold">${d.type}</div>
-                <div>Depth: ${d.depth}</div>
-                <div>Page Depth: ${d.pageDepth}</div>
-            `);
-    })
-    .on('mouseout', () => {
-        tooltip.style('display', 'none');
-    })
-    .on('click', (event, d) => {
-        // Highlight connected nodes
-        const connected = new Set([d.id, ...d.ancestors]);
-        node.attr('opacity', n => connected.has(n.id) ? 1 : 0.1);
-        link.attr('opacity', l => connected.has(l.source.id) && connected.has(l.target.id) ? 1 : 0.1);
-    });
+        // Add zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            });
 
-    // Add zoom controls
-    d3.select('#zoomIn').on('click', () => {
-        zoom.scaleBy(svg.transition().duration(750), 1.2);
-    });
+        svg.call(zoom);
 
-    d3.select('#zoomOut').on('click', () => {
-        zoom.scaleBy(svg.transition().duration(750), 0.8);
-    });
+        // Create main group for zoom/pan
+        const g = svg.append('g')
+            .attr('class', 'graph-group');
 
-    d3.select('#resetZoom').on('click', () => {
-        svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
-        // Reset node opacities
-        node.attr('opacity', 1);
-        link.attr('opacity', 1);
-    });
+        // Create the force simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(30));
 
-    // Double click background to reset opacities
-    svg.on('dblclick', () => {
-        node.attr('opacity', 1);
-        link.attr('opacity', 1);
-    });
+        // Create links
+        const link = g.append('g')
+            .attr('class', 'links')
+            .selectAll('line')
+            .data(links)
+            .join('line')
+            .attr('class', 'link')
+            .attr('stroke', '#999')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 1);
 
-    // Update positions on each tick
-    simulation.on('tick', () => {
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
+        // Create nodes
+        const node = g.append('g')
+            .attr('class', 'nodes')
+            .selectAll('circle')
+            .data(nodes)
+            .join('circle')
+            .attr('class', 'node')
+            .attr('r', d => 10 + d.depth * 2)
+            .attr('fill', d => colorScale(d.type))
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1.5)
+            .call(drag(simulation));
 
-        node
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y);
-    });
+        // Add tooltips
+        const tooltip = d3.select('#graph-tooltip');
+        
+        node.on('mouseover', (event, d) => {
+            tooltip
+                .style('display', 'block')
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY - 10) + 'px')
+                .html(`
+                    <div class="font-semibold">${d.type}</div>
+                    <div>Depth: ${d.depth}</div>
+                    <div>Page Depth: ${d.pageDepth}</div>
+                `);
+        })
+        .on('mouseout', () => {
+            tooltip.style('display', 'none');
+        })
+        .on('click', (event, d) => {
+            // Highlight connected nodes
+            const connected = new Set([d.id, ...(d.ancestors || [])]);
+            node.attr('opacity', n => connected.has(n.id) ? 1 : 0.1);
+            link.attr('opacity', l => connected.has(l.source.id) && connected.has(l.target.id) ? 1 : 0.1);
+        });
+
+        // Add zoom controls
+        d3.select('#zoomIn').on('click', () => {
+            zoom.scaleBy(svg.transition().duration(750), 1.2);
+        });
+
+        d3.select('#zoomOut').on('click', () => {
+            zoom.scaleBy(svg.transition().duration(750), 0.8);
+        });
+
+        d3.select('#resetZoom').on('click', () => {
+            svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+            // Reset node opacities
+            node.attr('opacity', 1);
+            link.attr('opacity', 1);
+        });
+
+        // Double click background to reset opacities
+        svg.on('dblclick', () => {
+            node.attr('opacity', 1);
+            link.attr('opacity', 1);
+        });
+
+        // Update positions on each tick
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            node
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+        });
+
+        console.log('Graph initialization complete');
+    } catch (error) {
+        console.error('Error in initializeGraph:', error);
+    }
 }
 
 // Drag behavior

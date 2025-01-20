@@ -301,7 +301,8 @@ function transformDataForGraph(data) {
         // Create nodes with more information
         const nodes = data.map(item => {
             try {
-                const createdTime = item.CREATED_TIME ? new Date(item.CREATED_TIME) : null;
+                // Convert Unix epoch milliseconds to Date object
+                const createdTime = item.CREATED_TIME ? new Date(Number(item.CREATED_TIME)) : null;
                 return {
                     id: item.ID,
                     type: item.TYPE,
@@ -593,8 +594,19 @@ function initializeGraph(data) {
             const minTime = new Date(Math.min(...times));
             const maxTime = new Date(Math.max(...times));
             
-            timelineStart.textContent = minTime.toLocaleDateString();
-            timelineEnd.textContent = maxTime.toLocaleDateString();
+            // Format dates with time
+            const formatDate = (date) => {
+                return date.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            };
+            
+            timelineStart.textContent = formatDate(minTime);
+            timelineEnd.textContent = formatDate(maxTime);
 
             let currentProgress = 100;
             updateTimelinePosition(currentProgress);
@@ -604,21 +616,25 @@ function initializeGraph(data) {
                 timelineProgress.style.width = `${progress}%`;
                 
                 const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
-                timelineTooltip.textContent = currentTime.toLocaleDateString();
+                timelineTooltip.textContent = formatDate(currentTime);
 
-                // Update node visibility
-                node.attr('opacity', d => {
-                    if (!d.createdTime) return 0.2;
-                    return d.createdTime <= currentTime ? 1 : 0.1;
-                });
+                // Update node visibility with transition
+                node.transition()
+                    .duration(200)
+                    .attr('opacity', d => {
+                        if (!d.createdTime) return 0.2;
+                        return d.createdTime <= currentTime ? 1 : 0.1;
+                    });
 
-                // Update link visibility
-                link.attr('opacity', l => {
-                    const sourceTime = l.source.createdTime;
-                    const targetTime = l.target.createdTime;
-                    if (!sourceTime || !targetTime) return 0.2;
-                    return (sourceTime <= currentTime && targetTime <= currentTime) ? 0.6 : 0.1;
-                });
+                // Update link visibility with transition
+                link.transition()
+                    .duration(200)
+                    .attr('opacity', l => {
+                        const sourceTime = l.source.createdTime;
+                        const targetTime = l.target.createdTime;
+                        if (!sourceTime || !targetTime) return 0.2;
+                        return (sourceTime <= currentTime && targetTime <= currentTime) ? 0.6 : 0.1;
+                    });
             }
 
             // Add drag behavior to timeline

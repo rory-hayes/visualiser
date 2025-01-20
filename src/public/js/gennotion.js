@@ -760,17 +760,28 @@ function initializeTimeline(nodes, links, weekRange) {
 // Color scale for different types
 const colorScale = d3.scaleOrdinal()
     .domain(['page', 'collection_view_page', 'collection'])
-    .range(['#60A5FA', '#34D399', '#F472B6']);
+    .range(['#4F46E5', '#10B981', '#EC4899']);
 
 // Initialize the graph visualization
 function initializeGraph(graphData) {
     try {
         const { nodes, links } = transformDataForGraph(graphData);
-        const weekRange = getWeekRange(nodes);
-        
+        if (!nodes.length) {
+            console.error('No nodes to display');
+            return;
+        }
+
         // Get container and clear any existing content
         const container = document.getElementById('graph-container');
         container.innerHTML = '';
+
+        // Add tooltip div if it doesn't exist
+        if (!document.getElementById('graph-tooltip')) {
+            const tooltip = document.createElement('div');
+            tooltip.id = 'graph-tooltip';
+            tooltip.className = 'hidden';
+            container.appendChild(tooltip);
+        }
 
         const width = container.clientWidth;
         const height = container.clientHeight;
@@ -778,79 +789,100 @@ function initializeGraph(graphData) {
         // Create SVG
         const svg = d3.select(container)
             .append('svg')
-            .attr('width', '100%')
-            .attr('height', '100%')
+            .attr('width', width)
+            .attr('height', height)
             .attr('viewBox', [0, 0, width, height])
             .attr('class', 'graph-svg');
+
+        // Create container group for zoom
+        const g = svg.append('g');
 
         // Add zoom behavior
         const zoom = d3.zoom()
             .scaleExtent([0.2, 2])
             .on('zoom', (event) => g.attr('transform', event.transform));
 
-        // Create arrow marker
-        svg.append('defs').append('marker')
-            .attr('id', 'arrowhead')
-            .attr('viewBox', '-5 -5 10 10')
-            .attr('refX', 20)
+        svg.call(zoom);
+
+        // Create arrow marker for links
+        svg.append('defs').selectAll('marker')
+            .data(['end'])
+            .join('marker')
+            .attr('id', 'arrow')
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 25)
             .attr('refY', 0)
             .attr('markerWidth', 6)
             .attr('markerHeight', 6)
             .attr('orient', 'auto')
             .append('path')
-            .attr('d', 'M -5,-5 L 5,0 L -5,5')
-            .attr('fill', '#999');
+            .attr('fill', '#999')
+            .attr('d', 'M0,-5L10,0L0,5');
 
-        // Create container group
-        const g = svg.append('g');
-        svg.call(zoom);
-
-        // Create forces with adjusted parameters for better layout
-        const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links)
-                .id(d => d.id)
-                .distance(d => 100 + (d.source.depth + d.target.depth) * 30))
-            .force('charge', d3.forceManyBody()
-                .strength(d => -800 - d.depth * 200)
-                .distanceMax(800))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('y', d3.forceY(d => height * (0.3 + d.depth * 0.15)).strength(0.2))
-            .force('collision', d3.forceCollide(35))
-            .alphaDecay(0.01);
-
-        // Create links with improved visibility
+        // Create the links
         const link = g.append('g')
             .selectAll('line')
             .data(links)
             .join('line')
             .attr('class', 'link')
             .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', d => Math.max(1, 3 - d.source.depth))
-            .attr('marker-end', 'url(#arrowhead)');
+            .attr('stroke-width', 1.5)
+            .attr('marker-end', 'url(#arrow)')
+            .style('opacity', 0.6);
 
-        // Create nodes with improved sizing
+        // Create the nodes
         const node = g.append('g')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
             .attr('class', 'node')
-            .attr('r', d => Math.max(12, 15 - d.depth * 1.5))
+            .attr('r', d => Math.max(8, 12 - d.depth))
             .attr('fill', d => colorScale(d.type))
             .attr('stroke', '#fff')
-            .attr('stroke-width', 1.5)
+            .attr('stroke-width', 2)
             .call(drag(simulation));
 
-        // Add node labels
+        // Add labels to nodes
         const label = g.append('g')
             .selectAll('text')
             .data(nodes)
             .join('text')
-            .attr('dy', 4)
+            .attr('class', 'node-label')
+            .attr('dy', -10)
             .attr('text-anchor', 'middle')
+            .attr('fill', '#4B5563')
             .style('font-size', '10px')
             .style('pointer-events', 'none')
-            .text(d => d.type.charAt(0).toUpperCase());
+            .text(d => d.text.substring(0, 20) || d.type);
+
+        // Set up forces for the simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links)
+                .id(d => d.id)
+                .distance(100))
+            .force('charge', d3.forceManyBody()
+                .strength(-500))
+            .force('x', d3.forceX(width / 2))
+            .force('y', d3.forceY(height / 2))
+            .force('collision', d3.forceCollide().radius(30))
+            .on('tick', () => {
+                // Update link positions
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                // Update node positions
+                node
+                    .attr('cx', d => d.x = Math.max(20, Math.min(width - 20, d.x)))
+                    .attr('cy', d => d.y = Math.max(20, Math.min(height - 20, d.y)));
+
+                // Update label positions
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
 
         // Enhanced tooltip functionality
         const tooltip = d3.select('#graph-tooltip');
@@ -897,67 +929,59 @@ function initializeGraph(graphData) {
                         </div>
                     </div>
                 `);
+
+            // Highlight connected nodes and links
+            const connectedNodeIds = new Set();
+            links.forEach(l => {
+                if (l.source.id === d.id) connectedNodeIds.add(l.target.id);
+                if (l.target.id === d.id) connectedNodeIds.add(l.source.id);
+            });
+
+            node.style('opacity', n => connectedNodeIds.has(n.id) || n.id === d.id ? 1 : 0.2);
+            link.style('opacity', l => l.source.id === d.id || l.target.id === d.id ? 1 : 0.1);
+            label.style('opacity', n => connectedNodeIds.has(n.id) || n.id === d.id ? 1 : 0.2);
         })
-        .on('mouseout', () => tooltip.style('display', 'none'))
-        .on('mousemove', (event) => {
-            const tooltipWidth = tooltip.node().offsetWidth;
-            const tooltipHeight = tooltip.node().offsetHeight;
-            const containerRect = container.getBoundingClientRect();
-            
-            let left = event.pageX + 10;
-            let top = event.pageY - 10;
-            
-            // Adjust position if tooltip would go outside container
-            if (left + tooltipWidth > containerRect.right) {
-                left = event.pageX - tooltipWidth - 10;
-            }
-            if (top + tooltipHeight > containerRect.bottom) {
-                top = event.pageY - tooltipHeight - 10;
-            }
-            
-            tooltip
-                .style('left', left + 'px')
-                .style('top', top + 'px');
+        .on('mouseout', () => {
+            tooltip.style('display', 'none');
+            node.style('opacity', 1);
+            link.style('opacity', 0.6);
+            label.style('opacity', 1);
         });
 
-        // Update positions on tick
-        simulation.on('tick', () => {
-            link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
-
-            node
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-
-            label
-                .attr('x', d => d.x)
-                .attr('y', d => d.y);
-        });
-
-        // Add timeline controls
+        // Add timeline slider
         const timelineContainer = document.createElement('div');
         timelineContainer.className = 'timeline-container';
+        
+        const startDate = d3.min(nodes, d => d.createdTime);
+        const endDate = d3.max(nodes, d => d.createdTime);
+        
         timelineContainer.innerHTML = `
             <div class="flex justify-between mb-2">
-                <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
-                <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
+                <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
+                <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
             </div>
-            <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
-                <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
-                <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
-                    <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
-                </div>
-            </div>
+            <input type="range" 
+                min="${startDate?.getTime() || 0}" 
+                max="${endDate?.getTime() || 100}" 
+                value="${startDate?.getTime() || 0}" 
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                id="timelineSlider">
         `;
         container.appendChild(timelineContainer);
 
-        // Initialize timeline if we have date information
-        if (weekRange) {
-            initializeTimeline(nodes, links, weekRange);
-        }
+        // Timeline slider functionality
+        const slider = document.getElementById('timelineSlider');
+        slider.addEventListener('input', (event) => {
+            const currentTime = new Date(parseInt(event.target.value));
+            
+            // Update visibility of nodes and links based on creation time
+            node.style('opacity', d => d.createdTime <= currentTime ? 1 : 0.1);
+            link.style('opacity', d => 
+                d.source.createdTime <= currentTime && 
+                d.target.createdTime <= currentTime ? 0.6 : 0.1
+            );
+            label.style('opacity', d => d.createdTime <= currentTime ? 1 : 0.1);
+        });
 
         // Add zoom controls
         const controlsContainer = document.createElement('div');
@@ -997,9 +1021,6 @@ function initializeGraph(graphData) {
                 .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
         });
 
-        // Store graph state for timeline updates
-        window._graphState = { nodes, links, node, link, label };
-
         // Initial zoom to fit
         setTimeout(() => {
             d3.select('#resetZoom').dispatch('click');
@@ -1011,7 +1032,7 @@ function initializeGraph(graphData) {
     }
 }
 
-// Drag behavior
+// Drag behavior for nodes
 function drag(simulation) {
     function dragstarted(event) {
         if (!event.active) simulation.alphaTarget(0.3).restart();

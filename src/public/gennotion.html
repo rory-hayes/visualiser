@@ -20,9 +20,20 @@
         .link {
             pointer-events: none;
         }
+        #graph-container {
+            min-height: 600px;
+            height: 600px;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
         #graph-tooltip {
             pointer-events: none;
             z-index: 100;
+        }
+        .graph-svg {
+            width: 100%;
+            height: 100%;
         }
     </style>
 </head>
@@ -82,9 +93,8 @@
             </div>
 
             <!-- Results Section -->
-            <div id="resultsSection" class="hidden space-y-4">
-                <h2 class="text-xl font-semibold text-gray-900">Results</h2>
-                <div id="resultsContent" class="bg-gray-50 rounded-lg p-4 overflow-auto max-h-[600px]">
+            <div id="resultsSection" class="hidden">
+                <div id="resultsContent" class="space-y-8">
                     <!-- Results will be inserted here -->
                 </div>
             </div>

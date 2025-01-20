@@ -152,7 +152,44 @@ function listenForResults() {
 function displayResults(data) {
     resultsSection.classList.remove('hidden');
     resultsContent.innerHTML = formatResults(data);
-    initializeGraph(data);
+    
+    // Wait for next frame to ensure container is rendered
+    requestAnimationFrame(() => {
+        // Scroll results into view
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Wait for scroll and any animations to complete
+        setTimeout(() => {
+            initializeGraph(data);
+            
+            // Force a resize event to ensure proper dimensions
+            window.dispatchEvent(new Event('resize'));
+        }, 500);
+    });
+}
+
+// Add resize handler for graph responsiveness
+window.addEventListener('resize', debounce(() => {
+    const container = document.getElementById('graph-container');
+    if (container && container.querySelector('svg')) {
+        const data = window._lastGraphData; // Store last used data
+        if (data) {
+            initializeGraph(data);
+        }
+    }
+}, 250));
+
+// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 function formatResults(data) {
@@ -301,6 +338,9 @@ const colorScale = d3.scaleOrdinal()
 // Initialize the graph visualization
 function initializeGraph(data) {
     try {
+        // Store data for resize handling
+        window._lastGraphData = data;
+        
         console.log('Initializing graph with data:', { 
             dataLength: data.length,
             sampleNode: data[0] 

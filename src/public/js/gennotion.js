@@ -782,46 +782,12 @@ function initializeGraph(graphData) {
 
         // Get container and clear any existing content
         const container = document.getElementById('graph-container');
-        container.innerHTML = ''; // Clear all existing content
-
-        // Recreate the control elements
-        container.innerHTML = `
-            <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
-                <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                </button>
-                <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                    </svg>
-                </button>
-                <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                </button>
-            </div>
-            <div id="graph-tooltip" class="hidden absolute z-20 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 max-w-xs"></div>
-            <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
-                <div class="flex justify-between mb-2">
-                    <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
-                    <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
-                </div>
-                <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
-                    <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
-                    <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
-                        <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
-                    </div>
-                </div>
-            </div>
-        `;
+        container.innerHTML = '';
 
         const width = container.clientWidth;
         const height = container.clientHeight;
 
-        // Create new SVG with improved dimensions
+        // Create SVG
         const svg = d3.select(container)
             .append('svg')
             .attr('width', '100%')
@@ -829,224 +795,172 @@ function initializeGraph(graphData) {
             .attr('viewBox', [0, 0, width, height])
             .attr('class', 'graph-svg');
 
-        // Create single container group for all graph elements
-        const g = svg.append('g')
-            .attr('class', 'graph-container');
-
-        // Initialize zoom behavior with improved bounds
+        // Add zoom behavior
         const zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
-            .on('zoom', (event) => {
-                g.attr('transform', event.transform);
-            });
+            .scaleExtent([0.2, 2])
+            .on('zoom', (event) => g.attr('transform', event.transform));
 
-        // Apply zoom to SVG and disable double-click zoom
-        svg.call(zoom)
-           .on('dblclick.zoom', null);
+        // Create arrow marker
+        svg.append('defs').append('marker')
+            .attr('id', 'arrowhead')
+            .attr('viewBox', '-5 -5 10 10')
+            .attr('refX', 20)
+            .attr('refY', 0)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M -5,-5 L 5,0 L -5,5')
+            .attr('fill', '#999');
 
-        // Create simulation with improved hierarchical forces
+        // Create container group
+        const g = svg.append('g');
+
+        // Apply zoom
+        svg.call(zoom);
+
+        // Create forces
         const simulation = d3.forceSimulation(nodes)
+            // Link force with increased distance for hierarchy
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(d => 150 + (d.source.depth + d.target.depth) * 30) // Dynamic distance based on depth
-                .strength(1)) // Stronger link force
+                .distance(d => 80 + (d.source.depth + d.target.depth) * 20))
+            // Charge force for node repulsion
             .force('charge', d3.forceManyBody()
-                .strength(d => -1000 - d.depth * 300) // Stronger repulsion for deeper nodes
-                .distanceMax(1500)
-                .theta(0.5))
-            .force('x', d3.forceX(width / 2).strength(d => 0.1 / (d.depth + 1))) // Weaker x force for deeper nodes
-            .force('y', d3.forceY(d => height * (0.2 + d.depth * 0.15)).strength(0.3)) // Vertical positioning based on depth
-            .force('collision', d3.forceCollide().radius(d => 30 + d.depth * 5)) // Larger collision radius for deeper nodes
-            .alphaDecay(0.01) // Slower cooling
-            .velocityDecay(0.3); // Less friction
+                .strength(d => -500 - d.depth * 100)
+                .distanceMax(500))
+            // Center force
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            // Vertical force based on depth
+            .force('y', d3.forceY(d => height * (0.3 + d.depth * 0.1)).strength(0.1))
+            // Collision force to prevent overlap
+            .force('collision', d3.forceCollide(30))
+            .alphaDecay(0.01);
 
-        // Add custom force to maintain hierarchy
-        simulation.force('hierarchy', alpha => {
-            nodes.forEach(node => {
-                if (node.parentId) {
-                    const parent = nodes.find(n => n.id === node.parentId);
-                    if (parent) {
-                        // Pull children below their parent
-                        const dy = parent.y + 100 - node.y;
-                        node.y += dy * alpha;
-                        // Keep children near their parent's x position
-                        const dx = parent.x - node.x;
-                        node.x += dx * alpha * 0.3;
-                    }
-                }
-            });
-        });
-
-        // Create links with improved visibility and curved paths
+        // Create links
         const link = g.append('g')
-            .attr('class', 'links')
-            .selectAll('path')
+            .selectAll('line')
             .data(links)
-            .join('path')
-            .attr('class', 'link')
+            .join('line')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 1.5)
-            .attr('fill', 'none')
+            .attr('stroke-width', d => Math.max(1, 3 - d.source.depth))
             .attr('marker-end', 'url(#arrowhead)');
 
-        // Create nodes with improved sizing
+        // Create nodes
         const node = g.append('g')
-            .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
-            .attr('class', 'node')
-            .attr('r', d => Math.max(8, 6 + d.depth * 2 + Math.sqrt(links.filter(l => l.source.id === d.id).length) * 2))
+            .attr('r', d => Math.max(5, 15 - d.depth * 1.5))
             .attr('fill', d => colorScale(d.type))
             .attr('stroke', '#fff')
             .attr('stroke-width', 1.5)
             .call(drag(simulation));
 
+        // Add node labels
+        const label = g.append('g')
+            .selectAll('text')
+            .data(nodes)
+            .join('text')
+            .attr('dy', 4)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '10px')
+            .style('pointer-events', 'none')
+            .text(d => d.type.charAt(0).toUpperCase());
+
         // Add tooltips
-        const tooltip = d3.select('#graph-tooltip');
-        
+        const tooltip = d3.select(container).append('div')
+            .attr('class', 'absolute hidden z-50 bg-white p-2 rounded shadow-lg text-sm')
+            .style('pointer-events', 'none');
+
         node.on('mouseover', (event, d) => {
-            const parentNode = nodes.find(n => n.id === d.parentId);
             const childCount = links.filter(l => l.source.id === d.id).length;
+            const parentNode = nodes.find(n => n.id === d.parentId);
             
-            const rect = event.target.getBoundingClientRect();
             tooltip
                 .style('display', 'block')
-                .style('left', `${rect.x + rect.width + 10}px`)
-                .style('top', `${rect.y}px`)
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY + 10) + 'px')
                 .html(`
-                    <div class="space-y-1">
-                        <div class="font-bold text-gray-900">${d.type}</div>
-                        <div class="text-sm">
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Created:</span>
-                                <span class="ml-2">${d.createdTime ? d.createdTime.toLocaleDateString() : 'Unknown'}</span>
-                            </div>
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Depth:</span>
-                                <span class="ml-2">${d.depth}</span>
-                            </div>
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Children:</span>
-                                <span class="ml-2">${childCount}</span>
-                            </div>
-                            ${parentNode ? `
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Parent:</span>
-                                <span class="ml-2">${parentNode.type}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                    </div>
+                    <div class="font-bold">${d.type}</div>
+                    <div>Depth: ${d.depth}</div>
+                    <div>Children: ${childCount}</div>
+                    ${d.createdTime ? `<div>Created: ${d.createdTime.toLocaleDateString()}</div>` : ''}
+                    ${parentNode ? `<div>Parent: ${parentNode.type}</div>` : ''}
                 `);
         })
-        .on('mouseout', () => {
-            tooltip.style('display', 'none');
+        .on('mouseout', () => tooltip.style('display', 'none'))
+        .on('mousemove', (event) => {
+            tooltip
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY + 10) + 'px');
         });
 
-        // Update positions on each tick with improved path calculation
+        // Update positions on tick
         simulation.on('tick', () => {
-            link.attr('d', d => {
-                const sourceX = Math.max(20, Math.min(width - 20, d.source.x));
-                const sourceY = Math.max(20, Math.min(height - 20, d.source.y));
-                const targetX = Math.max(20, Math.min(width - 20, d.target.x));
-                const targetY = Math.max(20, Math.min(height - 20, d.target.y));
-                
-                // Calculate control point for curved path
-                const dx = targetX - sourceX;
-                const dy = targetY - sourceY;
-                const dr = Math.sqrt(dx * dx + dy * dy);
-                
-                // Curved path if nodes are far apart, straight line if close
-                if (dr > 150) {
-                    const midX = (sourceX + targetX) / 2;
-                    const midY = (sourceY + targetY) / 2 - 50; // Control point above midpoint
-                    return `M${sourceX},${sourceY} Q${midX},${midY} ${targetX},${targetY}`;
-                } else {
-                    return `M${sourceX},${sourceY} L${targetX},${targetY}`;
-                }
-            });
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
 
             node
-                .attr('cx', d => Math.max(20, Math.min(width - 20, d.x)))
-                .attr('cy', d => Math.max(20, Math.min(height - 20, d.y)));
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+
+            label
+                .attr('x', d => d.x)
+                .attr('y', d => d.y);
         });
 
         // Add zoom controls
-        d3.select('#zoomIn').on('click', (e) => {
-            e.stopPropagation();
-            zoom.scaleBy(svg.transition().duration(750), 1.2);
-        });
+        const controls = d3.select(container)
+            .append('div')
+            .attr('class', 'absolute top-4 right-4 flex gap-2');
 
-        d3.select('#zoomOut').on('click', (e) => {
-            e.stopPropagation();
-            zoom.scaleBy(svg.transition().duration(750), 0.8);
-        });
+        controls.append('button')
+            .attr('class', 'p-2 bg-white rounded shadow hover:bg-gray-100')
+            .html('<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>')
+            .on('click', () => zoom.scaleBy(svg.transition().duration(300), 1.5));
 
-        d3.select('#resetZoom').on('click', (e) => {
-            e.stopPropagation();
-            const bounds = g.node().getBBox();
-            const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
-            const translate = [
-                width / 2 - scale * (bounds.x + bounds.width / 2),
-                height / 2 - scale * (bounds.y + bounds.height / 2)
-            ];
-            svg.transition()
-                .duration(750)
-                .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
-        });
+        controls.append('button')
+            .attr('class', 'p-2 bg-white rounded shadow hover:bg-gray-100')
+            .html('<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>')
+            .on('click', () => zoom.scaleBy(svg.transition().duration(300), 0.75));
 
-        // Initialize timeline
+        controls.append('button')
+            .attr('class', 'p-2 bg-white rounded shadow hover:bg-gray-100')
+            .html('<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>')
+            .on('click', () => {
+                const bounds = g.node().getBBox();
+                const dx = bounds.width;
+                const dy = bounds.height;
+                const x = bounds.x + dx / 2;
+                const y = bounds.y + dy / 2;
+                const scale = 0.9 / Math.max(dx / width, dy / height);
+                const translate = [width / 2 - scale * x, height / 2 - scale * y];
+                svg.transition()
+                    .duration(300)
+                    .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
+            });
+
+        // Initialize timeline if we have date information
         if (weekRange) {
             initializeTimeline(nodes, links, weekRange);
         }
 
-        // Store graph state
-        window._graphState = { nodes, links, weekRange, node, link };
+        // Store graph state for timeline updates
+        window._graphState = { nodes, links, node, link, label };
 
-        // Initial zoom fit
+        // Initial zoom to fit
         setTimeout(() => {
-            d3.select('#resetZoom').dispatch('click');
-        }, 100);
-
-        // Add node labels for better visibility
-        const labels = g.append('g')
-            .attr('class', 'labels')
-            .selectAll('text')
-            .data(nodes)
-            .join('text')
-            .attr('class', 'node-label')
-            .attr('dy', 4)
-            .attr('text-anchor', 'middle')
-            .style('font-size', '10px')
-            .style('fill', '#666')
-            .style('pointer-events', 'none')
-            .text(d => d.type.charAt(0).toUpperCase());
-
-        // Update label positions on tick
-        simulation.on('tick.labels', () => {
-            labels
-                .attr('x', d => Math.max(20, Math.min(width - 20, d.x)))
-                .attr('y', d => Math.max(20, Math.min(height - 20, d.y)));
-        });
-
-        // Heat up simulation periodically to prevent sticking
-        let ticker = 0;
-        const reheat = setInterval(() => {
-            ticker++;
-            if (ticker > 200) {
-                clearInterval(reheat);
-                return;
-            }
-            if (simulation.alpha() < 0.1) {
-                simulation.alpha(0.3).restart();
-            }
+            controls.select('button:last-child').dispatch('click');
         }, 100);
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
-        throw error;
+        showStatus('Error initializing graph visualization', false);
     }
 }
 

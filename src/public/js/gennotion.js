@@ -843,46 +843,50 @@ function initializeGraph(graphData) {
         svg.call(zoom)
            .on('dblclick.zoom', null);
 
-        // Create simulation with improved forces
+        // Create simulation with improved hierarchical forces
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(200) // Increased base distance
-                .strength(0.2)) // Reduced strength for more stability
+                .distance(d => 150 + (d.source.depth + d.target.depth) * 30) // Dynamic distance based on depth
+                .strength(1)) // Stronger link force
             .force('charge', d3.forceManyBody()
-                .strength(-800) // Reduced repulsion
-                .distanceMax(2000)
+                .strength(d => -1000 - d.depth * 300) // Stronger repulsion for deeper nodes
+                .distanceMax(1500)
                 .theta(0.5))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30)) // Fixed collision radius
-            .force('x', d3.forceX(width / 2).strength(0.05))
-            .force('y', d3.forceY(height / 2).strength(0.05))
+            .force('x', d3.forceX(width / 2).strength(d => 0.1 / (d.depth + 1))) // Weaker x force for deeper nodes
+            .force('y', d3.forceY(d => height * (0.2 + d.depth * 0.15)).strength(0.3)) // Vertical positioning based on depth
+            .force('collision', d3.forceCollide().radius(d => 30 + d.depth * 5)) // Larger collision radius for deeper nodes
             .alphaDecay(0.01) // Slower cooling
-            .velocityDecay(0.4); // More friction
+            .velocityDecay(0.3); // Less friction
 
-        // Create arrow marker for links with improved size
-        svg.append('defs').append('marker')
-            .attr('id', 'arrowhead')
-            .attr('viewBox', '-5 -5 10 10')
-            .attr('refX', 25)
-            .attr('refY', 0)
-            .attr('markerWidth', 8)
-            .attr('markerHeight', 8)
-            .attr('orient', 'auto')
-            .append('path')
-            .attr('d', 'M -5,-5 L 5,0 L -5,5')
-            .attr('fill', '#999');
+        // Add custom force to maintain hierarchy
+        simulation.force('hierarchy', alpha => {
+            nodes.forEach(node => {
+                if (node.parentId) {
+                    const parent = nodes.find(n => n.id === node.parentId);
+                    if (parent) {
+                        // Pull children below their parent
+                        const dy = parent.y + 100 - node.y;
+                        node.y += dy * alpha;
+                        // Keep children near their parent's x position
+                        const dx = parent.x - node.x;
+                        node.x += dx * alpha * 0.3;
+                    }
+                }
+            });
+        });
 
-        // Create links with improved visibility
+        // Create links with improved visibility and curved paths
         const link = g.append('g')
             .attr('class', 'links')
-            .selectAll('line')
+            .selectAll('path')
             .data(links)
-            .join('line')
+            .join('path')
             .attr('class', 'link')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
             .attr('stroke-width', 1.5)
+            .attr('fill', 'none')
             .attr('marker-end', 'url(#arrowhead)');
 
         // Create nodes with improved sizing
@@ -892,7 +896,7 @@ function initializeGraph(graphData) {
             .data(nodes)
             .join('circle')
             .attr('class', 'node')
-            .attr('r', d => Math.max(8, 6 + d.depth * 2))
+            .attr('r', d => Math.max(8, 6 + d.depth * 2 + Math.sqrt(links.filter(l => l.source.id === d.id).length) * 2))
             .attr('fill', d => colorScale(d.type))
             .attr('stroke', '#fff')
             .attr('stroke-width', 1.5)
@@ -940,13 +944,28 @@ function initializeGraph(graphData) {
             tooltip.style('display', 'none');
         });
 
-        // Update positions on each tick with bounds checking
+        // Update positions on each tick with improved path calculation
         simulation.on('tick', () => {
-            link
-                .attr('x1', d => Math.max(20, Math.min(width - 20, d.source.x)))
-                .attr('y1', d => Math.max(20, Math.min(height - 20, d.source.y)))
-                .attr('x2', d => Math.max(20, Math.min(width - 20, d.target.x)))
-                .attr('y2', d => Math.max(20, Math.min(height - 20, d.target.y)));
+            link.attr('d', d => {
+                const sourceX = Math.max(20, Math.min(width - 20, d.source.x));
+                const sourceY = Math.max(20, Math.min(height - 20, d.source.y));
+                const targetX = Math.max(20, Math.min(width - 20, d.target.x));
+                const targetY = Math.max(20, Math.min(height - 20, d.target.y));
+                
+                // Calculate control point for curved path
+                const dx = targetX - sourceX;
+                const dy = targetY - sourceY;
+                const dr = Math.sqrt(dx * dx + dy * dy);
+                
+                // Curved path if nodes are far apart, straight line if close
+                if (dr > 150) {
+                    const midX = (sourceX + targetX) / 2;
+                    const midY = (sourceY + targetY) / 2 - 50; // Control point above midpoint
+                    return `M${sourceX},${sourceY} Q${midX},${midY} ${targetX},${targetY}`;
+                } else {
+                    return `M${sourceX},${sourceY} L${targetX},${targetY}`;
+                }
+            });
 
             node
                 .attr('cx', d => Math.max(20, Math.min(width - 20, d.x)))
@@ -988,6 +1007,40 @@ function initializeGraph(graphData) {
         // Initial zoom fit
         setTimeout(() => {
             d3.select('#resetZoom').dispatch('click');
+        }, 100);
+
+        // Add node labels for better visibility
+        const labels = g.append('g')
+            .attr('class', 'labels')
+            .selectAll('text')
+            .data(nodes)
+            .join('text')
+            .attr('class', 'node-label')
+            .attr('dy', 4)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '10px')
+            .style('fill', '#666')
+            .style('pointer-events', 'none')
+            .text(d => d.type.charAt(0).toUpperCase());
+
+        // Update label positions on tick
+        simulation.on('tick.labels', () => {
+            labels
+                .attr('x', d => Math.max(20, Math.min(width - 20, d.x)))
+                .attr('y', d => Math.max(20, Math.min(height - 20, d.y)));
+        });
+
+        // Heat up simulation periodically to prevent sticking
+        let ticker = 0;
+        const reheat = setInterval(() => {
+            ticker++;
+            if (ticker > 200) {
+                clearInterval(reheat);
+                return;
+            }
+            if (simulation.alpha() < 0.1) {
+                simulation.alpha(0.3).restart();
+            }
         }, 100);
 
     } catch (error) {

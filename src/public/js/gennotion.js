@@ -62,6 +62,9 @@ async function processWorkspace(workspaceId) {
 
         const data = await response.json();
         
+        // Log the initial response data
+        console.log('Response data from /api/generate-report:', data);
+        
         if (!data.success) {
             throw new Error(data.error || 'Failed to trigger report');
         }
@@ -90,12 +93,18 @@ function listenForResults() {
         try {
             const data = JSON.parse(event.data);
             
+            // Log the event data received from the stream
+            console.log('Received event data:', data);
+            
             if (data.type === 'connected') {
                 console.log('Connected to results stream');
                 return;
             }
 
             if (data.success && data.data) {
+                // Log the actual results data
+                console.log('Final results data:', data.data);
+                
                 // Hide spinner and update status
                 showStatus('Results received!', false);
                 

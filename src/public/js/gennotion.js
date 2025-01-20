@@ -177,7 +177,7 @@ function displayResults(data) {
             hasData: !!data,
             dataType: typeof data,
             dataStructure: data ? Object.keys(data) : null,
-            rawData: data // Log the raw data to see its structure
+            rawData: data
         });
 
         resultsSection.classList.remove('hidden');
@@ -202,6 +202,13 @@ function displayResults(data) {
             throw new Error('graphData is not an array');
         }
 
+        // Store the extracted data for later use
+        window._lastGraphData = {
+            graphData,
+            insightsData,
+            keyInsightsData
+        };
+
         resultsContent.innerHTML = formatResults(graphData, insightsData, keyInsightsData);
         
         // Wait for next frame to ensure container is rendered
@@ -213,7 +220,7 @@ function displayResults(data) {
                 // Wait for scroll and any animations to complete
                 setTimeout(() => {
                     try {
-                        initializeGraph(data);
+                        initializeGraph(graphData); // Pass graphData instead of full data object
                         
                         // Force a resize event to ensure proper dimensions
                         window.dispatchEvent(new Event('resize'));
@@ -488,11 +495,16 @@ const colorScale = d3.scaleOrdinal()
     .range(['#60A5FA', '#34D399', '#F472B6']);
 
 // Initialize the graph visualization
-function initializeGraph(data) {
+function initializeGraph(graphData) {
     try {
-        window._lastGraphData = data;
+        const { nodes, links } = transformDataForGraph(graphData);
         
-        const { nodes, links } = transformDataForGraph(data);
+        console.log('Graph data transformed:', {
+            nodesCount: nodes.length,
+            linksCount: links.length,
+            sampleNode: nodes[0],
+            sampleLink: links[0]
+        });
         
         if (nodes.length === 0) {
             console.error('No valid nodes to display');

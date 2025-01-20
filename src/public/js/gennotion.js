@@ -437,28 +437,34 @@ function transformDataForGraph(data) {
     try {
         console.log('Transforming data for graph:', { dataLength: data.length });
         
-        // Create nodes with more information
+        // Create nodes with more information and proper date parsing
         const nodes = data.map(item => {
             try {
-                // Convert Unix epoch milliseconds to Date object
+                // Convert Unix epoch milliseconds to Date object with validation
                 let createdTime = null;
                 if (item.CREATED_TIME) {
                     const timestamp = Number(item.CREATED_TIME);
-                    if (!isNaN(timestamp)) {
+                    if (!isNaN(timestamp) && timestamp > 0) {
                         createdTime = new Date(timestamp);
+                        // Validate the date is reasonable
+                        if (createdTime.getFullYear() < 2000 || createdTime.getFullYear() > 2100) {
+                            console.warn('Invalid date detected:', createdTime);
+                            createdTime = null;
+                        }
                     }
                 }
 
                 return {
                     id: item.ID,
-                    type: item.TYPE,
-                    depth: item.DEPTH || 0,
-                    pageDepth: item.PAGE_DEPTH || 0,
+                    type: item.TYPE || 'unknown',
+                    depth: Number(item.DEPTH) || 0,
+                    pageDepth: Number(item.PAGE_DEPTH) || 0,
                     ancestors: item.ANCESTORS ? JSON.parse(item.ANCESTORS) : [],
                     parentId: item.PARENT_ID,
                     spaceId: item.SPACE_ID,
-                    text: item.TEXT,
+                    text: item.TEXT || '',
                     createdTime: createdTime,
+                    week: createdTime ? getWeekNumber(createdTime) : null,
                     originalData: item
                 };
             } catch (e) {
@@ -467,7 +473,14 @@ function transformDataForGraph(data) {
             }
         }).filter(Boolean);
 
-        // Create links from parent relationships
+        // Sort nodes by creation time
+        nodes.sort((a, b) => {
+            if (!a.createdTime) return -1;
+            if (!b.createdTime) return 1;
+            return a.createdTime - b.createdTime;
+        });
+
+        // Create links with validation
         const links = [];
         nodes.forEach(node => {
             if (node.parentId) {
@@ -476,10 +489,18 @@ function transformDataForGraph(data) {
                     links.push({
                         source: parentNode.id,
                         target: node.id,
-                        value: 1
+                        value: 1,
+                        sourceWeek: parentNode.week,
+                        targetWeek: node.week
                     });
                 }
             }
+        });
+
+        console.log('Transformed data:', {
+            nodeCount: nodes.length,
+            linkCount: links.length,
+            weekRange: getWeekRange(nodes)
         });
 
         return { nodes, links };
@@ -487,6 +508,116 @@ function transformDataForGraph(data) {
         console.error('Error in transformDataForGraph:', error);
         return { nodes: [], links: [] };
     }
+}
+
+// Helper function to get week number
+function getWeekNumber(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+// Helper function to get week range
+function getWeekRange(nodes) {
+    const weeks = nodes
+        .filter(n => n.week)
+        .map(n => ({
+            week: n.week,
+            year: n.createdTime.getFullYear()
+        }));
+    
+    if (weeks.length === 0) return null;
+
+    return {
+        start: weeks.reduce((min, curr) => 
+            curr.year < min.year || (curr.year === min.year && curr.week < min.week) ? curr : min
+        ),
+        end: weeks.reduce((max, curr) => 
+            curr.year > max.year || (curr.year === max.year && curr.week > max.week) ? curr : max
+        )
+    };
+}
+
+function updateTimelinePosition(progress, nodes, links, weekRange) {
+    if (!weekRange) return;
+
+    const totalWeeks = (weekRange.end.year - weekRange.start.year) * 52 + 
+                      (weekRange.end.week - weekRange.start.week);
+    const currentWeek = Math.floor((totalWeeks * progress) / 100);
+    
+    const currentYear = weekRange.start.year + Math.floor(currentWeek / 52);
+    const weekInYear = weekRange.start.week + (currentWeek % 52);
+
+    // Update tooltip with week information
+    const tooltipDate = new Date(currentYear, 0, 1 + (weekInYear - 1) * 7);
+    timelineTooltip.textContent = tooltipDate.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+
+    // Update node visibility with transition
+    node.transition()
+        .duration(400)
+        .style('opacity', d => {
+            if (!d.week) return 0.3;
+            const nodeYear = d.createdTime.getFullYear();
+            const isVisible = nodeYear < currentYear || 
+                            (nodeYear === currentYear && d.week <= weekInYear);
+            return isVisible ? 1 : 0;
+        })
+        .style('r', d => {
+            if (!d.week) return 8;
+            const nodeYear = d.createdTime.getFullYear();
+            const isVisible = nodeYear < currentYear || 
+                            (nodeYear === currentYear && d.week <= weekInYear);
+            return isVisible ? Math.max(10, 8 + d.depth * 2) : 0;
+        });
+
+    // Update link visibility
+    link.transition()
+        .duration(400)
+        .style('opacity', l => {
+            const sourceVisible = isNodeVisible(l.source, currentYear, weekInYear);
+            const targetVisible = isNodeVisible(l.target, currentYear, weekInYear);
+            return (sourceVisible && targetVisible) ? 0.8 : 0;
+        })
+        .style('stroke-width', l => {
+            const sourceVisible = isNodeVisible(l.source, currentYear, weekInYear);
+            const targetVisible = isNodeVisible(l.target, currentYear, weekInYear);
+            return (sourceVisible && targetVisible) ? 2 : 0;
+        });
+}
+
+function isNodeVisible(node, currentYear, weekInYear) {
+    if (!node.createdTime) return false;
+    const nodeYear = node.createdTime.getFullYear();
+    return nodeYear < currentYear || (nodeYear === currentYear && node.week <= weekInYear);
+}
+
+function updateProgress() {
+    if (!isPlaying) return;
+    
+    currentProgress += 0.005; // Slower progression
+    if (currentProgress > 100) {
+        currentProgress = 0;
+        isPlaying = false;
+        playButton.innerHTML = `
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        `;
+        return;
+    }
+    
+    // Add delay between updates
+    setTimeout(() => {
+        updateTimelinePosition(currentProgress, nodes, links, weekRange);
+        requestAnimationFrame(updateProgress);
+    }, 100); // 100ms delay between updates
 }
 
 // Color scale for different types
@@ -498,12 +629,13 @@ const colorScale = d3.scaleOrdinal()
 function initializeGraph(graphData) {
     try {
         const { nodes, links } = transformDataForGraph(graphData);
+        const weekRange = getWeekRange(nodes);
         
         console.log('Graph data transformed:', {
             nodesCount: nodes.length,
             linksCount: links.length,
-            sampleNode: nodes[0],
-            sampleLink: links[0]
+            weekRange: weekRange,
+            sampleNode: nodes[0]
         });
         
         if (nodes.length === 0) {
@@ -552,7 +684,7 @@ function initializeGraph(graphData) {
         const width = container.clientWidth;
         const height = container.clientHeight;
 
-        // Create new SVG
+        // Create new SVG with improved dimensions
         const svg = d3.select(container)
             .append('svg')
             .attr('width', '100%')
@@ -564,9 +696,9 @@ function initializeGraph(graphData) {
         const g = svg.append('g')
             .attr('class', 'graph-container');
 
-        // Initialize zoom behavior
+        // Initialize zoom behavior with improved bounds
         const zoom = d3.zoom()
-            .scaleExtent([0.2, 3])
+            .scaleExtent([0.1, 4])
             .on('zoom', (event) => {
                 g.attr('transform', event.transform);
             });
@@ -575,49 +707,36 @@ function initializeGraph(graphData) {
         svg.call(zoom)
            .on('dblclick.zoom', null);
 
-        // Create simulation with adjusted forces
+        // Create simulation with improved forces
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(150) // Increased distance between nodes
-                .strength(0.7)) // Increased link strength
+                .distance(d => 100 + (d.source.depth + d.target.depth) * 20) // Dynamic distance based on depth
+                .strength(0.5))
             .force('charge', d3.forceManyBody()
-                .strength(-2000) // Stronger repulsion
-                .distanceMax(800))
+                .strength(d => -2000 - d.depth * 500) // Stronger repulsion for deeper nodes
+                .distanceMax(1000))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(40)) // Increased collision radius
+            .force('collision', d3.forceCollide().radius(d => 20 + d.depth * 5)) // Dynamic collision radius
             .force('x', d3.forceX(width / 2).strength(0.1))
             .force('y', d3.forceY(height / 2).strength(0.1))
-            .alphaDecay(0.005) // Slower cooling
-            .velocityDecay(0.4); // More friction
+            .alphaDecay(0.002) // Much slower cooling
+            .velocityDecay(0.3);
 
-        // Create arrow marker for links
+        // Create arrow marker for links with improved size
         svg.append('defs').append('marker')
             .attr('id', 'arrowhead')
             .attr('viewBox', '-5 -5 10 10')
-            .attr('refX', 20)
+            .attr('refX', 25) // Adjusted to account for larger nodes
             .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
+            .attr('markerWidth', 8)
+            .attr('markerHeight', 8)
             .attr('orient', 'auto')
             .append('path')
             .attr('d', 'M -5,-5 L 5,0 L -5,5')
             .attr('fill', '#999');
 
-        // Create nodes with larger initial size
-        const node = g.append('g')
-            .attr('class', 'nodes')
-            .selectAll('circle')
-            .data(nodes)
-            .join('circle')
-            .attr('class', 'node')
-            .attr('r', d => Math.max(10, 8 + d.depth * 2)) // Increased initial node sizes
-            .attr('fill', d => colorScale(d.type))
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 2) // Increased stroke width
-            .call(drag(simulation));
-
-        // Create links with increased visibility
+        // Create links with improved visibility
         const link = g.append('g')
             .attr('class', 'links')
             .selectAll('line')
@@ -625,267 +744,79 @@ function initializeGraph(graphData) {
             .join('line')
             .attr('class', 'link')
             .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.8) // Increased opacity
-            .attr('stroke-width', 2) // Increased width
+            .attr('stroke-opacity', 0.8)
+            .attr('stroke-width', 2)
             .attr('marker-end', 'url(#arrowhead)');
 
-        // Add tooltips
-        const tooltip = d3.select('#graph-tooltip');
-        
-        node.on('mouseover', (event, d) => {
-            const parentNode = nodes.find(n => n.id === d.parentId);
-            const childCount = links.filter(l => l.source.id === d.id).length;
-            
-            const rect = event.target.getBoundingClientRect();
-            tooltip
-                .style('display', 'block')
-                .style('left', `${rect.x + rect.width + 10}px`)
-                .style('top', `${rect.y}px`)
-                .html(`
-                    <div class="p-2">
-                        <div class="font-bold text-gray-900 mb-1">${d.type}</div>
-                        <div class="text-sm space-y-1">
-                            <div class="flex items-center">
-                                <span class="text-gray-500">ID:</span>
-                                <span class="ml-2 font-mono text-xs">${d.id.slice(0, 8)}...</span>
-                            </div>
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Created:</span>
-                                <span class="ml-2">${d.createdTime ? d.createdTime.toLocaleString() : 'Unknown'}</span>
-                            </div>
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Depth:</span>
-                                <span class="ml-2">${d.depth}</span>
-                            </div>
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Children:</span>
-                                <span class="ml-2">${childCount}</span>
-                            </div>
-                            ${parentNode ? `
-                            <div class="flex items-center">
-                                <span class="text-gray-500">Parent:</span>
-                                <span class="ml-2">${parentNode.type}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `);
-        })
-        .on('mouseout', () => {
-            tooltip.style('display', 'none');
-        });
+        // Create nodes with improved sizing
+        const node = g.append('g')
+            .attr('class', 'nodes')
+            .selectAll('circle')
+            .data(nodes)
+            .join('circle')
+            .attr('class', 'node')
+            .attr('r', d => Math.max(12, 10 + d.depth * 3)) // Larger base size
+            .attr('fill', d => colorScale(d.type))
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2)
+            .call(drag(simulation));
 
-        // Update positions on each tick
-        simulation.on('tick', () => {
-            link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
-
-            node
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-        });
-
-        // Initialize timeline
-        const times = nodes.map(n => n.createdTime).filter(Boolean);
-        if (times.length > 0) {
-            const minTime = new Date(Math.min(...times));
-            const maxTime = new Date(Math.max(...times));
-            
-            const formatDate = date => {
-                return date.toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            };
-
-            const timelineSlider = document.getElementById('timelineSlider');
-            const timelineHandle = document.getElementById('timelineHandle');
-            const timelineTooltip = document.getElementById('timelineTooltip');
-            const timelineProgress = document.getElementById('timelineProgress');
-            const timelineStart = document.getElementById('timelineStart');
-            const timelineEnd = document.getElementById('timelineEnd');
-
-            // Set initial dates
-            timelineStart.textContent = formatDate(minTime);
-            timelineEnd.textContent = formatDate(maxTime);
-
-            function updateTimelinePosition(progress) {
-                const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
-                
-                // Update slider UI
-                timelineHandle.style.left = `${progress}%`;
-                timelineProgress.style.width = `${progress}%`;
-                timelineTooltip.textContent = formatDate(currentTime);
-                
-                // Update node visibility with transition
-                node.transition()
-                    .duration(400) // Increased duration for smoother transition
-                    .style('opacity', d => {
-                        if (!d.createdTime) return 0.5; // Increased opacity for nodes without creation time
-                        return d.createdTime <= currentTime ? 1 : 0;
-                    })
-                    .style('r', d => {
-                        if (!d.createdTime) return 8;
-                        return d.createdTime <= currentTime ? Math.max(10, 8 + d.depth * 2) : 0; // Increased node sizes
-                    });
-
-                // Update link visibility with transition
-                link.transition()
-                    .duration(400) // Increased duration for smoother transition
-                    .style('opacity', l => {
-                        const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
-                        const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
-                        return (sourceVisible && targetVisible) ? 0.8 : 0; // Increased link opacity
-                    })
-                    .style('stroke-width', l => {
-                        const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
-                        const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
-                        return (sourceVisible && targetVisible) ? 2 : 0; // Increased stroke width
-                    });
-            }
-
-            let isDragging = false;
-
-            function startDragging(e) {
-                isDragging = true;
-                handleDrag(e);
-                e.stopPropagation();
-            }
-
-            function handleDrag(e) {
-                if (!isDragging) return;
-                e.preventDefault();
-                e.stopPropagation();
-                
-                const rect = timelineSlider.getBoundingClientRect();
-                const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-                updateTimelinePosition(progress);
-            }
-
-            function stopDragging() {
-                isDragging = false;
-            }
-
-            // Add click handler for direct clicking on the slider
-            timelineSlider.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const rect = timelineSlider.getBoundingClientRect();
-                const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-                updateTimelinePosition(progress);
-            });
-
-            // Mouse events
-            timelineSlider.addEventListener('mousedown', startDragging);
-            document.addEventListener('mousemove', handleDrag);
-            document.addEventListener('mouseup', stopDragging);
-
-            // Initialize timeline at the start
-            updateTimelinePosition(0);
-
-            // Add play button with smoother animation
-            const playButton = document.createElement('button');
-            playButton.className = 'graph-control-button ml-2';
-            playButton.innerHTML = `
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            `;
-            timelineSlider.parentNode.insertBefore(playButton, timelineSlider);
-
-            let isPlaying = false;
-            let playInterval;
-            let currentProgress = 0;
-
-            function updateProgress() {
-                if (!isPlaying) return;
-                
-                currentProgress += 0.01; // Reduced from 0.1 to 0.01 for 10x slower animation
-                if (currentProgress > 100) {
-                    currentProgress = 0;
-                    isPlaying = false;
-                    playButton.innerHTML = `
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    `;
-                    return;
-                }
-                
-                // Add delay between updates
-                setTimeout(() => {
-                    updateTimelinePosition(currentProgress);
-                    requestAnimationFrame(updateProgress);
-                }, 50); // 50ms delay between updates
-            }
-
-            playButton.addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (isPlaying) {
-                    isPlaying = false;
-                    playButton.innerHTML = `
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    `;
-                } else {
-                    isPlaying = true;
-                    playButton.innerHTML = `
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                    `;
-                    currentProgress = parseFloat(timelineHandle.style.left) || 0;
-                    requestAnimationFrame(updateProgress);
-                }
-            });
-        } else {
-            const timelineContainer = document.querySelector('.timeline-container');
-            if (timelineContainer) {
-                timelineContainer.style.display = 'none';
-            }
+        // Initialize timeline if we have date information
+        if (weekRange) {
+            initializeTimeline(nodes, links, weekRange);
         }
 
-        // Add zoom controls with event propagation prevention
-        d3.select('#zoomIn').on('click', (e) => {
-            e.stopPropagation();
-            zoom.scaleBy(svg.transition().duration(750), 1.2);
+        // Update positions on each tick with bounds checking
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => Math.max(0, Math.min(width, d.source.x)))
+                .attr('y1', d => Math.max(0, Math.min(height, d.source.y)))
+                .attr('x2', d => Math.max(0, Math.min(width, d.target.x)))
+                .attr('y2', d => Math.max(0, Math.min(height, d.target.y)));
+
+            node
+                .attr('cx', d => Math.max(20, Math.min(width - 20, d.x)))
+                .attr('cy', d => Math.max(20, Math.min(height - 20, d.y)));
         });
 
-        d3.select('#zoomOut').on('click', (e) => {
-            e.stopPropagation();
-            zoom.scaleBy(svg.transition().duration(750), 0.8);
-        });
+        // Heat up the simulation periodically to prevent sticking
+        let ticker = 0;
+        const reheat = setInterval(() => {
+            ticker++;
+            if (ticker > 200) { // Stop after 200 ticks
+                clearInterval(reheat);
+                return;
+            }
+            if (simulation.alpha() < 0.1) {
+                simulation.alpha(0.3).restart();
+            }
+        }, 100);
 
-        d3.select('#resetZoom').on('click', (e) => {
-            e.stopPropagation();
+        // Export necessary variables to window for timeline access
+        window._graphState = {
+            nodes,
+            links,
+            weekRange,
+            node,
+            link
+        };
+
+        // Initial zoom fit
+        setTimeout(() => {
             const bounds = g.node().getBBox();
             const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
             const translate = [
                 width / 2 - scale * (bounds.x + bounds.width / 2),
                 height / 2 - scale * (bounds.y + bounds.height / 2)
             ];
-
             svg.transition()
                 .duration(750)
                 .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
-        });
-
-        // Initial zoom fit
-        setTimeout(() => {
-            d3.select('#resetZoom').dispatch('click');
         }, 100);
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
+        throw error;
     }
 }
 

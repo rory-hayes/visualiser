@@ -495,11 +495,13 @@ function initializeGraph(data) {
             return;
         }
 
-        // Clear existing graph
-        d3.select('#graph-container svg').remove();
-
-        // Create SVG container
+        // Clear existing graph and all its contents
         const container = document.getElementById('graph-container');
+        const existingSvg = container.querySelector('svg');
+        if (existingSvg) {
+            existingSvg.remove();
+        }
+
         if (!container) {
             console.error('Graph container not found');
             return;
@@ -509,42 +511,35 @@ function initializeGraph(data) {
         const height = container.clientHeight;
         console.log('Container dimensions:', { width, height });
 
+        // Create new SVG with a clean slate
         const svg = d3.select('#graph-container')
             .append('svg')
             .attr('width', width)
             .attr('height', height)
-            .attr('class', 'graph-svg');
+            .attr('class', 'graph-svg')
+            .style('position', 'absolute')
+            .style('top', 0)
+            .style('left', 0);
 
-        // Create main group for zoom/pan with a background rect to catch events
+        // Create main group for zoom/pan
         const g = svg.append('g')
             .attr('class', 'graph-group');
-            
-        // Add a background rectangle to catch events
-        g.append('rect')
-            .attr('class', 'graph-background')
-            .attr('width', width)
-            .attr('height', height)
-            .attr('fill', 'none')
-            .attr('pointer-events', 'all');
 
-        // Add zoom behavior with bounds
+        // Add zoom behavior
         const zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on('zoom', (event) => {
                 g.attr('transform', event.transform);
             });
 
-        svg.call(zoom)
-            .on('dblclick.zoom', null); // Disable double-click zoom
+        svg.call(zoom);
 
-        // Create the force simulation with adjusted parameters
+        // Create the force simulation
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links).id(d => d.id).distance(100))
             .force('charge', d3.forceManyBody().strength(-500))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30))
-            .force('x', d3.forceX(width / 2).strength(0.1))
-            .force('y', d3.forceY(height / 2).strength(0.1));
+            .force('collision', d3.forceCollide().radius(30));
 
         // Create links
         const link = g.append('g')
@@ -557,7 +552,7 @@ function initializeGraph(data) {
             .attr('stroke-opacity', 0.6)
             .attr('stroke-width', 1);
 
-        // Create nodes with adjusted sizes
+        // Create nodes
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
@@ -578,13 +573,10 @@ function initializeGraph(data) {
             const childCount = links.filter(l => l.source.id === d.id).length;
             
             const rect = event.target.getBoundingClientRect();
-            const tooltipX = rect.x + rect.width + 10;
-            const tooltipY = rect.y;
-            
             tooltip
                 .style('display', 'block')
-                .style('left', `${tooltipX}px`)
-                .style('top', `${tooltipY}px`)
+                .style('left', `${rect.x + rect.width + 10}px`)
+                .style('top', `${rect.y}px`)
                 .html(`
                     <div class="p-2">
                         <div class="font-bold text-gray-900 mb-1">${d.type}</div>
@@ -594,12 +586,12 @@ function initializeGraph(data) {
                                 <span class="ml-2 font-mono text-xs">${d.id.slice(0, 8)}...</span>
                             </div>
                             <div class="flex items-center">
-                                <span class="text-gray-500">Depth:</span>
-                                <span class="ml-2">${d.depth}</span>
+                                <span class="text-gray-500">Created:</span>
+                                <span class="ml-2">${d.createdTime ? d.createdTime.toLocaleString() : 'Unknown'}</span>
                             </div>
                             <div class="flex items-center">
-                                <span class="text-gray-500">Page Depth:</span>
-                                <span class="ml-2">${d.pageDepth}</span>
+                                <span class="text-gray-500">Depth:</span>
+                                <span class="ml-2">${d.depth}</span>
                             </div>
                             <div class="flex items-center">
                                 <span class="text-gray-500">Children:</span>
@@ -607,60 +599,16 @@ function initializeGraph(data) {
                             </div>
                             ${parentNode ? `
                             <div class="flex items-center">
-                                <span class="text-gray-500">Parent Type:</span>
+                                <span class="text-gray-500">Parent:</span>
                                 <span class="ml-2">${parentNode.type}</span>
-                            </div>
-                            ` : ''}
-                            ${d.text ? `
-                            <div class="mt-2 pt-2 border-t border-gray-200">
-                                <div class="text-gray-500">Content:</div>
-                                <div class="text-xs mt-1">${d.text}</div>
                             </div>
                             ` : ''}
                         </div>
                     </div>
                 `);
-
-            // Adjust tooltip position if it goes off screen
-            const tooltipNode = tooltip.node();
-            const tooltipRect = tooltipNode.getBoundingClientRect();
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-
-            if (tooltipRect.right > viewportWidth) {
-                tooltip.style('left', `${rect.x - tooltipRect.width - 10}px`);
-            }
-            if (tooltipRect.bottom > viewportHeight) {
-                tooltip.style('top', `${rect.y + rect.height - tooltipRect.height}px`);
-            }
         })
         .on('mouseout', () => {
             tooltip.style('display', 'none');
-        })
-        .on('click', (event, d) => {
-            // Highlight connected nodes
-            const connected = new Set([d.id, ...(d.ancestors || [])]);
-            node.attr('opacity', n => connected.has(n.id) ? 1 : 0.1);
-            link.attr('opacity', l => connected.has(l.source.id) && connected.has(l.target.id) ? 1 : 0.1);
-        });
-
-        // Add zoom controls
-        d3.select('#zoomIn').on('click', () => {
-            zoom.scaleBy(svg.transition().duration(750), 1.2);
-        });
-
-        d3.select('#zoomOut').on('click', () => {
-            zoom.scaleBy(svg.transition().duration(750), 0.8);
-        });
-
-        d3.select('#resetZoom').on('click', () => {
-            fitGraphToView();
-        });
-
-        // Double click background to reset opacities
-        svg.on('dblclick', () => {
-            node.attr('opacity', 1);
-            link.attr('opacity', 1);
         });
 
         // Update positions on each tick
@@ -676,50 +624,13 @@ function initializeGraph(data) {
                 .attr('cy', d => d.y);
         });
 
-        // Function to fit graph to view
-        function fitGraphToView() {
-            const bounds = g.node().getBBox();
-            const fullWidth = width;
-            const fullHeight = height;
-            const width_ = bounds.width;
-            const height_ = bounds.height;
-            const midX = bounds.x + width_ / 2;
-            const midY = bounds.y + height_ / 2;
-
-            if (width_ === 0 || height_ === 0) return; // nothing to fit
-
-            const scale = 0.8 / Math.max(width_ / fullWidth, height_ / fullHeight);
-            const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
-
-            svg.transition()
-                .duration(750)
-                .call(
-                    zoom.transform,
-                    d3.zoomIdentity
-                        .translate(translate[0], translate[1])
-                        .scale(scale)
-                );
-        }
-
-        // Initial fit after simulation has settled
-        simulation.on('end', fitGraphToView);
-
-        // Initialize timeline
-        const timelineSlider = document.getElementById('timelineSlider');
-        const timelineHandle = document.getElementById('timelineHandle');
-        const timelineTooltip = document.getElementById('timelineTooltip');
-        const timelineProgress = document.getElementById('timelineProgress');
-        const timelineStart = document.getElementById('timelineStart');
-        const timelineEnd = document.getElementById('timelineEnd');
-
-        // Get time range
+        // Initialize timeline if we have creation times
         const times = nodes.map(n => n.createdTime).filter(Boolean);
         if (times.length > 0) {
             const minTime = new Date(Math.min(...times));
             const maxTime = new Date(Math.max(...times));
             
-            // Format dates with time
-            const formatDate = (date) => {
+            const formatDate = date => {
                 return date.toLocaleString('en-US', {
                     year: 'numeric',
                     month: 'short',
@@ -728,38 +639,40 @@ function initializeGraph(data) {
                     minute: '2-digit'
                 });
             };
-            
+
+            const timelineSlider = document.getElementById('timelineSlider');
+            const timelineHandle = document.getElementById('timelineHandle');
+            const timelineTooltip = document.getElementById('timelineTooltip');
+            const timelineProgress = document.getElementById('timelineProgress');
+            const timelineStart = document.getElementById('timelineStart');
+            const timelineEnd = document.getElementById('timelineEnd');
+
             timelineStart.textContent = formatDate(minTime);
             timelineEnd.textContent = formatDate(maxTime);
 
             function updateTimelinePosition(progress) {
+                const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
+                
+                // Update slider UI
                 timelineHandle.style.left = `${progress}%`;
                 timelineProgress.style.width = `${progress}%`;
-                
-                const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
                 timelineTooltip.textContent = formatDate(currentTime);
 
-                // Update node visibility - show nodes created before or at current time
-                node.attr('opacity', d => {
-                    if (!d.createdTime) return 0.3; // Semi-transparent for nodes without creation time
-                    return d.createdTime <= currentTime ? 1 : 0.1;
+                // Update node visibility
+                nodes.forEach(d => {
+                    d.visible = !d.createdTime || d.createdTime <= currentTime;
                 });
 
-                // Update link visibility - only show links where both nodes are visible
-                link.attr('opacity', l => {
-                    const sourceTime = l.source.createdTime;
-                    const targetTime = l.target.createdTime;
-                    if (!sourceTime || !targetTime) return 0.2;
-                    return (sourceTime <= currentTime && targetTime <= currentTime) ? 0.6 : 0.05;
+                // Update visual elements
+                node.style('display', d => d.visible ? null : 'none');
+                link.style('display', l => {
+                    const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
+                    const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
+                    return sourceVisible && targetVisible ? null : 'none';
                 });
             }
 
-            // Add drag behavior to timeline with improved handling
             let isDragging = false;
-
-            timelineSlider.addEventListener('mousedown', startDragging);
-            document.addEventListener('mousemove', handleDrag);
-            document.addEventListener('mouseup', stopDragging);
 
             function startDragging(e) {
                 isDragging = true;
@@ -768,12 +681,10 @@ function initializeGraph(data) {
 
             function handleDrag(e) {
                 if (!isDragging) return;
-                e.preventDefault(); // Prevent text selection while dragging
+                e.preventDefault();
                 
                 const rect = timelineSlider.getBoundingClientRect();
-                let progress = ((e.clientX - rect.left) / rect.width) * 100;
-                progress = Math.max(0, Math.min(100, progress));
-                
+                const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
                 updateTimelinePosition(progress);
             }
 
@@ -781,17 +692,41 @@ function initializeGraph(data) {
                 isDragging = false;
             }
 
+            timelineSlider.addEventListener('mousedown', startDragging);
+            document.addEventListener('mousemove', handleDrag);
+            document.addEventListener('mouseup', stopDragging);
+
             // Initialize with all nodes visible
             updateTimelinePosition(100);
         } else {
-            // Hide timeline if no time data
             const timelineContainer = document.querySelector('.timeline-container');
             if (timelineContainer) {
                 timelineContainer.style.display = 'none';
             }
         }
 
-        console.log('Graph initialization complete');
+        // Add zoom controls
+        d3.select('#zoomIn').on('click', () => {
+            zoom.scaleBy(svg.transition().duration(750), 1.2);
+        });
+
+        d3.select('#zoomOut').on('click', () => {
+            zoom.scaleBy(svg.transition().duration(750), 0.8);
+        });
+
+        d3.select('#resetZoom').on('click', () => {
+            const bounds = g.node().getBBox();
+            const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
+            const translate = [
+                width / 2 - scale * (bounds.x + bounds.width / 2),
+                height / 2 - scale * (bounds.y + bounds.height / 2)
+            ];
+
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
+        });
+
     } catch (error) {
         console.error('Error in initializeGraph:', error);
     }

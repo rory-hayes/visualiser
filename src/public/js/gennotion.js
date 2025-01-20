@@ -273,6 +273,18 @@ function formatResults(data) {
                             </svg>
                         </button>
                     </div>
+                    <div class="timeline-container">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm text-gray-500" id="timelineStart"></span>
+                            <span class="text-sm text-gray-500" id="timelineEnd"></span>
+                        </div>
+                        <div class="timeline-slider" id="timelineSlider">
+                            <div class="timeline-progress" id="timelineProgress"></div>
+                            <div class="timeline-handle" id="timelineHandle">
+                                <div class="timeline-tooltip" id="timelineTooltip"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -289,6 +301,7 @@ function transformDataForGraph(data) {
         // Create nodes with more information
         const nodes = data.map(item => {
             try {
+                const createdTime = item.CREATED_TIME ? new Date(item.CREATED_TIME) : null;
                 return {
                     id: item.ID,
                     type: item.TYPE,
@@ -298,6 +311,7 @@ function transformDataForGraph(data) {
                     parentId: item.PARENT_ID,
                     spaceId: item.SPACE_ID,
                     text: item.TEXT,
+                    createdTime: createdTime,
                     // Store the original data for tooltip
                     originalData: item
                 };
@@ -306,6 +320,13 @@ function transformDataForGraph(data) {
                 return null;
             }
         }).filter(Boolean);
+
+        // Sort nodes by creation time
+        nodes.sort((a, b) => {
+            if (!a.createdTime) return -1;
+            if (!b.createdTime) return 1;
+            return a.createdTime - b.createdTime;
+        });
 
         console.log('Transformed nodes:', { nodeCount: nodes.length });
 
@@ -557,6 +578,81 @@ function initializeGraph(data) {
 
         // Initial fit after simulation has settled
         simulation.on('end', fitGraphToView);
+
+        // Initialize timeline
+        const timelineSlider = document.getElementById('timelineSlider');
+        const timelineHandle = document.getElementById('timelineHandle');
+        const timelineTooltip = document.getElementById('timelineTooltip');
+        const timelineProgress = document.getElementById('timelineProgress');
+        const timelineStart = document.getElementById('timelineStart');
+        const timelineEnd = document.getElementById('timelineEnd');
+
+        // Get time range
+        const times = nodes.map(n => n.createdTime).filter(Boolean);
+        if (times.length > 0) {
+            const minTime = new Date(Math.min(...times));
+            const maxTime = new Date(Math.max(...times));
+            
+            timelineStart.textContent = minTime.toLocaleDateString();
+            timelineEnd.textContent = maxTime.toLocaleDateString();
+
+            let currentProgress = 100;
+            updateTimelinePosition(currentProgress);
+
+            function updateTimelinePosition(progress) {
+                timelineHandle.style.left = `${progress}%`;
+                timelineProgress.style.width = `${progress}%`;
+                
+                const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
+                timelineTooltip.textContent = currentTime.toLocaleDateString();
+
+                // Update node visibility
+                node.attr('opacity', d => {
+                    if (!d.createdTime) return 0.2;
+                    return d.createdTime <= currentTime ? 1 : 0.1;
+                });
+
+                // Update link visibility
+                link.attr('opacity', l => {
+                    const sourceTime = l.source.createdTime;
+                    const targetTime = l.target.createdTime;
+                    if (!sourceTime || !targetTime) return 0.2;
+                    return (sourceTime <= currentTime && targetTime <= currentTime) ? 0.6 : 0.1;
+                });
+            }
+
+            // Add drag behavior to timeline
+            let isDragging = false;
+
+            timelineSlider.addEventListener('mousedown', startDragging);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDragging);
+
+            function startDragging(e) {
+                isDragging = true;
+                drag(e);
+            }
+
+            function drag(e) {
+                if (!isDragging) return;
+                
+                const rect = timelineSlider.getBoundingClientRect();
+                let progress = ((e.clientX - rect.left) / rect.width) * 100;
+                progress = Math.max(0, Math.min(100, progress));
+                
+                updateTimelinePosition(progress);
+            }
+
+            function stopDragging() {
+                isDragging = false;
+            }
+        } else {
+            // Hide timeline if no time data
+            const timelineContainer = document.querySelector('.timeline-container');
+            if (timelineContainer) {
+                timelineContainer.style.display = 'none';
+            }
+        }
 
         console.log('Graph initialization complete');
     } catch (error) {

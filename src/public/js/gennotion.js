@@ -62,8 +62,17 @@ async function processWorkspace(workspaceId) {
 
         const data = await response.json();
         
-        // Log the initial response data
-        console.log('Response data from /api/generate-report:', data);
+        // Send data to server for logging
+        await fetch('/api/log-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                type: 'generate-report',
+                data: data
+            })
+        });
         
         if (!data.success) {
             throw new Error(data.error || 'Failed to trigger report');
@@ -102,6 +111,18 @@ function listenForResults() {
             }
 
             if (data.success && data.data) {
+                // Send final results to server for logging
+                fetch('/api/log-data', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        type: 'final-results',
+                        data: data.data
+                    })
+                });
+                
                 // Log the actual results data
                 console.log('Final results data:', data.data);
                 
@@ -142,48 +163,93 @@ function formatResults(data) {
         return '<p class="text-gray-500">No results available</p>';
     }
 
-    // Create a table to display the results
-    const table = document.createElement('table');
-    table.className = 'min-w-full divide-y divide-gray-200';
-    
-    // Create table header
-    const thead = document.createElement('thead');
-    thead.className = 'bg-gray-50';
-    const headerRow = document.createElement('tr');
-    
-    // Get columns from the first data item
-    const columns = Object.keys(data[0] || {});
-    
-    columns.forEach(column => {
-        const th = document.createElement('th');
-        th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
-        th.textContent = column;
-        headerRow.appendChild(th);
+    // Calculate insights
+    const insights = {
+        totalPages: data.length,
+        typeDistribution: {},
+        depthDistribution: {},
+        pageDepthDistribution: {},
+        collections: data.filter(item => item.TYPE === 'collection').length,
+        collectionViews: data.filter(item => item.TYPE === 'collection_view_page').length,
+        maxDepth: Math.max(...data.map(item => item.DEPTH)),
+        maxPageDepth: Math.max(...data.map(item => item.PAGE_DEPTH)),
+        rootPages: data.filter(item => item.DEPTH === 0).length
+    };
+
+    // Calculate distributions
+    data.forEach(item => {
+        insights.typeDistribution[item.TYPE] = (insights.typeDistribution[item.TYPE] || 0) + 1;
+        insights.depthDistribution[item.DEPTH] = (insights.depthDistribution[item.DEPTH] || 0) + 1;
+        insights.pageDepthDistribution[item.PAGE_DEPTH] = (insights.pageDepthDistribution[item.PAGE_DEPTH] || 0) + 1;
     });
-    
-    thead.appendChild(headerRow);
-    table.appendChild(thead);
-    
-    // Create table body
-    const tbody = document.createElement('tbody');
-    tbody.className = 'bg-white divide-y divide-gray-200';
-    
-    data.forEach((item, index) => {
-        const row = document.createElement('tr');
-        row.className = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
-        
-        columns.forEach(column => {
-            const td = document.createElement('td');
-            td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
-            td.textContent = item[column] || '';
-            row.appendChild(td);
-        });
-        
-        tbody.appendChild(row);
-    });
-    
-    table.appendChild(tbody);
-    return table.outerHTML;
+
+    // Create HTML output
+    let html = `
+        <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
+            <h2 class="text-2xl font-bold mb-4">Workspace Structure Insights</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                <div class="p-4 bg-gray-50 rounded">
+                    <h3 class="font-semibold">Overview</h3>
+                    <ul class="mt-2">
+                        <li>Total Pages: ${insights.totalPages}</li>
+                        <li>Root Pages: ${insights.rootPages}</li>
+                        <li>Max Depth: ${insights.maxDepth}</li>
+                        <li>Max Page Depth: ${insights.maxPageDepth}</li>
+                    </ul>
+                </div>
+                
+                <div class="p-4 bg-gray-50 rounded">
+                    <h3 class="font-semibold">Page Types</h3>
+                    <ul class="mt-2">
+                        ${Object.entries(insights.typeDistribution)
+                            .map(([type, count]) => `<li>${type}: ${count}</li>`)
+                            .join('')}
+                    </ul>
+                </div>
+                
+                <div class="p-4 bg-gray-50 rounded">
+                    <h3 class="font-semibold">Depth Distribution</h3>
+                    <ul class="mt-2">
+                        ${Object.entries(insights.depthDistribution)
+                            .map(([depth, count]) => `<li>Depth ${depth}: ${count} pages</li>`)
+                            .join('')}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <h3 class="font-semibold mb-3">Detailed Page List</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depth</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Page Depth</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parent Type</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                            ${data.map((item, index) => {
+                                const parentPage = data.find(p => p.ID === item.PARENT_PAGE_ID);
+                                return `
+                                    <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.TYPE}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.DEPTH}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.PAGE_DEPTH}</td>
+                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${parentPage ? parentPage.TYPE : 'Root'}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return html;
 }
 
 function showStatus(message, showSpinner = false) {

@@ -608,5 +608,67 @@ app.get('/api/hex-results/:runId', async (req, res) => {
     }
 });
 
+// Add logging endpoint
+app.post('/api/log-data', (req, res) => {
+    try {
+        const { type, data } = req.body;
+        const timestamp = new Date().toISOString();
+        const logPath = '/opt/render/project/src/logs.json';
+        
+        // Create log entry
+        const logEntry = {
+            timestamp,
+            type,
+            data
+        };
+
+        // Read existing logs or create new array
+        let logs = [];
+        if (fs.existsSync(logPath)) {
+            const fileContent = fs.readFileSync(logPath, 'utf8');
+            logs = JSON.parse(fileContent);
+        }
+
+        // Add new log and keep only last 100 entries
+        logs.push(logEntry);
+        if (logs.length > 100) {
+            logs = logs.slice(-100);
+        }
+
+        // Write back to file
+        fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
+
+        console.log('Logged data:', {
+            type,
+            timestamp,
+            dataSize: JSON.stringify(data).length
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error logging data:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Add endpoint to view logs
+app.get('/api/logs', (req, res) => {
+    try {
+        const logPath = '/opt/render/project/src/logs.json';
+        
+        if (!fs.existsSync(logPath)) {
+            return res.json({ logs: [] });
+        }
+
+        const fileContent = fs.readFileSync(logPath, 'utf8');
+        const logs = JSON.parse(fileContent);
+
+        res.json({ logs });
+    } catch (error) {
+        console.error('Error reading logs:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

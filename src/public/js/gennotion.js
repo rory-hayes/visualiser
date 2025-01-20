@@ -353,39 +353,39 @@ function formatResults(graphData, insightsData, keyInsightsData) {
 
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
-                <div id="graph-container" class="w-full h-[600px] relative bg-gray-50 rounded-lg">
+                <div id="graph-container" class="w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden">
                     <!-- Graph Controls -->
-                    <div class="graph-controls">
-                        <button class="graph-control-button" id="zoomIn" title="Zoom In">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
+                        <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                             </svg>
                         </button>
-                        <button class="graph-control-button" id="zoomOut" title="Zoom Out">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
                             </svg>
                         </button>
-                        <button class="graph-control-button" id="resetZoom" title="Reset View">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
                         </button>
                     </div>
 
                     <!-- Tooltip Container -->
-                    <div id="graph-tooltip" class="hidden"></div>
+                    <div id="graph-tooltip" class="hidden absolute z-20 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 max-w-xs"></div>
 
                     <!-- Timeline Container -->
-                    <div class="timeline-container">
+                    <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
                         <div class="flex justify-between mb-2">
-                            <span class="text-sm text-gray-500" id="timelineStart"></span>
-                            <span class="text-sm text-gray-500" id="timelineEnd"></span>
+                            <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
+                            <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
                         </div>
-                        <div class="timeline-slider" id="timelineSlider">
-                            <div class="timeline-progress" id="timelineProgress"></div>
-                            <div class="timeline-handle" id="timelineHandle">
-                                <div class="timeline-tooltip" id="timelineTooltip"></div>
+                        <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
+                            <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
+                            <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
+                                <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
                             </div>
                         </div>
                     </div>

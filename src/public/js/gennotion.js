@@ -150,12 +150,9 @@ function listenForResults() {
 }
 
 function displayResults(data) {
-    // Show results section
     resultsSection.classList.remove('hidden');
-    
-    // Create a formatted display of the results
-    const formattedResults = formatResults(data);
-    resultsContent.innerHTML = formattedResults;
+    resultsContent.innerHTML = formatResults(data);
+    initializeGraph(data);
 }
 
 function formatResults(data) {
@@ -188,7 +185,7 @@ function formatResults(data) {
         <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
             <h2 class="text-2xl font-bold mb-4">Workspace Structure Insights</h2>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div class="p-4 bg-gray-50 rounded">
                     <h3 class="font-semibold">Overview</h3>
                     <ul class="mt-2">
@@ -219,37 +216,204 @@ function formatResults(data) {
             </div>
 
             <div class="mt-6">
-                <h3 class="font-semibold mb-3">Detailed Page List</h3>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Depth</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Page Depth</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parent Type</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200">
-                            ${data.map((item, index) => {
-                                const parentPage = data.find(p => p.ID === item.PARENT_PAGE_ID);
-                                return `
-                                    <tr class="${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.TYPE}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.DEPTH}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.PAGE_DEPTH}</td>
-                                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${parentPage ? parentPage.TYPE : 'Root'}</td>
-                                    </tr>
-                                `;
-                            }).join('')}
-                        </tbody>
-                    </table>
+                <h3 class="font-semibold mb-3">Workspace Visualization</h3>
+                <div id="graph-container" class="w-full h-[600px] bg-gray-50 rounded-lg relative">
+                    <div id="graph-tooltip" class="hidden absolute bg-white p-2 rounded shadow-lg border text-sm"></div>
+                    <div class="absolute top-4 right-4 space-y-2">
+                        <button id="zoomIn" class="bg-white p-2 rounded shadow hover:bg-gray-100">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                        </button>
+                        <button id="zoomOut" class="bg-white p-2 rounded shadow hover:bg-gray-100">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                            </svg>
+                        </button>
+                        <button id="resetZoom" class="bg-white p-2 rounded shadow hover:bg-gray-100">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     `;
 
     return html;
+}
+
+// Transform data for D3
+function transformDataForGraph(data) {
+    // Create nodes
+    const nodes = data.map(item => ({
+        id: item.ID,
+        type: item.TYPE,
+        depth: item.DEPTH,
+        pageDepth: item.PAGE_DEPTH,
+        ancestors: JSON.parse(item.ANCESTORS),
+        parentId: item.PARENT_ID
+    }));
+
+    // Create links from ancestors
+    const links = [];
+    nodes.forEach(node => {
+        if (node.parentId) {
+            links.push({
+                source: node.parentId,
+                target: node.id
+            });
+        }
+    });
+
+    return { nodes, links };
+}
+
+// Color scale for different types
+const colorScale = d3.scaleOrdinal()
+    .domain(['page', 'collection_view_page', 'collection'])
+    .range(['#60A5FA', '#34D399', '#F472B6']);
+
+// Initialize the graph visualization
+function initializeGraph(data) {
+    const { nodes, links } = transformDataForGraph(data);
+    
+    // Clear existing graph
+    d3.select('#graph-container svg').remove();
+
+    // Create SVG container
+    const container = document.getElementById('graph-container');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const svg = d3.select('#graph-container')
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    // Add zoom behavior
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+        });
+
+    svg.call(zoom);
+
+    // Create main group for zoom/pan
+    const g = svg.append('g');
+
+    // Create the force simulation
+    const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(30));
+
+    // Create links
+    const link = g.append('g')
+        .selectAll('line')
+        .data(links)
+        .join('line')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', 1);
+
+    // Create nodes
+    const node = g.append('g')
+        .selectAll('circle')
+        .data(nodes)
+        .join('circle')
+        .attr('r', d => 10 + d.depth * 2)
+        .attr('fill', d => colorScale(d.type))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5)
+        .call(drag(simulation));
+
+    // Add tooltips
+    const tooltip = d3.select('#graph-tooltip');
+    
+    node.on('mouseover', (event, d) => {
+        tooltip
+            .style('display', 'block')
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px')
+            .html(`
+                <div class="font-semibold">${d.type}</div>
+                <div>Depth: ${d.depth}</div>
+                <div>Page Depth: ${d.pageDepth}</div>
+            `);
+    })
+    .on('mouseout', () => {
+        tooltip.style('display', 'none');
+    })
+    .on('click', (event, d) => {
+        // Highlight connected nodes
+        const connected = new Set([d.id, ...d.ancestors]);
+        node.attr('opacity', n => connected.has(n.id) ? 1 : 0.1);
+        link.attr('opacity', l => connected.has(l.source.id) && connected.has(l.target.id) ? 1 : 0.1);
+    });
+
+    // Add zoom controls
+    d3.select('#zoomIn').on('click', () => {
+        zoom.scaleBy(svg.transition().duration(750), 1.2);
+    });
+
+    d3.select('#zoomOut').on('click', () => {
+        zoom.scaleBy(svg.transition().duration(750), 0.8);
+    });
+
+    d3.select('#resetZoom').on('click', () => {
+        svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
+        // Reset node opacities
+        node.attr('opacity', 1);
+        link.attr('opacity', 1);
+    });
+
+    // Double click background to reset opacities
+    svg.on('dblclick', () => {
+        node.attr('opacity', 1);
+        link.attr('opacity', 1);
+    });
+
+    // Update positions on each tick
+    simulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        node
+            .attr('cx', d => d.x)
+            .attr('cy', d => d.y);
+    });
+}
+
+// Drag behavior
+function drag(simulation) {
+    function dragstarted(event) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        event.subject.fx = event.subject.x;
+        event.subject.fy = event.subject.y;
+    }
+
+    function dragged(event) {
+        event.subject.fx = event.x;
+        event.subject.fy = event.y;
+    }
+
+    function dragended(event) {
+        if (!event.active) simulation.alphaTarget(0);
+        event.subject.fx = null;
+        event.subject.fy = null;
+    }
+
+    return d3.drag()
+        .on('start', dragstarted)
+        .on('drag', dragged)
+        .on('end', dragended);
 }
 
 function showStatus(message, showSpinner = false) {

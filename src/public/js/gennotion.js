@@ -583,10 +583,7 @@ function initializeGraph(graphData) {
         // Add tooltip
         const tooltip = d3.select(container)
             .append('div')
-            .attr('class', 'tooltip')
-            .style('opacity', 0)
-            .style('position', 'absolute')
-            .style('pointer-events', 'none');
+            .attr('id', 'graph-tooltip');
 
         // Node hover effects
         node.on('mouseover', (event, d) => {
@@ -606,18 +603,13 @@ function initializeGraph(graphData) {
                 l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
             );
 
-            // Calculate tooltip position relative to container
-            const containerRect = container.getBoundingClientRect();
-            const tooltipX = event.pageX - containerRect.left;
-            const tooltipY = event.pageY - containerRect.top;
-
             // Show tooltip
             tooltip
                 .style('display', 'block')
-                .style('left', `${tooltipX + 10}px`)
-                .style('top', `${tooltipY - 10}px`)
+                .style('left', `${event.offsetX + 10}px`)
+                .style('top', `${event.offsetY - 10}px`)
                 .html(`
-                    <div class="bg-white p-3 rounded shadow-lg">
+                    <div class="bg-white">
                         <div class="font-bold text-gray-900 flex items-center gap-2">
                             <span class="w-3 h-3 rounded-full" style="background: ${colorScale(d.type)}"></span>
                             ${d.name}
@@ -653,14 +645,9 @@ function initializeGraph(graphData) {
             tooltip.style('display', 'none');
         })
         .on('mousemove', (event) => {
-            // Update tooltip position on mouse move
-            const containerRect = container.getBoundingClientRect();
-            const tooltipX = event.pageX - containerRect.left;
-            const tooltipY = event.pageY - containerRect.top;
-            
             tooltip
-                .style('left', `${tooltipX + 10}px`)
-                .style('top', `${tooltipY - 10}px`);
+                .style('left', `${event.offsetX + 10}px`)
+                .style('top', `${event.offsetY - 10}px`);
         });
 
         // Add timeline slider
@@ -678,7 +665,7 @@ function initializeGraph(graphData) {
             <input type="range" 
                 min="${startDate?.getTime() || 0}" 
                 max="${endDate?.getTime() || 100}" 
-                value="${startDate?.getTime() || 0}" 
+                value="${endDate?.getTime() || 100}" 
                 class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 id="timelineSlider">
         `;
@@ -686,9 +673,8 @@ function initializeGraph(graphData) {
 
         // Timeline slider functionality
         const slider = document.getElementById('timelineSlider');
-        slider.addEventListener('input', (event) => {
-            const currentTime = new Date(parseInt(event.target.value));
-            
+        
+        function updateNodesVisibility(currentTime) {
             // Update visibility based on creation time
             node.style('opacity', d => {
                 const nodeTime = d.createdTime;
@@ -702,6 +688,21 @@ function initializeGraph(graphData) {
                        sourceTime <= currentTime && 
                        targetTime <= currentTime ? 0.6 : 0.1;
             });
+        }
+
+        // Set initial state to show all nodes
+        updateNodesVisibility(endDate);
+
+        slider.addEventListener('input', (event) => {
+            const currentTime = new Date(parseInt(event.target.value));
+            updateNodesVisibility(currentTime);
+        });
+
+        // Reset visibility when clicking outside nodes
+        svg.on('click', (event) => {
+            if (event.target.tagName === 'svg') {
+                updateNodesVisibility(new Date(slider.value));
+            }
         });
 
         // Add zoom controls

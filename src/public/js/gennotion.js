@@ -604,7 +604,20 @@ function initializeGraph(graphData) {
             .attr('d', 'M -5,-5 L 5,0 L -5,5')
             .attr('fill', '#999');
 
-        // Create links
+        // Create nodes with larger initial size
+        const node = g.append('g')
+            .attr('class', 'nodes')
+            .selectAll('circle')
+            .data(nodes)
+            .join('circle')
+            .attr('class', 'node')
+            .attr('r', d => Math.max(10, 8 + d.depth * 2)) // Increased initial node sizes
+            .attr('fill', d => colorScale(d.type))
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 2) // Increased stroke width
+            .call(drag(simulation));
+
+        // Create links with increased visibility
         const link = g.append('g')
             .attr('class', 'links')
             .selectAll('line')
@@ -612,22 +625,9 @@ function initializeGraph(graphData) {
             .join('line')
             .attr('class', 'link')
             .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 1)
+            .attr('stroke-opacity', 0.8) // Increased opacity
+            .attr('stroke-width', 2) // Increased width
             .attr('marker-end', 'url(#arrowhead)');
-
-        // Create nodes
-        const node = g.append('g')
-            .attr('class', 'nodes')
-            .selectAll('circle')
-            .data(nodes)
-            .join('circle')
-            .attr('class', 'node')
-            .attr('r', d => Math.max(8, 6 + d.depth * 1.5))
-            .attr('fill', d => colorScale(d.type))
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 1.5)
-            .call(drag(simulation));
 
         // Add tooltips
         const tooltip = d3.select('#graph-tooltip');
@@ -725,28 +725,28 @@ function initializeGraph(graphData) {
                 
                 // Update node visibility with transition
                 node.transition()
-                    .duration(200)
+                    .duration(400) // Increased duration for smoother transition
                     .style('opacity', d => {
-                        if (!d.createdTime) return 0.3; // Semi-transparent for nodes without creation time
+                        if (!d.createdTime) return 0.5; // Increased opacity for nodes without creation time
                         return d.createdTime <= currentTime ? 1 : 0;
                     })
                     .style('r', d => {
-                        if (!d.createdTime) return 6;
-                        return d.createdTime <= currentTime ? Math.max(8, 6 + d.depth * 1.5) : 0;
+                        if (!d.createdTime) return 8;
+                        return d.createdTime <= currentTime ? Math.max(10, 8 + d.depth * 2) : 0; // Increased node sizes
                     });
 
                 // Update link visibility with transition
                 link.transition()
-                    .duration(200)
+                    .duration(400) // Increased duration for smoother transition
                     .style('opacity', l => {
                         const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
                         const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
-                        return (sourceVisible && targetVisible) ? 0.6 : 0;
+                        return (sourceVisible && targetVisible) ? 0.8 : 0; // Increased link opacity
                     })
                     .style('stroke-width', l => {
                         const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
                         const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
-                        return (sourceVisible && targetVisible) ? 1 : 0;
+                        return (sourceVisible && targetVisible) ? 2 : 0; // Increased stroke width
                     });
             }
 
@@ -806,7 +806,7 @@ function initializeGraph(graphData) {
             function updateProgress() {
                 if (!isPlaying) return;
                 
-                currentProgress += 0.1; // Reduced from 0.5 to 0.1 for slower animation
+                currentProgress += 0.01; // Reduced from 0.1 to 0.01 for 10x slower animation
                 if (currentProgress > 100) {
                     currentProgress = 0;
                     isPlaying = false;
@@ -819,8 +819,11 @@ function initializeGraph(graphData) {
                     return;
                 }
                 
-                updateTimelinePosition(currentProgress);
-                requestAnimationFrame(updateProgress);
+                // Add delay between updates
+                setTimeout(() => {
+                    updateTimelinePosition(currentProgress);
+                    requestAnimationFrame(updateProgress);
+                }, 50); // 50ms delay between updates
             }
 
             playButton.addEventListener('click', (e) => {

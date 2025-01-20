@@ -151,7 +151,12 @@ function listenForResults() {
 
 function displayResults(data) {
     resultsSection.classList.remove('hidden');
-    resultsContent.innerHTML = formatResults(data);
+    
+    // Extract the two dataframes
+    const graphData = data.data.dataframe_2;
+    const insightsData = data.data.dataframe_3;
+    
+    resultsContent.innerHTML = formatResults(graphData, insightsData);
     
     // Wait for next frame to ensure container is rendered
     requestAnimationFrame(() => {
@@ -160,7 +165,7 @@ function displayResults(data) {
         
         // Wait for scroll and any animations to complete
         setTimeout(() => {
-            initializeGraph(data);
+            initializeGraph(graphData);
             
             // Force a resize event to ensure proper dimensions
             window.dispatchEvent(new Event('resize'));
@@ -168,63 +173,56 @@ function displayResults(data) {
     });
 }
 
-// Add resize handler for graph responsiveness
-window.addEventListener('resize', debounce(() => {
-    const container = document.getElementById('graph-container');
-    if (container && container.querySelector('svg')) {
-        const data = window._lastGraphData; // Store last used data
-        if (data) {
-            initializeGraph(data);
-        }
-    }
-}, 250));
-
-// Debounce helper function
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-function formatResults(data) {
-    if (!Array.isArray(data) || data.length === 0) {
+function formatResults(graphData, insightsData) {
+    if (!Array.isArray(graphData) || graphData.length === 0) {
         return '<p class="text-gray-500">No results available</p>';
     }
 
-    // Calculate insights
+    // Calculate graph insights
     const insights = {
-        totalPages: data.length,
+        totalPages: graphData.length,
         typeDistribution: {},
         depthDistribution: {},
         pageDepthDistribution: {},
-        collections: data.filter(item => item.TYPE === 'collection').length,
-        collectionViews: data.filter(item => item.TYPE === 'collection_view_page').length,
-        maxDepth: Math.max(...data.map(item => item.DEPTH)),
-        maxPageDepth: Math.max(...data.map(item => item.PAGE_DEPTH)),
-        rootPages: data.filter(item => item.DEPTH === 0).length
+        collections: graphData.filter(item => item.TYPE === 'collection').length,
+        collectionViews: graphData.filter(item => item.TYPE === 'collection_view_page').length,
+        maxDepth: Math.max(...graphData.map(item => item.DEPTH)),
+        maxPageDepth: Math.max(...graphData.map(item => item.PAGE_DEPTH)),
+        rootPages: graphData.filter(item => item.DEPTH === 0).length
     };
 
     // Calculate distributions
-    data.forEach(item => {
+    graphData.forEach(item => {
         insights.typeDistribution[item.TYPE] = (insights.typeDistribution[item.TYPE] || 0) + 1;
         insights.depthDistribution[item.DEPTH] = (insights.depthDistribution[item.DEPTH] || 0) + 1;
         insights.pageDepthDistribution[item.PAGE_DEPTH] = (insights.pageDepthDistribution[item.PAGE_DEPTH] || 0) + 1;
     });
 
+    // Format workspace insights from dataframe_3
+    const workspaceInsights = insightsData && insightsData.length > 0 ? insightsData[0] : null;
+    
     // Create HTML output
     let html = `
         <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
             <h2 class="text-2xl font-bold mb-4">Workspace Structure Insights</h2>
             
+            ${workspaceInsights ? `
+            <div class="mb-8 p-4 bg-indigo-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-indigo-900 mb-3">Workspace Overview</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    ${Object.entries(workspaceInsights).map(([key, value]) => `
+                        <div class="bg-white p-3 rounded shadow-sm">
+                            <div class="text-sm text-gray-500">${formatKey(key)}</div>
+                            <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div class="p-4 bg-gray-50 rounded">
-                    <h3 class="font-semibold">Overview</h3>
+                    <h3 class="font-semibold">Structure Overview</h3>
                     <ul class="mt-2">
                         <li>Total Pages: ${insights.totalPages}</li>
                         <li>Root Pages: ${insights.rootPages}</li>
@@ -237,7 +235,7 @@ function formatResults(data) {
                     <h3 class="font-semibold">Page Types</h3>
                     <ul class="mt-2">
                         ${Object.entries(insights.typeDistribution)
-                            .map(([type, count]) => `<li>${type}: ${count}</li>`)
+                            .map(([type, count]) => `<li>${formatKey(type)}: ${count}</li>`)
                             .join('')}
                     </ul>
                 </div>
@@ -291,6 +289,51 @@ function formatResults(data) {
     `;
 
     return html;
+}
+
+// Helper function to format keys for display
+function formatKey(key) {
+    return key
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ');
+}
+
+// Helper function to format values for display
+function formatValue(value) {
+    if (typeof value === 'number') {
+        // Format percentages
+        if (value >= 0 && value <= 1) {
+            return `${(value * 100).toFixed(1)}%`;
+        }
+        // Format large numbers
+        return value.toLocaleString();
+    }
+    return value;
+}
+
+// Add resize handler for graph responsiveness
+window.addEventListener('resize', debounce(() => {
+    const container = document.getElementById('graph-container');
+    if (container && container.querySelector('svg')) {
+        const data = window._lastGraphData; // Store last used data
+        if (data) {
+            initializeGraph(data);
+        }
+    }
+}, 250));
+
+// Debounce helper function
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
 }
 
 // Transform data for D3

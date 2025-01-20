@@ -218,6 +218,9 @@ function displayResults(data) {
             container.innerHTML = '';
         }
 
+        // Reset graph initialization flag
+        window._graphInitialized = false;
+
         resultsContent.innerHTML = formatResults(graphData, insightsData, keyInsightsData);
         
         // Wait for next frame to ensure container is rendered
@@ -229,10 +232,8 @@ function displayResults(data) {
                 // Initialize graph with delay to ensure DOM is ready
                 setTimeout(() => {
                     try {
-                        if (!window._graphInitialized) {
-                            initializeGraph(graphData);
-                            window._graphInitialized = true;
-                        }
+                        initializeGraph(graphData);
+                        window._graphInitialized = true;
                         
                         // Force a resize event to ensure proper dimensions
                         window.dispatchEvent(new Event('resize'));
@@ -418,8 +419,8 @@ function formatValue(value) {
 window.addEventListener('resize', debounce(() => {
     const container = document.getElementById('graph-container');
     if (container && container.querySelector('svg')) {
-        const data = window._lastGraphData; // Store last used data
-        if (data) {
+        const data = window._lastGraphData?.graphData; // Get just the graphData
+        if (data && Array.isArray(data)) {
             initializeGraph(data);
         }
     }
@@ -506,8 +507,8 @@ function transformDataForGraph(data) {
                 const parentNode = nodes.find(n => n.id === node.parentId);
                 if (parentNode) {
                     links.push({
-                        source: parentNode.id,
-                        target: node.id,
+                        source: parentNode,
+                        target: node,
                         value: 1,
                         sourceWeek: parentNode.week,
                         targetWeek: node.week

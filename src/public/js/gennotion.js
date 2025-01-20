@@ -439,352 +439,68 @@ function debounce(func, wait) {
     };
 }
 
-// Transform data for D3
-function transformDataForGraph(data) {
+// Transform flat data into hierarchical structure
+function transformDataForTree(data) {
     try {
         if (!Array.isArray(data) || data.length === 0) {
-            console.error('Invalid input data for graph transformation:', data);
-            return { nodes: [], links: [] };
+            console.error('Invalid input data');
+            return null;
         }
 
-        console.log('Transforming data for graph:', { 
-            dataLength: data.length,
-            sampleData: data[0]
-        });
+        // Create nodes map
+        const nodesMap = new Map();
         
-        // Create nodes with more information and proper date parsing
-        const nodes = data.map(item => {
-            try {
-                if (!item || typeof item !== 'object') {
-                    console.warn('Invalid item in data:', item);
-                    return null;
-                }
-
-                // Convert Unix epoch milliseconds to Date object with validation
-                let createdTime = null;
-                if (item.CREATED_TIME) {
-                    const timestamp = Number(item.CREATED_TIME);
-                    if (!isNaN(timestamp) && timestamp > 0) {
-                        createdTime = new Date(timestamp);
-                        // Validate the date is reasonable
-                        if (createdTime.getFullYear() < 2000 || createdTime.getFullYear() > 2100) {
-                            console.warn('Invalid date detected:', createdTime);
-                            createdTime = null;
-                        }
-                    }
-                }
-
-                return {
-                    id: item.ID,
-                    type: item.TYPE || 'unknown',
-                    depth: Number(item.DEPTH) || 0,
-                    pageDepth: Number(item.PAGE_DEPTH) || 0,
-                    ancestors: item.ANCESTORS ? JSON.parse(item.ANCESTORS) : [],
-                    parentId: item.PARENT_ID,
-                    spaceId: item.SPACE_ID,
-                    text: item.TEXT || '',
-                    createdTime: createdTime,
-                    week: createdTime ? getWeekNumber(createdTime) : null,
-                    originalData: item
-                };
-            } catch (e) {
-                console.error('Error transforming node:', { item, error: e });
-                return null;
-            }
-        }).filter(Boolean);
-
-        // Sort nodes by creation time
-        nodes.sort((a, b) => {
-            if (!a.createdTime) return -1;
-            if (!b.createdTime) return 1;
-            return a.createdTime - b.createdTime;
+        // First pass: Create all nodes
+        data.forEach(item => {
+            nodesMap.set(item.ID, {
+                id: item.ID,
+                name: item.TEXT || item.TYPE,
+                type: item.TYPE,
+                children: [],
+                createdTime: item.CREATED_TIME ? new Date(Number(item.CREATED_TIME)) : null,
+                depth: Number(item.DEPTH) || 0,
+                pageDepth: Number(item.PAGE_DEPTH) || 0,
+                parentId: item.PARENT_ID,
+                originalData: item
+            });
         });
 
-        // Create links with validation
-        const links = [];
-        nodes.forEach(node => {
-            if (node.parentId) {
-                const parentNode = nodes.find(n => n.id === node.parentId);
-                if (parentNode) {
-                    links.push({
-                        source: parentNode,
-                        target: node,
-                        value: 1,
-                        sourceWeek: parentNode.week,
-                        targetWeek: node.week
-                    });
-                }
+        // Second pass: Build hierarchy
+        let root = null;
+        nodesMap.forEach(node => {
+            if (node.parentId && nodesMap.has(node.parentId)) {
+                const parent = nodesMap.get(node.parentId);
+                parent.children.push(node);
+            } else if (!node.parentId || !nodesMap.has(node.parentId)) {
+                root = node; // This is the root node
             }
         });
 
-        console.log('Transformed data:', {
-            nodeCount: nodes.length,
-            linkCount: links.length,
-            weekRange: getWeekRange(nodes),
-            sampleNode: nodes[0],
-            sampleLink: links[0]
-        });
-
-        return { nodes, links };
+        return root;
     } catch (error) {
-        console.error('Error in transformDataForGraph:', error);
-        return { nodes: [], links: [] };
+        console.error('Error transforming data:', error);
+        return null;
     }
 }
 
-// Helper function to get week number
-function getWeekNumber(date) {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-}
-
-// Helper function to get week range
-function getWeekRange(nodes) {
-    const weeks = nodes
-        .filter(n => n.week)
-        .map(n => ({
-            week: n.week,
-            year: n.createdTime.getFullYear()
-        }));
-    
-    if (weeks.length === 0) return null;
-
-    return {
-        start: weeks.reduce((min, curr) => 
-            curr.year < min.year || (curr.year === min.year && curr.week < min.week) ? curr : min
-        ),
-        end: weeks.reduce((max, curr) => 
-            curr.year > max.year || (curr.year === max.year && curr.week > max.week) ? curr : max
-        )
-    };
-}
-
-function updateTimelinePosition(progress, nodes, links, weekRange) {
-    if (!weekRange) return;
-
-    const totalWeeks = (weekRange.end.year - weekRange.start.year) * 52 + 
-                      (weekRange.end.week - weekRange.start.week);
-    const currentWeek = Math.floor((totalWeeks * progress) / 100);
-    
-    const currentYear = weekRange.start.year + Math.floor(currentWeek / 52);
-    const weekInYear = weekRange.start.week + (currentWeek % 52);
-
-    // Update timeline UI
-    const timelineHandle = document.getElementById('timelineHandle');
-    const timelineProgress = document.getElementById('timelineProgress');
-    const timelineTooltip = document.getElementById('timelineTooltip');
-
-    if (timelineHandle && timelineProgress && timelineTooltip) {
-        timelineHandle.style.left = `${progress}%`;
-        timelineProgress.style.width = `${progress}%`;
-
-        // Update tooltip with week information
-        const tooltipDate = new Date(currentYear, 0, 1 + (weekInYear - 1) * 7);
-        timelineTooltip.textContent = tooltipDate.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    }
-
-    // Get the node and link elements from the current graph state
-    const node = d3.selectAll('.node');
-    const link = d3.selectAll('.link');
-
-    // Update node visibility with transition
-    node.transition()
-        .duration(400)
-        .style('opacity', d => {
-            if (!d.week) return 0.3;
-            const nodeYear = d.createdTime.getFullYear();
-            const isVisible = nodeYear < currentYear || 
-                            (nodeYear === currentYear && d.week <= weekInYear);
-            return isVisible ? 1 : 0;
-        })
-        .style('r', d => {
-            if (!d.week) return 8;
-            const nodeYear = d.createdTime.getFullYear();
-            const isVisible = nodeYear < currentYear || 
-                            (nodeYear === currentYear && d.week <= weekInYear);
-            return isVisible ? Math.max(12, 10 + d.depth * 3) : 0;
-        });
-
-    // Update link visibility
-    link.transition()
-        .duration(400)
-        .style('opacity', l => {
-            const sourceVisible = isNodeVisible(l.source, currentYear, weekInYear);
-            const targetVisible = isNodeVisible(l.target, currentYear, weekInYear);
-            return (sourceVisible && targetVisible) ? 0.8 : 0;
-        })
-        .style('stroke-width', l => {
-            const sourceVisible = isNodeVisible(l.source, currentYear, weekInYear);
-            const targetVisible = isNodeVisible(l.target, currentYear, weekInYear);
-            return (sourceVisible && targetVisible) ? 2 : 0;
-        });
-}
-
-function isNodeVisible(node, currentYear, weekInYear) {
-    if (!node.createdTime) return false;
-    const nodeYear = node.createdTime.getFullYear();
-    return nodeYear < currentYear || (nodeYear === currentYear && node.week <= weekInYear);
-}
-
-function initializeTimeline(nodes, links, weekRange) {
-    if (!weekRange) return;
-
-    const formatDate = date => {
-        return date.toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    };
-
-    const timelineSlider = document.getElementById('timelineSlider');
-    const timelineHandle = document.getElementById('timelineHandle');
-    const timelineTooltip = document.getElementById('timelineTooltip');
-    const timelineProgress = document.getElementById('timelineProgress');
-    const timelineStart = document.getElementById('timelineStart');
-    const timelineEnd = document.getElementById('timelineEnd');
-
-    // Calculate start and end dates
-    const startDate = new Date(weekRange.start.year, 0, 1 + (weekRange.start.week - 1) * 7);
-    const endDate = new Date(weekRange.end.year, 0, 1 + (weekRange.end.week - 1) * 7);
-
-    // Set initial dates
-    timelineStart.textContent = formatDate(startDate);
-    timelineEnd.textContent = formatDate(endDate);
-
-    let isDragging = false;
-    let isPlaying = false;
-    let currentProgress = 0;
-
-    function handleDrag(e) {
-        if (!isDragging) return;
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const rect = timelineSlider.getBoundingClientRect();
-        const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-        updateTimelinePosition(progress, nodes, links, weekRange);
-        currentProgress = progress;
-    }
-
-    function startDragging(e) {
-        isDragging = true;
-        handleDrag(e);
-        e.stopPropagation();
-    }
-
-    function stopDragging() {
-        isDragging = false;
-    }
-
-    // Add click handler for direct clicking on the slider
-    timelineSlider.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const rect = timelineSlider.getBoundingClientRect();
-        const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-        updateTimelinePosition(progress, nodes, links, weekRange);
-        currentProgress = progress;
-    });
-
-    // Mouse events
-    timelineSlider.addEventListener('mousedown', startDragging);
-    document.addEventListener('mousemove', handleDrag);
-    document.addEventListener('mouseup', stopDragging);
-
-    // Add play button
-    const playButton = document.createElement('button');
-    playButton.className = 'graph-control-button ml-2';
-    playButton.innerHTML = `
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-    `;
-    timelineSlider.parentNode.insertBefore(playButton, timelineSlider);
-
-    function updateProgress() {
-        if (!isPlaying) return;
-        
-        currentProgress += 0.005; // Very slow progression
-        if (currentProgress > 100) {
-            currentProgress = 0;
-            isPlaying = false;
-            playButton.innerHTML = `
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            `;
-            return;
-        }
-        
-        // Add delay between updates
-        setTimeout(() => {
-            updateTimelinePosition(currentProgress, nodes, links, weekRange);
-            requestAnimationFrame(() => updateProgress());
-        }, 200); // 200ms delay between updates for smoother animation
-    }
-
-    playButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (isPlaying) {
-            isPlaying = false;
-            playButton.innerHTML = `
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            `;
-        } else {
-            isPlaying = true;
-            playButton.innerHTML = `
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            `;
-            requestAnimationFrame(updateProgress);
-        }
-    });
-
-    // Initialize timeline at the start
-    updateTimelinePosition(0, nodes, links, weekRange);
-}
-
-// Color scale for different types
-const colorScale = d3.scaleOrdinal()
-    .domain(['page', 'collection_view_page', 'collection'])
-    .range(['#4F46E5', '#10B981', '#EC4899']);
-
-// Initialize the graph visualization
+// Initialize the tree visualization
 function initializeGraph(graphData) {
     try {
-        const { nodes, links } = transformDataForGraph(graphData);
-        if (!nodes.length) {
-            console.error('No nodes to display');
+        const root = transformDataForTree(graphData);
+        if (!root) {
+            console.error('No valid data to display');
             return;
         }
 
-        // Get container and clear any existing content
+        // Get container and clear existing content
         const container = document.getElementById('graph-container');
         container.innerHTML = '';
 
-        // Add tooltip div if it doesn't exist
-        if (!document.getElementById('graph-tooltip')) {
-            const tooltip = document.createElement('div');
-            tooltip.id = 'graph-tooltip';
-            tooltip.className = 'hidden';
-            container.appendChild(tooltip);
-        }
-
         const width = container.clientWidth;
         const height = container.clientHeight;
+        const margin = { top: 40, right: 120, bottom: 40, left: 120 };
+        const innerWidth = width - margin.left - margin.right;
+        const innerHeight = height - margin.top - margin.bottom;
 
         // Create SVG
         const svg = d3.select(container)
@@ -795,165 +511,105 @@ function initializeGraph(graphData) {
             .attr('class', 'graph-svg');
 
         // Create container group for zoom
-        const g = svg.append('g');
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
 
         // Add zoom behavior
         const zoom = d3.zoom()
-            .scaleExtent([0.2, 2])
+            .scaleExtent([0.1, 3])
             .on('zoom', (event) => g.attr('transform', event.transform));
 
         svg.call(zoom);
 
-        // Create arrow marker for links
-        svg.append('defs').selectAll('marker')
-            .data(['end'])
-            .join('marker')
-            .attr('id', 'arrow')
-            .attr('viewBox', '0 -5 10 10')
-            .attr('refX', 25)
-            .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
-            .attr('orient', 'auto')
-            .append('path')
-            .attr('fill', '#999')
-            .attr('d', 'M0,-5L10,0L0,5');
+        // Create tree layout
+        const tree = d3.tree()
+            .size([innerHeight, innerWidth])
+            .nodeSize([50, 150]); // Adjust node spacing
 
-        // Create the links
+        // Create hierarchy and calculate layout
+        const hierarchy = d3.hierarchy(root);
+        const treeData = tree(hierarchy);
+
+        // Create links
         const link = g.append('g')
-            .selectAll('line')
-            .data(links)
-            .join('line')
+            .attr('class', 'links')
+            .selectAll('path')
+            .data(treeData.links())
+            .join('path')
             .attr('class', 'link')
+            .attr('d', d3.linkHorizontal()
+                .x(d => d.y)  // Swap x and y for horizontal layout
+                .y(d => d.x))
             .attr('stroke', '#999')
             .attr('stroke-width', 1.5)
-            .attr('marker-end', 'url(#arrow)')
-            .style('opacity', 0.6);
+            .attr('fill', 'none');
 
-        // Create the nodes
+        // Create nodes
         const node = g.append('g')
-            .selectAll('circle')
-            .data(nodes)
-            .join('circle')
+            .attr('class', 'nodes')
+            .selectAll('g')
+            .data(treeData.descendants())
+            .join('g')
             .attr('class', 'node')
-            .attr('r', d => Math.max(8, 12 - d.depth))
-            .attr('fill', d => colorScale(d.type))
+            .attr('transform', d => `translate(${d.y},${d.x})`); // Swap x and y for horizontal layout
+
+        // Add circles for nodes
+        node.append('circle')
+            .attr('r', 6)
+            .attr('fill', d => colorScale(d.data.type))
             .attr('stroke', '#fff')
-            .attr('stroke-width', 2)
-            .call(drag(simulation));
+            .attr('stroke-width', 2);
 
-        // Add labels to nodes
-        const label = g.append('g')
-            .selectAll('text')
-            .data(nodes)
-            .join('text')
+        // Add labels
+        node.append('text')
+            .attr('dy', '0.31em')
+            .attr('x', d => d.children ? -8 : 8)
+            .attr('text-anchor', d => d.children ? 'end' : 'start')
+            .text(d => d.data.name.substring(0, 30))
             .attr('class', 'node-label')
-            .attr('dy', -10)
-            .attr('text-anchor', 'middle')
-            .attr('fill', '#4B5563')
-            .style('font-size', '10px')
-            .style('pointer-events', 'none')
-            .text(d => d.text.substring(0, 20) || d.type);
+            .clone(true).lower()
+            .attr('stroke', 'white')
+            .attr('stroke-width', 3);
 
-        // Set up forces for the simulation
-        const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links)
-                .id(d => d.id)
-                .distance(100))
-            .force('charge', d3.forceManyBody()
-                .strength(-500))
-            .force('x', d3.forceX(width / 2))
-            .force('y', d3.forceY(height / 2))
-            .force('collision', d3.forceCollide().radius(30))
-            .on('tick', () => {
-                // Update link positions
-                link
-                    .attr('x1', d => d.source.x)
-                    .attr('y1', d => d.source.y)
-                    .attr('x2', d => d.target.x)
-                    .attr('y2', d => d.target.y);
+        // Add tooltip
+        const tooltip = d3.select(container)
+            .append('div')
+            .attr('class', 'tooltip')
+            .style('opacity', 0)
+            .style('position', 'absolute')
+            .style('pointer-events', 'none');
 
-                // Update node positions
-                node
-                    .attr('cx', d => d.x = Math.max(20, Math.min(width - 20, d.x)))
-                    .attr('cy', d => d.y = Math.max(20, Math.min(height - 20, d.y)));
-
-                // Update label positions
-                label
-                    .attr('x', d => d.x)
-                    .attr('y', d => d.y);
-            });
-
-        // Enhanced tooltip functionality
-        const tooltip = d3.select('#graph-tooltip');
-        
         node.on('mouseover', (event, d) => {
-            const childCount = links.filter(l => l.source.id === d.id).length;
-            const parentNode = nodes.find(n => n.id === d.parentId);
-            
-            tooltip
-                .style('display', 'block')
-                .style('left', (event.pageX + 10) + 'px')
-                .style('top', (event.pageY - 10) + 'px')
-                .html(`
-                    <div class="space-y-2">
-                        <div class="font-bold text-gray-900 flex items-center gap-2">
-                            <span class="w-3 h-3 rounded-full" style="background: ${colorScale(d.type)}"></span>
-                            ${d.type}
-                        </div>
-                        <div class="text-sm space-y-1">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500">Created:</span>
-                                <span class="ml-2 font-medium">${d.createdTime ? d.createdTime.toLocaleDateString() : 'Unknown'}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500">Depth:</span>
-                                <span class="ml-2 font-medium">${d.depth}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500">Children:</span>
-                                <span class="ml-2 font-medium">${childCount}</span>
-                            </div>
-                            ${parentNode ? `
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500">Parent:</span>
-                                <span class="ml-2 font-medium">${parentNode.type}</span>
-                            </div>
-                            ` : ''}
-                            ${d.text ? `
-                            <div class="mt-2 pt-2 border-t border-gray-200">
-                                <span class="text-gray-500 block mb-1">Content:</span>
-                                <span class="text-gray-700">${d.text.substring(0, 100)}${d.text.length > 100 ? '...' : ''}</span>
-                            </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                `);
-
-            // Highlight connected nodes and links
-            const connectedNodeIds = new Set();
-            links.forEach(l => {
-                if (l.source.id === d.id) connectedNodeIds.add(l.target.id);
-                if (l.target.id === d.id) connectedNodeIds.add(l.source.id);
-            });
-
-            node.style('opacity', n => connectedNodeIds.has(n.id) || n.id === d.id ? 1 : 0.2);
-            link.style('opacity', l => l.source.id === d.id || l.target.id === d.id ? 1 : 0.1);
-            label.style('opacity', n => connectedNodeIds.has(n.id) || n.id === d.id ? 1 : 0.2);
+            tooltip.transition()
+                .duration(200)
+                .style('opacity', 1);
+            tooltip.html(`
+                <div class="bg-white p-2 rounded shadow-lg">
+                    <div class="font-bold">${d.data.name}</div>
+                    <div>Type: ${d.data.type}</div>
+                    <div>Created: ${d.data.createdTime?.toLocaleDateString()}</div>
+                    <div>Depth: ${d.data.depth}</div>
+                    <div>Children: ${d.children ? d.children.length : 0}</div>
+                </div>
+            `)
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px');
         })
         .on('mouseout', () => {
-            tooltip.style('display', 'none');
-            node.style('opacity', 1);
-            link.style('opacity', 0.6);
-            label.style('opacity', 1);
+            tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
         });
 
         // Add timeline slider
         const timelineContainer = document.createElement('div');
         timelineContainer.className = 'timeline-container';
         
-        const startDate = d3.min(nodes, d => d.createdTime);
-        const endDate = d3.max(nodes, d => d.createdTime);
+        // Find min and max dates
+        const allNodes = treeData.descendants();
+        const dates = allNodes.map(n => n.data.createdTime).filter(Boolean);
+        const startDate = d3.min(dates);
+        const endDate = d3.max(dates);
         
         timelineContainer.innerHTML = `
             <div class="flex justify-between mb-2">
@@ -974,13 +630,19 @@ function initializeGraph(graphData) {
         slider.addEventListener('input', (event) => {
             const currentTime = new Date(parseInt(event.target.value));
             
-            // Update visibility of nodes and links based on creation time
-            node.style('opacity', d => d.createdTime <= currentTime ? 1 : 0.1);
-            link.style('opacity', d => 
-                d.source.createdTime <= currentTime && 
-                d.target.createdTime <= currentTime ? 0.6 : 0.1
-            );
-            label.style('opacity', d => d.createdTime <= currentTime ? 1 : 0.1);
+            // Update visibility based on creation time
+            node.style('opacity', d => {
+                const nodeTime = d.data.createdTime;
+                return nodeTime && nodeTime <= currentTime ? 1 : 0.1;
+            });
+            
+            link.style('opacity', d => {
+                const sourceTime = d.source.data.createdTime;
+                const targetTime = d.target.data.createdTime;
+                return sourceTime && targetTime && 
+                       sourceTime <= currentTime && 
+                       targetTime <= currentTime ? 0.6 : 0.1;
+            });
         });
 
         // Add zoom controls
@@ -1010,12 +672,13 @@ function initializeGraph(graphData) {
         d3.select('#zoomOut').on('click', () => zoom.scaleBy(svg.transition().duration(300), 0.75));
         d3.select('#resetZoom').on('click', () => {
             const bounds = g.node().getBBox();
-            const dx = bounds.width;
-            const dy = bounds.height;
-            const x = bounds.x + dx / 2;
-            const y = bounds.y + dy / 2;
-            const scale = 0.9 / Math.max(dx / width, dy / height);
-            const translate = [width / 2 - scale * x, height / 2 - scale * y];
+            const fullWidth = width - margin.left - margin.right;
+            const fullHeight = height - margin.top - margin.bottom;
+            const scale = 0.9 / Math.max(bounds.width / fullWidth, bounds.height / fullHeight);
+            const translate = [
+                (fullWidth - scale * bounds.width) / 2 - bounds.x * scale + margin.left,
+                (fullHeight - scale * bounds.height) / 2 - bounds.y * scale + margin.top
+            ];
             svg.transition()
                 .duration(300)
                 .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
@@ -1028,34 +691,14 @@ function initializeGraph(graphData) {
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
-        showStatus('Error initializing graph visualization', false);
+        showStatus('Error initializing tree visualization', false);
     }
 }
 
-// Drag behavior for nodes
-function drag(simulation) {
-    function dragstarted(event) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        event.subject.fx = event.subject.x;
-        event.subject.fy = event.subject.y;
-    }
-
-    function dragged(event) {
-        event.subject.fx = event.x;
-        event.subject.fy = event.y;
-    }
-
-    function dragended(event) {
-        if (!event.active) simulation.alphaTarget(0);
-        event.subject.fx = null;
-        event.subject.fy = null;
-    }
-
-    return d3.drag()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended);
-}
+// Color scale for different types
+const colorScale = d3.scaleOrdinal()
+    .domain(['page', 'collection_view_page', 'collection'])
+    .range(['#4F46E5', '#10B981', '#EC4899']);
 
 function showStatus(message, showSpinner = false) {
     statusSection.classList.remove('hidden');

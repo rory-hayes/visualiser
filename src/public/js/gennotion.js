@@ -333,6 +333,10 @@ function initializeGraph(data) {
             .attr('height', height)
             .attr('class', 'graph-svg');
 
+        // Create main group for zoom/pan
+        const g = svg.append('g')
+            .attr('class', 'graph-group');
+
         // Add zoom behavior
         const zoom = d3.zoom()
             .scaleExtent([0.1, 4])
@@ -342,16 +346,14 @@ function initializeGraph(data) {
 
         svg.call(zoom);
 
-        // Create main group for zoom/pan
-        const g = svg.append('g')
-            .attr('class', 'graph-group');
-
-        // Create the force simulation
+        // Create the force simulation with adjusted parameters
         const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links).id(d => d.id).distance(100))
-            .force('charge', d3.forceManyBody().strength(-300))
+            .force('link', d3.forceLink(links).id(d => d.id).distance(150)) // Increased distance
+            .force('charge', d3.forceManyBody().strength(-1000)) // Stronger repulsion
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30));
+            .force('collision', d3.forceCollide().radius(40)) // Increased collision radius
+            .force('x', d3.forceX(width / 2).strength(0.1)) // Added X-axis centering
+            .force('y', d3.forceY(height / 2).strength(0.1)); // Added Y-axis centering
 
         // Create links
         const link = g.append('g')
@@ -364,14 +366,14 @@ function initializeGraph(data) {
             .attr('stroke-opacity', 0.6)
             .attr('stroke-width', 1);
 
-        // Create nodes
+        // Create nodes with adjusted sizes
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
             .attr('class', 'node')
-            .attr('r', d => 10 + d.depth * 2)
+            .attr('r', d => Math.max(8, 6 + d.depth * 1.5)) // Adjusted node sizing
             .attr('fill', d => colorScale(d.type))
             .attr('stroke', '#fff')
             .attr('stroke-width', 1.5)
@@ -411,10 +413,7 @@ function initializeGraph(data) {
         });
 
         d3.select('#resetZoom').on('click', () => {
-            svg.transition().duration(750).call(zoom.transform, d3.zoomIdentity);
-            // Reset node opacities
-            node.attr('opacity', 1);
-            link.attr('opacity', 1);
+            fitGraphToView();
         });
 
         // Double click background to reset opacities
@@ -435,6 +434,34 @@ function initializeGraph(data) {
                 .attr('cx', d => d.x)
                 .attr('cy', d => d.y);
         });
+
+        // Function to fit graph to view
+        function fitGraphToView() {
+            const bounds = g.node().getBBox();
+            const fullWidth = width;
+            const fullHeight = height;
+            const width_ = bounds.width;
+            const height_ = bounds.height;
+            const midX = bounds.x + width_ / 2;
+            const midY = bounds.y + height_ / 2;
+
+            if (width_ === 0 || height_ === 0) return; // nothing to fit
+
+            const scale = 0.8 / Math.max(width_ / fullWidth, height_ / fullHeight);
+            const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
+
+            svg.transition()
+                .duration(750)
+                .call(
+                    zoom.transform,
+                    d3.zoomIdentity
+                        .translate(translate[0], translate[1])
+                        .scale(scale)
+                );
+        }
+
+        // Initial fit after simulation has settled
+        simulation.on('end', fitGraphToView);
 
         console.log('Graph initialization complete');
     } catch (error) {

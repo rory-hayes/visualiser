@@ -254,35 +254,34 @@ function formatResults(data) {
 
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
-                <div id="graph-container" class="w-full h-[600px] relative bg-gray-50 rounded-lg">
-                    <!-- SVG will be inserted here by D3 -->
-                    <div class="graph-controls absolute top-4 right-4 flex flex-col gap-2 z-[1000]">
-                        <button class="graph-control-button" id="zoomIn" title="Zoom In">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div id="graph-container" class="w-full h-[600px] relative">
+                    <div id="graph-tooltip" class="hidden absolute"></div>
+                    <div class="graph-controls">
+                        <button id="zoomIn" class="graph-control-button" title="Zoom In">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                             </svg>
                         </button>
-                        <button class="graph-control-button" id="zoomOut" title="Zoom Out">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button id="zoomOut" class="graph-control-button" title="Zoom Out">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
                             </svg>
                         </button>
-                        <button class="graph-control-button" id="resetZoom" title="Reset View">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <button id="resetZoom" class="graph-control-button" title="Reset View">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
                         </button>
                     </div>
-                    <div id="graph-tooltip" class="hidden absolute z-[1001]"></div>
-                    <div class="timeline-container absolute bottom-4 left-4 right-4 z-[1000]">
-                        <div class="flex justify-between text-sm text-gray-500 mb-2">
-                            <span id="timelineStart"></span>
-                            <span id="timelineEnd"></span>
+                    <div class="timeline-container">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm text-gray-500" id="timelineStart"></span>
+                            <span class="text-sm text-gray-500" id="timelineEnd"></span>
                         </div>
-                        <div id="timelineSlider" class="timeline-slider">
-                            <div id="timelineProgress" class="timeline-progress"></div>
-                            <div id="timelineHandle" class="timeline-handle">
-                                <div id="timelineTooltip" class="timeline-tooltip"></div>
+                        <div class="timeline-slider" id="timelineSlider">
+                            <div class="timeline-progress" id="timelineProgress"></div>
+                            <div class="timeline-handle" id="timelineHandle">
+                                <div class="timeline-tooltip" id="timelineTooltip"></div>
                             </div>
                         </div>
                     </div>

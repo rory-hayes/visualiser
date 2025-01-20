@@ -255,7 +255,8 @@ function formatResults(data) {
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
                 <div id="graph-container" class="w-full h-[600px] relative bg-gray-50 rounded-lg">
-                    <div class="graph-controls absolute top-4 right-4 flex flex-col gap-2 z-50">
+                    <!-- SVG will be inserted here by D3 -->
+                    <div class="graph-controls absolute top-4 right-4 flex flex-col gap-2 z-[1000]">
                         <button class="graph-control-button" id="zoomIn" title="Zoom In">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
@@ -272,8 +273,8 @@ function formatResults(data) {
                             </svg>
                         </button>
                     </div>
-                    <div id="graph-tooltip" class="hidden"></div>
-                    <div class="timeline-container">
+                    <div id="graph-tooltip" class="hidden absolute z-[1001]"></div>
+                    <div class="timeline-container absolute bottom-4 left-4 right-4 z-[1000]">
                         <div class="flex justify-between text-sm text-gray-500 mb-2">
                             <span id="timelineStart"></span>
                             <span id="timelineEnd"></span>

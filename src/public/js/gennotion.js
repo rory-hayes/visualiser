@@ -465,18 +465,33 @@ function transformDataForTree(data) {
             });
         });
 
-        // Second pass: Build hierarchy
-        let root = null;
+        // Second pass: Build connections
+        const roots = [];
         nodesMap.forEach(node => {
             if (node.parentId && nodesMap.has(node.parentId)) {
                 const parent = nodesMap.get(node.parentId);
                 parent.children.push(node);
-            } else if (!node.parentId || !nodesMap.has(node.parentId)) {
-                root = node; // This is the root node
+            } else {
+                roots.push(node); // Collect all root nodes
             }
         });
 
-        return root;
+        // Create an artificial root to hold multiple roots if needed
+        if (roots.length > 1) {
+            return {
+                id: 'root',
+                name: 'Workspace',
+                type: 'workspace',
+                children: roots,
+                createdTime: d3.min(roots, r => r.createdTime),
+                depth: -1,
+                pageDepth: -1
+            };
+        } else if (roots.length === 1) {
+            return roots[0];
+        }
+
+        return null;
     } catch (error) {
         console.error('Error transforming data:', error);
         return null;
@@ -524,13 +539,14 @@ function initializeGraph(graphData) {
         // Create tree layout
         const tree = d3.tree()
             .size([innerHeight, innerWidth])
-            .nodeSize([50, 150]); // Adjust node spacing
+            .nodeSize([30, 200]) // Adjust node spacing for better visibility
+            .separation((a, b) => (a.parent === b.parent ? 1 : 2)); // Increase separation between different branches
 
         // Create hierarchy and calculate layout
         const hierarchy = d3.hierarchy(root);
         const treeData = tree(hierarchy);
 
-        // Create links
+        // Create curved links
         const link = g.append('g')
             .attr('class', 'links')
             .selectAll('path')
@@ -538,7 +554,7 @@ function initializeGraph(graphData) {
             .join('path')
             .attr('class', 'link')
             .attr('d', d3.linkHorizontal()
-                .x(d => d.y)  // Swap x and y for horizontal layout
+                .x(d => d.y)
                 .y(d => d.x))
             .attr('stroke', '#999')
             .attr('stroke-width', 1.5)
@@ -550,12 +566,12 @@ function initializeGraph(graphData) {
             .selectAll('g')
             .data(treeData.descendants())
             .join('g')
-            .attr('class', 'node')
-            .attr('transform', d => `translate(${d.y},${d.x})`); // Swap x and y for horizontal layout
+            .attr('class', d => `node ${d.data.type}`)
+            .attr('transform', d => `translate(${d.y},${d.x})`);
 
         // Add circles for nodes
         node.append('circle')
-            .attr('r', 6)
+            .attr('r', d => d.data.type === 'workspace' ? 0 : 6) // Hide workspace root
             .attr('fill', d => colorScale(d.data.type))
             .attr('stroke', '#fff')
             .attr('stroke-width', 2);
@@ -565,7 +581,7 @@ function initializeGraph(graphData) {
             .attr('dy', '0.31em')
             .attr('x', d => d.children ? -8 : 8)
             .attr('text-anchor', d => d.children ? 'end' : 'start')
-            .text(d => d.data.name.substring(0, 30))
+            .text(d => d.data.type === 'workspace' ? '' : d.data.name.substring(0, 30))
             .attr('class', 'node-label')
             .clone(true).lower()
             .attr('stroke', 'white')

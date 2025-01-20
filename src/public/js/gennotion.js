@@ -670,157 +670,162 @@ function initializeGraph(data) {
         });
 
         // Initialize timeline
-        const timelineSlider = document.getElementById('timelineSlider');
-        const timelineHandle = document.getElementById('timelineHandle');
-        const timelineTooltip = document.getElementById('timelineTooltip');
-        const timelineProgress = document.getElementById('timelineProgress');
-        const timelineStart = document.getElementById('timelineStart');
-        const timelineEnd = document.getElementById('timelineEnd');
-
-        timelineStart.textContent = formatDate(minTime);
-        timelineEnd.textContent = formatDate(maxTime);
-
-        function updateTimelinePosition(progress) {
-            console.log('Updating timeline position:', progress);
-            const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
+        const times = nodes.map(n => n.createdTime).filter(Boolean);
+        if (times.length > 0) {
+            const minTime = new Date(Math.min(...times));
+            const maxTime = new Date(Math.max(...times));
             
-            // Update slider UI
-            timelineHandle.style.left = `${progress}%`;
-            timelineProgress.style.width = `${progress}%`;
-            timelineTooltip.textContent = formatDate(currentTime);
-            
-            console.log('Current time:', currentTime);
-
-            // Update node visibility
-            node.style('opacity', d => {
-                const isVisible = !d.createdTime || d.createdTime <= currentTime;
-                console.log('Node visibility:', { 
-                    id: d.id, 
-                    createdTime: d.createdTime, 
-                    currentTime: currentTime,
-                    isVisible: isVisible 
+            const formatDate = date => {
+                return date.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
                 });
-                return isVisible ? 1 : 0.1;
-            });
+            };
 
-            // Update link visibility
-            link.style('opacity', l => {
-                const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
-                const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
-                return (sourceVisible && targetVisible) ? 0.6 : 0.1;
-            });
-        }
+            const timelineSlider = document.getElementById('timelineSlider');
+            const timelineHandle = document.getElementById('timelineHandle');
+            const timelineTooltip = document.getElementById('timelineTooltip');
+            const timelineProgress = document.getElementById('timelineProgress');
+            const timelineStart = document.getElementById('timelineStart');
+            const timelineEnd = document.getElementById('timelineEnd');
 
-        let isDragging = false;
+            // Set initial dates
+            timelineStart.textContent = formatDate(minTime);
+            timelineEnd.textContent = formatDate(maxTime);
 
-        function startDragging(e) {
-            console.log('Started dragging');
-            isDragging = true;
-            handleDrag(e);
-        }
+            function updateTimelinePosition(progress) {
+                console.log('Updating timeline position:', progress);
+                const currentTime = new Date(minTime.getTime() + (maxTime.getTime() - minTime.getTime()) * (progress / 100));
+                
+                // Update slider UI
+                timelineHandle.style.left = `${progress}%`;
+                timelineProgress.style.width = `${progress}%`;
+                timelineTooltip.textContent = formatDate(currentTime);
+                
+                console.log('Current time:', currentTime);
 
-        function handleDrag(e) {
-            if (!isDragging) return;
-            e.preventDefault();
-            
-            const rect = timelineSlider.getBoundingClientRect();
-            const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-            console.log('Dragging progress:', progress);
-            updateTimelinePosition(progress);
-        }
+                // Update node visibility
+                node.style('opacity', d => {
+                    const isVisible = !d.createdTime || d.createdTime <= currentTime;
+                    return isVisible ? 1 : 0.1;
+                });
 
-        function stopDragging() {
-            console.log('Stopped dragging');
-            isDragging = false;
-        }
-
-        // Add click handler for direct clicking on the slider
-        timelineSlider.addEventListener('click', (e) => {
-            console.log('Timeline clicked');
-            const rect = timelineSlider.getBoundingClientRect();
-            const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-            updateTimelinePosition(progress);
-        });
-
-        // Add touch events for mobile support
-        timelineSlider.addEventListener('touchstart', (e) => {
-            console.log('Touch started');
-            isDragging = true;
-            const touch = e.touches[0];
-            handleDrag(touch);
-        });
-
-        document.addEventListener('touchmove', (e) => {
-            if (!isDragging) return;
-            const touch = e.touches[0];
-            handleDrag(touch);
-        });
-
-        document.addEventListener('touchend', () => {
-            stopDragging();
-        });
-
-        // Mouse events
-        timelineSlider.addEventListener('mousedown', startDragging);
-        document.addEventListener('mousemove', handleDrag);
-        document.addEventListener('mouseup', stopDragging);
-
-        // Initialize timeline at the start
-        console.log('Initializing timeline at start');
-        updateTimelinePosition(0);
-
-        // Add a play button functionality
-        const playButton = document.createElement('button');
-        playButton.className = 'graph-control-button ml-2';
-        playButton.innerHTML = `
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-        `;
-        timelineSlider.parentNode.insertBefore(playButton, timelineSlider);
-
-        let isPlaying = false;
-        let playInterval;
-
-        playButton.addEventListener('click', () => {
-            if (isPlaying) {
-                clearInterval(playInterval);
-                isPlaying = false;
-                playButton.innerHTML = `
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                `;
-            } else {
-                isPlaying = true;
-                playButton.innerHTML = `
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                `;
-                let progress = parseFloat(timelineHandle.style.left) || 0;
-                playInterval = setInterval(() => {
-                    progress += 0.5;
-                    if (progress > 100) {
-                        progress = 0;
-                    }
-                    updateTimelinePosition(progress);
-                }, 50);
+                // Update link visibility
+                link.style('opacity', l => {
+                    const sourceVisible = !l.source.createdTime || l.source.createdTime <= currentTime;
+                    const targetVisible = !l.target.createdTime || l.target.createdTime <= currentTime;
+                    return (sourceVisible && targetVisible) ? 0.6 : 0.1;
+                });
             }
-        });
 
-        // Add zoom controls
-        d3.select('#zoomIn').on('click', () => {
+            let isDragging = false;
+
+            function startDragging(e) {
+                console.log('Started dragging');
+                isDragging = true;
+                handleDrag(e);
+                e.stopPropagation(); // Prevent event from bubbling up
+            }
+
+            function handleDrag(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                e.stopPropagation(); // Prevent event from bubbling up
+                
+                const rect = timelineSlider.getBoundingClientRect();
+                const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                console.log('Dragging progress:', progress);
+                updateTimelinePosition(progress);
+            }
+
+            function stopDragging() {
+                console.log('Stopped dragging');
+                isDragging = false;
+            }
+
+            // Add click handler for direct clicking on the slider
+            timelineSlider.addEventListener('click', (e) => {
+                console.log('Timeline clicked');
+                e.stopPropagation(); // Prevent event from bubbling up
+                const rect = timelineSlider.getBoundingClientRect();
+                const progress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+                updateTimelinePosition(progress);
+            });
+
+            // Mouse events
+            timelineSlider.addEventListener('mousedown', startDragging);
+            document.addEventListener('mousemove', handleDrag);
+            document.addEventListener('mouseup', stopDragging);
+
+            // Initialize timeline at the start
+            console.log('Initializing timeline at start');
+            updateTimelinePosition(0);
+
+            // Add a play button functionality
+            const playButton = document.createElement('button');
+            playButton.className = 'graph-control-button ml-2';
+            playButton.innerHTML = `
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            `;
+            timelineSlider.parentNode.insertBefore(playButton, timelineSlider);
+
+            let isPlaying = false;
+            let playInterval;
+
+            playButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent event from bubbling up
+                if (isPlaying) {
+                    clearInterval(playInterval);
+                    isPlaying = false;
+                    playButton.innerHTML = `
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    `;
+                } else {
+                    isPlaying = true;
+                    playButton.innerHTML = `
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-4 h-4">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    `;
+                    let progress = parseFloat(timelineHandle.style.left) || 0;
+                    playInterval = setInterval(() => {
+                        progress += 0.5;
+                        if (progress > 100) {
+                            progress = 0;
+                        }
+                        updateTimelinePosition(progress);
+                    }, 50);
+                }
+            });
+        } else {
+            const timelineContainer = document.querySelector('.timeline-container');
+            if (timelineContainer) {
+                timelineContainer.style.display = 'none';
+            }
+        }
+
+        // Add zoom controls with event propagation prevention
+        d3.select('#zoomIn').on('click', (e) => {
+            e.stopPropagation();
             zoom.scaleBy(svg.transition().duration(750), 1.2);
         });
 
-        d3.select('#zoomOut').on('click', () => {
+        d3.select('#zoomOut').on('click', (e) => {
+            e.stopPropagation();
             zoom.scaleBy(svg.transition().duration(750), 0.8);
         });
 
-        d3.select('#resetZoom').on('click', () => {
+        d3.select('#resetZoom').on('click', (e) => {
+            e.stopPropagation();
             const bounds = g.node().getBBox();
             const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
             const translate = [

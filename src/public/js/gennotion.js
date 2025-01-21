@@ -484,7 +484,12 @@ function transformDataForGraph(data) {
 // Initialize the force-directed graph
 function initializeGraph(graphData) {
     try {
-        const { nodes, links } = transformDataForGraph(graphData);
+        // Extract dataframes from the response
+        const df2 = graphData.data.dataframe_2;
+        const df3 = graphData.data.dataframe_3;
+
+        // Transform and create graph
+        const { nodes, links } = transformDataForGraph(df2);
         if (!nodes.length) {
             console.error('No nodes to display');
             return;
@@ -493,6 +498,26 @@ function initializeGraph(graphData) {
         // Get container and clear existing content
         const container = document.getElementById('graph-container');
         container.innerHTML = '';
+
+        // Add insights section if df3 exists
+        if (df3 && df3.length > 0) {
+            const insights = df3[0]; // Get the first row of insights
+            const insightsContainer = document.createElement('div');
+            insightsContainer.className = 'absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-lg z-10 max-w-sm';
+            insightsContainer.innerHTML = `
+                <h3 class="text-sm font-semibold text-gray-900 mb-2">Workspace Insights</h3>
+                <div class="space-y-2">
+                    ${Object.entries(insights)
+                        .map(([key, value]) => `
+                            <div class="flex justify-between text-xs">
+                                <span class="text-gray-500">${formatKey(key)}:</span>
+                                <span class="font-medium text-gray-900">${formatValue(value)}</span>
+                            </div>
+                        `).join('')}
+                </div>
+            `;
+            container.appendChild(insightsContainer);
+        }
 
         const width = container.clientWidth;
         const height = container.clientHeight;
@@ -603,13 +628,18 @@ function initializeGraph(graphData) {
                 l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
             );
 
-            // Show tooltip
+            // Show tooltip with fixed positioning
+            const containerRect = container.getBoundingClientRect();
+            const nodeRect = event.target.getBoundingClientRect();
+            const tooltipX = nodeRect.left - containerRect.left + nodeRect.width + 10;
+            const tooltipY = nodeRect.top - containerRect.top;
+
             tooltip
                 .style('display', 'block')
-                .style('left', `${event.offsetX + 10}px`)
-                .style('top', `${event.offsetY - 10}px`)
+                .style('left', `${tooltipX}px`)
+                .style('top', `${tooltipY}px`)
                 .html(`
-                    <div class="bg-white">
+                    <div class="bg-white p-3 rounded-lg shadow-lg">
                         <div class="font-bold text-gray-900 flex items-center gap-2">
                             <span class="w-3 h-3 rounded-full" style="background: ${colorScale(d.type)}"></span>
                             ${d.name}
@@ -643,11 +673,6 @@ function initializeGraph(graphData) {
             node.style('opacity', 1);
             link.style('opacity', 0.6);
             tooltip.style('display', 'none');
-        })
-        .on('mousemove', (event) => {
-            tooltip
-                .style('left', `${event.offsetX + 10}px`)
-                .style('top', `${event.offsetY - 10}px`);
         });
 
         // Add timeline slider

@@ -97,6 +97,38 @@ function calculateGrowthMetrics(data) {
     };
 }
 
+function calculateUsageMetrics(data) {
+    return {
+        active_users: data.active_users || 0,
+        daily_active_users: data.daily_active_users || 0,
+        weekly_active_users: data.weekly_active_users || 0,
+        monthly_active_users: data.monthly_active_users || 0,
+        average_daily_edits: data.average_daily_edits || 0,
+        average_weekly_edits: data.average_weekly_edits || 0,
+        pages_per_user: (data.num_pages / data.total_num_members) || 0,
+        edits_per_user: (data.total_edits / data.total_num_members) || 0,
+        collaboration_rate: ((data.collaborative_pages / data.num_total_pages) * 100) || 0,
+        engagement_score: calculateEngagementScore(data)
+    };
+}
+
+function calculateEngagementScore(data) {
+    const dailyWeight = 0.4;
+    const weeklyWeight = 0.3;
+    const monthlyWeight = 0.2;
+    const editWeight = 0.1;
+
+    const dailyScore = (data.daily_active_users / data.total_num_members) || 0;
+    const weeklyScore = (data.weekly_active_users / data.total_num_members) || 0;
+    const monthlyScore = (data.monthly_active_users / data.total_num_members) || 0;
+    const editScore = (data.average_daily_edits / data.total_num_members) || 0;
+
+    return (dailyScore * dailyWeight + 
+            weeklyScore * weeklyWeight + 
+            monthlyScore * monthlyWeight + 
+            editScore * editWeight) * 100;
+}
+
 function calculateKeyInsights(data) {
     return {
         key_metrics_insight_1: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks),

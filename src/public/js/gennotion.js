@@ -419,8 +419,8 @@ function formatValue(value) {
 window.addEventListener('resize', debounce(() => {
     const container = document.getElementById('graph-container');
     if (container && container.querySelector('svg')) {
-        const data = window._lastGraphData?.graphData; // Get just the graphData
-        if (data && Array.isArray(data)) {
+        const data = window._lastGraphData?.graphData;
+        if (data) {
             initializeGraph(data);
         }
     }
@@ -484,9 +484,9 @@ function transformDataForGraph(data) {
 // Initialize the force-directed graph
 function initializeGraph(graphData) {
     try {
-        // Extract dataframes from the response
-        const df2 = graphData.data.dataframe_2;
-        const df3 = graphData.data.dataframe_3;
+        // Handle both direct data and response object formats
+        const df2 = graphData.data?.dataframe_2 || graphData;
+        const df3 = graphData.data?.dataframe_3;
 
         // Transform and create graph
         const { nodes, links } = transformDataForGraph(df2);
@@ -494,6 +494,13 @@ function initializeGraph(graphData) {
             console.error('No nodes to display');
             return;
         }
+
+        // Store the data for resize handling
+        window._lastGraphData = {
+            graphData: df2,
+            nodes,
+            links
+        };
 
         // Get container and clear existing content
         const container = document.getElementById('graph-container');

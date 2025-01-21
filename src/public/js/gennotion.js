@@ -552,13 +552,14 @@ function initializeGraph(graphData) {
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
                 .distance(100))
-            .force('charge', d3.forceManyBody().strength(-300))
+            .force('charge', d3.forceManyBody()
+                .strength(-150))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(40))
-            .force('x', d3.forceX(width / 2).strength(0.05))
-            .force('y', d3.forceY(height / 2).strength(0.05))
-            .alphaDecay(0.02)
-            .velocityDecay(0.4);
+            .force('collision', d3.forceCollide().radius(50))
+            .force('x', d3.forceX(width / 2).strength(0.02))
+            .force('y', d3.forceY(height / 2).strength(0.02))
+            .alphaDecay(0.05)
+            .velocityDecay(0.6);
 
         // Create arrow marker for links
         svg.append('defs').selectAll('marker')
@@ -619,15 +620,24 @@ function initializeGraph(graphData) {
 
         // Node hover effects
         node.on('mouseover', (event, d) => {
-            // Stop node movement during hover
+            // Pause the simulation and fix the node position
+            simulation.alphaTarget(0);
             d.fx = d.x;
             d.fy = d.y;
 
-            // Highlight connected nodes and links
+            // Fix positions of connected nodes too
             const connectedNodes = new Set();
             links.forEach(l => {
-                if (l.source.id === d.id) connectedNodes.add(l.target.id);
-                if (l.target.id === d.id) connectedNodes.add(l.source.id);
+                if (l.source.id === d.id) {
+                    connectedNodes.add(l.target.id);
+                    l.target.fx = l.target.x;
+                    l.target.fy = l.target.y;
+                }
+                if (l.target.id === d.id) {
+                    connectedNodes.add(l.source.id);
+                    l.source.fx = l.source.x;
+                    l.source.fy = l.source.y;
+                }
             });
 
             node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.2);
@@ -635,16 +645,14 @@ function initializeGraph(graphData) {
                 l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
             );
 
-            // Show tooltip with fixed positioning
-            const containerRect = container.getBoundingClientRect();
+            // Show tooltip
             const nodeRect = event.target.getBoundingClientRect();
-            const tooltipX = nodeRect.left - containerRect.left + nodeRect.width + 10;
-            const tooltipY = nodeRect.top - containerRect.top;
-
+            const containerRect = container.getBoundingClientRect();
+            
             tooltip
                 .style('display', 'block')
-                .style('left', `${tooltipX}px`)
-                .style('top', `${tooltipY}px`)
+                .style('left', `${nodeRect.right - containerRect.left + 10}px`)
+                .style('top', `${nodeRect.top - containerRect.top}px`)
                 .html(`
                     <div class="bg-white p-3 rounded-lg shadow-lg">
                         <div class="font-bold text-gray-900 flex items-center gap-2">
@@ -673,13 +681,23 @@ function initializeGraph(graphData) {
                 `);
         })
         .on('mouseout', (event, d) => {
-            // Release node position when not hovering
-            d.fx = null;
-            d.fy = null;
-
+            // Release all fixed positions
+            nodes.forEach(n => {
+                n.fx = null;
+                n.fy = null;
+            });
+            
+            // Restart simulation with low alpha
+            simulation.alphaTarget(0.1).restart();
+            
             node.style('opacity', 1);
             link.style('opacity', 0.6);
             tooltip.style('display', 'none');
+
+            // After a short delay, stop the simulation again
+            setTimeout(() => {
+                simulation.alphaTarget(0);
+            }, 300);
         });
 
         // Add timeline slider

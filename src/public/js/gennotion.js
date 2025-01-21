@@ -447,17 +447,41 @@ function transformDataForGraph(data) {
             return { nodes: [], links: [] };
         }
 
-        // Create nodes array
-        const nodes = data.map(item => ({
-            id: item.ID,
-            name: item.TEXT || item.TYPE,
-            type: item.TYPE,
-            createdTime: item.CREATED_TIME ? new Date(Number(item.CREATED_TIME)) : null,
-            depth: Number(item.DEPTH) || 0,
-            pageDepth: Number(item.PAGE_DEPTH) || 0,
-            parentId: item.PARENT_ID,
-            originalData: item
-        }));
+        // Create nodes array with date validation
+        const nodes = data.map(item => {
+            const createdTime = item.CREATED_TIME ? new Date(Number(item.CREATED_TIME)) : null;
+            
+            // Validate date
+            if (createdTime) {
+                const year = createdTime.getFullYear();
+                if (year < 2000 || year > 2100) {
+                    console.warn(`Invalid date for node ${item.ID}: ${createdTime}`);
+                }
+            }
+
+            return {
+                id: item.ID,
+                name: item.TEXT || item.TYPE,
+                type: item.TYPE,
+                createdTime,
+                depth: Number(item.DEPTH) || 0,
+                pageDepth: Number(item.PAGE_DEPTH) || 0,
+                parentId: item.PARENT_ID,
+                originalData: item
+            };
+        });
+
+        // Log date range information
+        const dates = nodes.map(n => n.createdTime).filter(Boolean);
+        const startDate = new Date(Math.min(...dates));
+        const endDate = new Date(Math.max(...dates));
+        
+        console.log('Date range in data:', {
+            start: startDate.toLocaleDateString(),
+            end: endDate.toLocaleDateString(),
+            totalNodes: nodes.length,
+            nodesWithDates: dates.length
+        });
 
         // Create links array
         const links = [];
@@ -708,14 +732,16 @@ function initializeGraph(graphData) {
         const endDate = d3.max(nodes, d => d.createdTime);
         
         timelineContainer.innerHTML = `
-            <div class="flex justify-between mb-2">
+            <div class="flex justify-between items-center mb-2">
                 <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
+                <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
                 <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
             </div>
             <input type="range" 
                 min="${startDate?.getTime() || 0}" 
                 max="${endDate?.getTime() || 100}" 
                 value="${endDate?.getTime() || 100}" 
+                step="86400000"
                 class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                 id="timelineSlider">
         `;
@@ -723,14 +749,24 @@ function initializeGraph(graphData) {
 
         // Timeline slider functionality
         const slider = document.getElementById('timelineSlider');
+        const currentDateDisplay = document.getElementById('currentDate');
         
         function updateNodesVisibility(currentTime) {
+            // Update current date display
+            currentDateDisplay.textContent = currentTime.toLocaleDateString();
+
+            // Count visible nodes for debugging
+            let visibleCount = 0;
+
             // Update visibility based on creation time
             node.style('opacity', d => {
                 const nodeTime = d.createdTime;
-                return nodeTime && nodeTime <= currentTime ? 1 : 0.1;
+                const isVisible = nodeTime && nodeTime <= currentTime;
+                if (isVisible) visibleCount++;
+                return isVisible ? 1 : 0.1;
             });
             
+            // Update links visibility only between visible nodes
             link.style('opacity', d => {
                 const sourceTime = d.source.createdTime;
                 const targetTime = d.target.createdTime;
@@ -738,6 +774,8 @@ function initializeGraph(graphData) {
                        sourceTime <= currentTime && 
                        targetTime <= currentTime ? 0.6 : 0.1;
             });
+
+            console.log(`Visible nodes at ${currentTime.toLocaleDateString()}: ${visibleCount} / ${nodes.length}`);
         }
 
         // Set initial state to show all nodes
@@ -751,7 +789,8 @@ function initializeGraph(graphData) {
         // Reset visibility when clicking outside nodes
         svg.on('click', (event) => {
             if (event.target.tagName === 'svg') {
-                updateNodesVisibility(new Date(slider.value));
+                const currentTime = new Date(parseInt(slider.value));
+                updateNodesVisibility(currentTime);
             }
         });
 

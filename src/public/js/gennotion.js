@@ -175,11 +175,7 @@ function listenForResults() {
 
 function displayResults(data) {
     try {
-        console.log('Starting displayResults with data structure:', {
-            hasData: !!data,
-            dataType: typeof data,
-            dataStructure: data ? Object.keys(data) : null
-        });
+        console.log('Starting displayResults with raw data:', data);
 
         // Show results section
         resultsSection.classList.remove('hidden');
@@ -190,145 +186,134 @@ function displayResults(data) {
         
         // Handle different data structures
         if (data && typeof data === 'object') {
-            if (data.data?.dataframe_2) {
-                graphData = data.data.dataframe_2;
-                insightsData = data.data.dataframe_3;
-            } else if (data.dataframe_2) {
-                graphData = data.dataframe_2;
-                insightsData = data.dataframe_3;
+            if (data.data) {
+                // Case 1: Nested under data property
+                graphData = data.data.dataframe_2 || [];
+                insightsData = data.data.dataframe_3 || {};
+                console.log('Case 1 - Data from data property:', {
+                    graphData: graphData?.length,
+                    insightsData: Object.keys(insightsData)
+                });
+            } else if (data.dataframe_2 || data.dataframe_3) {
+                // Case 2: Direct properties
+                graphData = data.dataframe_2 || [];
+                insightsData = data.dataframe_3 || {};
+                console.log('Case 2 - Direct data properties:', {
+                    graphData: graphData?.length,
+                    insightsData: Object.keys(insightsData)
+                });
             } else if (Array.isArray(data)) {
+                // Case 3: Array data
                 graphData = data;
+                console.log('Case 3 - Array data:', {
+                    graphData: graphData?.length
+                });
             }
         }
 
-        // Calculate metrics using reportGenerator
-        if (graphData && insightsData) {
-            const metrics = calculateMetrics(graphData, insightsData);
-            
-            // Log all metrics by category
-            console.log('Calculated Metrics:', {
-                sqlMetrics: {
-                    total_pages: metrics.total_pages,
-                    page_count: metrics.page_count,
-                    collections_count: metrics.collections_count,
-                    collection_views: metrics.collection_views,
-                    public_pages_count: metrics.public_pages_count,
-                    connected_tool_count: metrics.connected_tool_count,
-                    total_num_members: metrics.total_num_members,
-                    total_num_guests: metrics.total_num_guests,
-                    total_num_teamspaces: metrics.total_num_teamspaces,
-                    num_alive_pages: metrics.num_alive_pages,
-                    num_private_pages: metrics.num_private_pages,
-                    num_alive_blocks: metrics.num_alive_blocks,
-                    num_blocks: metrics.num_blocks,
-                    num_alive_collections: metrics.num_alive_collections,
-                    total_arr: metrics.total_arr,
-                    total_paid_seats: metrics.total_paid_seats
-                },
-                graphMetrics: {
-                    max_depth: metrics.max_depth,
-                    avg_depth: metrics.avg_depth,
-                    root_pages: metrics.root_pages,
-                    orphaned_blocks: metrics.orphaned_blocks,
-                    deep_pages_count: metrics.deep_pages_count,
-                    template_count: metrics.template_count,
-                    linked_database_count: metrics.linked_database_count,
-                    duplicate_count: metrics.duplicate_count,
-                    bottleneck_count: metrics.bottleneck_count,
-                    unfindable_pages: metrics.unfindable_pages
-                },
-                growthMetrics: {
-                    growth_rate: metrics.growth_rate,
-                    blocks_created_last_month: metrics.blocks_created_last_month,
-                    blocks_created_last_year: metrics.blocks_created_last_year,
-                    pages_created_last_month: metrics.pages_created_last_month,
-                    monthly_member_growth_rate: metrics.monthly_member_growth_rate,
-                    expected_members_in_next_year: metrics.expected_members_in_next_year,
-                    monthly_content_growth_rate: metrics.monthly_content_growth_rate
-                },
-                usageMetrics: {
-                    active_users: metrics.active_users,
-                    daily_active_users: metrics.daily_active_users,
-                    weekly_active_users: metrics.weekly_active_users,
-                    monthly_active_users: metrics.monthly_active_users,
-                    average_daily_edits: metrics.average_daily_edits,
-                    average_weekly_edits: metrics.average_weekly_edits,
-                    pages_per_user: metrics.pages_per_user,
-                    edits_per_user: metrics.edits_per_user,
-                    collaboration_rate: metrics.collaboration_rate,
-                    engagement_score: metrics.engagement_score
-                },
-                combinedMetrics: {
-                    nav_complexity: metrics.nav_complexity,
-                    duplicate_content_rate: metrics.duplicate_content_rate,
-                    percentage_unlinked: metrics.percentage_unlinked,
-                    current_collaboration_score: metrics.current_collaboration_score,
-                    current_visibility_score: metrics.current_visibility_score,
-                    projected_visibility_score: metrics.projected_visibility_score,
-                    current_productivity_score: metrics.current_productivity_score,
-                    ai_productivity_gain: metrics.ai_productivity_gain,
-                    automation_potential: metrics.automation_potential,
-                    projected_time_savings: metrics.projected_time_savings,
-                    current_organization_score: metrics.current_organization_score,
-                    projected_organisation_score: metrics.projected_organisation_score,
-                    security_improvement_score: metrics.security_improvement_score,
-                    success_improvement: metrics.success_improvement
-                },
-                roiMetrics: {
-                    current_plan: metrics.current_plan,
-                    enterprise_plan: metrics.enterprise_plan,
-                    enterprise_plan_w_ai: metrics.enterprise_plan_w_ai,
-                    '10_percent_increase': metrics['10_percent_increase'],
-                    '20_percent_increase': metrics['20_percent_increase'],
-                    '50_percent_increase': metrics['50_percent_increase'],
-                    '10_percent_increase_w_ai': metrics['10_percent_increase_w_ai'],
-                    '20_percent_increase_w_ai': metrics['20_percent_increase_w_ai'],
-                    '50_percent_increase_w_ai': metrics['50_percent_increase_w_ai'],
-                    enterprise_plan_roi: metrics.enterprise_plan_roi,
-                    enterprise_plan_w_ai_roi: metrics.enterprise_plan_w_ai_roi
-                }
-            });
-
-            // Generate report if template is available
-            const template = "# Workspace Analysis Report\n\n" +
-                           "## Overview\n" +
-                           "Total Pages: [[total_pages]]\n" +
-                           "Active Pages: [[num_alive_pages]]\n" +
-                           "Collections: [[collections_count]]\n\n" +
-                           "## Usage Metrics\n" +
-                           "Total Members: [[total_num_members]]\n" +
-                           "Total Guests: [[total_num_guests]]\n" +
-                           "Connected Tools: [[connected_tool_count]]\n\n" +
-                           "## Growth Metrics\n" +
-                           "Growth Rate: [[growth_rate]]%\n" +
-                           "Monthly Member Growth: [[monthly_member_growth_rate]]%\n\n" +
-                           "## ROI Metrics\n" +
-                           "Current Plan Cost: $[[current_plan]]\n" +
-                           "Enterprise Plan ROI: [[enterprise_plan_roi]]%\n";
-
-            const report = generateReport(template, metrics);
-            console.log('Generated Report:', report);
-        } else {
-            console.warn('Missing required data for metrics calculation');
-        }
-
-        // Validate graphData for visualization
-        if (!Array.isArray(graphData) || graphData.length === 0) {
-            console.error('Invalid or empty graphData:', graphData);
+        // Validate extracted data
+        if (!graphData || !Array.isArray(graphData)) {
+            console.error('Invalid or missing graphData:', graphData);
             showStatus('Error: Invalid graph data received', false);
             return;
         }
 
-        // Store the extracted data for later use
-        window._lastGraphData = {
-            graphData,
-            insightsData
-        };
+        // Transform insightsData if needed
+        if (insightsData) {
+            // Ensure all required fields are present with proper types
+            insightsData = {
+                num_total_pages: Number(insightsData.num_total_pages || 0),
+                num_pages: Number(insightsData.num_pages || 0),
+                num_collections: Number(insightsData.num_collections || 0),
+                total_num_collection_views: Number(insightsData.total_num_collection_views || 0),
+                num_public_pages: Number(insightsData.num_public_pages || 0),
+                total_num_integrations: Number(insightsData.total_num_integrations || 0),
+                total_num_members: Number(insightsData.total_num_members || 0),
+                total_num_guests: Number(insightsData.total_num_guests || 0),
+                total_num_teamspaces: Number(insightsData.total_num_teamspaces || 0),
+                num_alive_pages: Number(insightsData.num_alive_pages || 0),
+                num_private_pages: Number(insightsData.num_private_pages || 0),
+                num_alive_blocks: Number(insightsData.num_alive_blocks || 0),
+                num_blocks: Number(insightsData.num_blocks || 0),
+                num_alive_collections: Number(insightsData.num_alive_collections || 0),
+                total_arr: Number(insightsData.total_arr || 0),
+                total_paid_seats: Number(insightsData.total_paid_seats || 0),
+                current_month_blocks: Number(insightsData.current_month_blocks || 0),
+                previous_month_blocks: Number(insightsData.previous_month_blocks || 0),
+                current_month_members: Number(insightsData.current_month_members || 0),
+                previous_month_members: Number(insightsData.previous_month_members || 0),
+                collaborative_pages: Number(insightsData.collaborative_pages || 0),
+                num_permission_groups: Number(insightsData.num_permission_groups || 0)
+            };
+            
+            console.log('Transformed insightsData:', insightsData);
+        }
+
+        // Calculate metrics using reportGenerator
+        const metrics = calculateMetrics(graphData, insightsData);
+        
+        // Log all metrics by category
+        console.log('Calculated Metrics:', {
+            sqlMetrics: {
+                total_pages: metrics.total_pages,
+                page_count: metrics.page_count,
+                collections_count: metrics.collections_count,
+                collection_views: metrics.collection_views,
+                public_pages_count: metrics.public_pages_count,
+                connected_tool_count: metrics.connected_tool_count,
+                total_num_members: metrics.total_num_members,
+                total_num_guests: metrics.total_num_guests,
+                total_num_teamspaces: metrics.total_num_teamspaces,
+                num_alive_pages: metrics.num_alive_pages,
+                num_private_pages: metrics.num_private_pages,
+                num_alive_blocks: metrics.num_alive_blocks,
+                num_blocks: metrics.num_blocks,
+                num_alive_collections: metrics.num_alive_collections,
+                total_arr: metrics.total_arr,
+                total_paid_seats: metrics.total_paid_seats
+            },
+            graphMetrics: {
+                max_depth: metrics.max_depth,
+                avg_depth: metrics.avg_depth,
+                root_pages: metrics.root_pages,
+                orphaned_blocks: metrics.orphaned_blocks,
+                deep_pages_count: metrics.deep_pages_count,
+                template_count: metrics.template_count,
+                linked_database_count: metrics.linked_database_count,
+                duplicate_count: metrics.duplicate_count,
+                bottleneck_count: metrics.bottleneck_count,
+                unfindable_pages: metrics.unfindable_pages
+            }
+        });
+
+        // Generate report
+        const template = `# Workspace Analysis Report
+
+## Overview
+Total Pages: [[total_pages]]
+Active Pages: [[num_alive_pages]]
+Collections: [[collections_count]]
+
+## Usage Metrics
+Total Members: [[total_num_members]]
+Total Guests: [[total_num_guests]]
+Connected Tools: [[connected_tool_count]]
+
+## Growth Metrics
+Growth Rate: [[growth_rate]]%
+Monthly Member Growth: [[monthly_member_growth_rate]]%
+
+## ROI Metrics
+Current Plan Cost: $[[current_plan]]
+Enterprise Plan ROI: [[enterprise_plan_roi]]%`;
+
+        const report = generateReport(template, metrics);
+        console.log('Generated Report:', report);
 
         // Format and display results HTML
         resultsContent.innerHTML = formatResults(graphData, insightsData);
         
-        // Get graph container after HTML is updated
+        // Initialize graph
         const container = document.getElementById('graph-container');
         if (!container) {
             console.error('Graph container not found after HTML update');
@@ -336,21 +321,15 @@ function displayResults(data) {
             return;
         }
 
-        // Initialize graph immediately
-        try {
-            initializeGraph(graphData, container);
-            
-            // Scroll results into view
-            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            
-            // Force a resize event to ensure proper dimensions
-            window.dispatchEvent(new Event('resize'));
-            
-            console.log('Graph initialization completed successfully');
-        } catch (graphError) {
-            console.error('Error initializing graph:', graphError);
-            showStatus('Error initializing graph visualization', false);
-        }
+        // Initialize graph
+        initializeGraph(graphData, container);
+        
+        // Scroll results into view
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Force a resize event
+        window.dispatchEvent(new Event('resize'));
+        
     } catch (error) {
         console.error('Error in displayResults:', error);
         showStatus('Error displaying results: ' + error.message, false);

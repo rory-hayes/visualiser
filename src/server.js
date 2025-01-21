@@ -481,35 +481,99 @@ app.post('/api/generate-report', async (req, res) => {
 app.post('/api/hex-results', async (req, res) => {
     try {
         const results = req.body;
-        console.log('Received raw request body:', JSON.stringify(req.body));
-        console.log('Received Hex results:', {
+        console.log('Received raw request body:', {
             hasData: !!results.data,
-            dataLength: results.data?.length,
-            firstRecord: results.data?.[0],
-            hasMetadata: !!results.metadata,
-            metadata: results.metadata,
-            rawResults: results
+            dataframe2Length: results.data?.dataframe_2?.length,
+            dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
         });
 
-        // Store the results
+        // Transform and validate the data
+        let transformedData = {
+            data: {
+                dataframe_2: [],
+                dataframe_3: {}
+            }
+        };
+
+        // Extract and validate dataframe_2 (graph data)
+        if (results.data && Array.isArray(results.data.dataframe_2)) {
+            transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
+                id: item.ID || item.id || '',
+                type: item.TYPE || item.type || '',
+                parent_id: item.PARENT_ID || item.parent_id || '',
+                space_id: item.SPACE_ID || item.space_id || '',
+                ancestors: item.ANCESTORS || item.ancestors || [],
+                depth: Number(item.DEPTH || item.depth || 0),
+                page_depth: Number(item.PAGE_DEPTH || item.page_depth || 0),
+                parent_page_id: item.PARENT_PAGE_ID || item.parent_page_id || '',
+                text: item.TEXT || item.text || '',
+                created_time: item.CREATED_TIME || item.created_time || ''
+            }));
+        }
+
+        // Extract and validate dataframe_3 (metrics)
+        if (results.data && results.data.dataframe_3) {
+            const df3 = results.data.dataframe_3;
+            transformedData.data.dataframe_3 = {
+                // Page metrics
+                num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || 0),
+                num_pages: Number(df3.num_pages || df3.NUM_PAGES || 0),
+                num_alive_pages: Number(df3.num_alive_pages || df3.NUM_ALIVE_PAGES || 0),
+                num_public_pages: Number(df3.num_public_pages || df3.NUM_PUBLIC_PAGES || 0),
+                num_private_pages: Number(df3.num_private_pages || df3.NUM_PRIVATE_PAGES || 0),
+
+                // Block metrics
+                num_blocks: Number(df3.num_blocks || df3.NUM_BLOCKS || 0),
+                num_alive_blocks: Number(df3.num_alive_blocks || df3.NUM_ALIVE_BLOCKS || 0),
+                current_month_blocks: Number(df3.current_month_blocks || df3.CURRENT_MONTH_BLOCKS || 0),
+                previous_month_blocks: Number(df3.previous_month_blocks || df3.PREVIOUS_MONTH_BLOCKS || 0),
+
+                // Collection metrics
+                num_collections: Number(df3.num_collections || df3.NUM_COLLECTIONS || 0),
+                num_alive_collections: Number(df3.num_alive_collections || df3.NUM_ALIVE_COLLECTIONS || 0),
+                total_num_collection_views: Number(df3.total_num_collection_views || df3.TOTAL_NUM_COLLECTION_VIEWS || 0),
+
+                // User metrics
+                total_num_members: Number(df3.total_num_members || df3.TOTAL_NUM_MEMBERS || 0),
+                total_num_guests: Number(df3.total_num_guests || df3.TOTAL_NUM_GUESTS || 0),
+                total_num_teamspaces: Number(df3.total_num_teamspaces || df3.TOTAL_NUM_TEAMSPACES || 0),
+                current_month_members: Number(df3.current_month_members || df3.CURRENT_MONTH_MEMBERS || 0),
+                previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0),
+
+                // Integration metrics
+                total_num_integrations: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
+                total_num_bots: Number(df3.total_num_bots || df3.TOTAL_NUM_BOTS || 0),
+
+                // Business metrics
+                total_arr: Number(df3.total_arr || df3.TOTAL_ARR || 0),
+                total_paid_seats: Number(df3.total_paid_seats || df3.TOTAL_PAID_SEATS || 0),
+
+                // Additional metrics
+                collaborative_pages: Number(df3.collaborative_pages || df3.COLLABORATIVE_PAGES || 0),
+                num_permission_groups: Number(df3.num_permission_groups || df3.NUM_PERMISSION_GROUPS || 0)
+            };
+        }
+
+        console.log('Transformed data:', {
+            hasDataframe2: transformedData.data.dataframe_2.length > 0,
+            dataframe2Length: transformedData.data.dataframe_2.length,
+            hasDataframe3: Object.keys(transformedData.data.dataframe_3).length > 0,
+            dataframe3Keys: Object.keys(transformedData.data.dataframe_3)
+        });
+
+        // Store the transformed results
         const storedData = {
             timestamp: new Date(),
-            data: results.data,
-            metadata: results.metadata
+            data: transformedData.data,
+            metadata: results.metadata || {}
         };
         saveResults(storedData);
         
-        console.log('Stored Hex results:', {
-            storedData: storedData.data?.length || 0,
-            storedTimestamp: storedData.timestamp,
-            storedMetadata: storedData.metadata
-        });
-
         // Notify all connected clients
         if (connectedClients.size > 0) {
             const eventData = JSON.stringify({
                 success: true,
-                data: results.data
+                data: transformedData
             });
             connectedClients.forEach(client => {
                 client.write(`data: ${eventData}\n\n`);
@@ -540,11 +604,25 @@ app.get('/api/hex-results/stream', (req, res) => {
 
     const results = loadResults();
     if (results && results.data) {
+        console.log('Sending stored results via SSE:', {
+            hasDataframe2: results.data.dataframe_2?.length > 0,
+            dataframe2Length: results.data.dataframe_2?.length,
+            hasDataframe3: Object.keys(results.data.dataframe_3 || {}).length > 0,
+            dataframe3Keys: Object.keys(results.data.dataframe_3 || {})
+        });
+
         const eventData = JSON.stringify({
             success: true,
-            data: results.data
+            data: {
+                data: {
+                    dataframe_2: results.data.dataframe_2 || [],
+                    dataframe_3: results.data.dataframe_3 || {}
+                }
+            }
         });
         res.write(`data: ${eventData}\n\n`);
+    } else {
+        console.log('No stored results available');
     }
 
     req.on('close', () => {

@@ -8,46 +8,78 @@ export function calculateMetrics(dataframe_2, dataframe_3) {
             throw new Error('Missing required dataframes');
         }
 
-        // Direct SQL metrics
+        // Log input data for debugging
+        console.log('Input Data:', {
+            dataframe_2: {
+                length: dataframe_2.length,
+                sample: dataframe_2[0],
+                fields: dataframe_2[0] ? Object.keys(dataframe_2[0]) : []
+            },
+            dataframe_3: {
+                sample: dataframe_3,
+                fields: Object.keys(dataframe_3)
+            }
+        });
+
+        // Direct SQL metrics with logging
         const sqlMetrics = calculateSQLMetrics(dataframe_3);
+        console.log('SQL Metrics:', sqlMetrics);
         Object.assign(metrics, sqlMetrics);
 
-        // Graph structure metrics
+        // Graph structure metrics with logging
         const graphMetrics = calculateGraphMetrics(dataframe_2);
+        console.log('Graph Metrics:', graphMetrics);
         Object.assign(metrics, graphMetrics);
 
-        // Growth metrics
+        // Growth metrics with logging
         const growthMetrics = calculateGrowthMetrics(dataframe_3);
+        console.log('Growth Metrics:', growthMetrics);
         Object.assign(metrics, growthMetrics);
 
-        // Usage metrics
+        // Usage metrics with logging
         const usageMetrics = calculateUsageMetrics(dataframe_3);
+        console.log('Usage Metrics:', usageMetrics);
         Object.assign(metrics, usageMetrics);
 
-        // Key insights
+        // Key insights with logging
         const keyInsights = calculateKeyInsights(dataframe_3);
+        console.log('Key Insights:', keyInsights);
         Object.assign(metrics, keyInsights);
 
-        // Combined and calculated metrics
+        // Combined and calculated metrics with logging
         const combinedMetrics = calculateCombinedMetrics(metrics);
+        console.log('Combined Metrics:', combinedMetrics);
         Object.assign(metrics, combinedMetrics);
 
-        // ROI calculations
+        // ROI calculations with logging
         const roiMetrics = calculateROIMetrics(dataframe_3, metrics);
+        console.log('ROI Metrics:', roiMetrics);
         Object.assign(metrics, roiMetrics);
 
         // Mark unavailable metrics
         markUnavailableMetrics(metrics);
 
+        // Log final metrics
+        console.log('Final Metrics:', metrics);
+
         return metrics;
 
     } catch (error) {
         console.error('Error in calculateMetrics:', error);
+        console.error('Error details:', {
+            hasDataframe2: !!dataframe_2,
+            hasDataframe3: !!dataframe_3,
+            dataframe2Length: dataframe_2?.length,
+            dataframe3Fields: dataframe_3 ? Object.keys(dataframe_3) : []
+        });
         throw error;
     }
 }
 
 function calculateSQLMetrics(data) {
+    // Log input data
+    console.log('Calculating SQL Metrics from:', data);
+
     return {
         total_pages: data.num_total_pages || 0,
         page_count: data.num_pages || 0,
@@ -64,52 +96,105 @@ function calculateSQLMetrics(data) {
         num_blocks: data.num_blocks || 0,
         num_alive_collections: data.num_alive_collections || 0,
         total_arr: data.total_arr || 0,
-        total_paid_seats: data.total_paid_seats || 0
+        total_paid_seats: data.total_paid_seats || 0,
+        num_permission_groups: data.num_permission_groups || 0,
+        total_num_bots: data.total_num_bots || 0,
+        total_num_internal_bots: data.total_num_internal_bots || 0,
+        total_num_public_bots: data.total_num_public_bots || 0,
+        total_num_link_preview_integrations: data.total_num_link_preview_integrations || 0,
+        total_num_public_integrations: data.total_num_public_integrations || 0,
+        current_month_blocks: data.current_month_blocks || 0,
+        previous_month_blocks: data.previous_month_blocks || 0,
+        current_year_blocks: data.current_year_blocks || 0,
+        previous_year_blocks: data.previous_year_blocks || 0,
+        current_month_pages: data.current_month_pages || 0,
+        previous_month_pages: data.previous_month_pages || 0,
+        current_month_members: data.current_month_members || 0,
+        previous_month_members: data.previous_month_members || 0,
+        collaborative_pages: data.collaborative_pages || 0
     };
 }
 
 function calculateGraphMetrics(graph) {
     const metrics = {};
     
-    metrics.max_depth = Math.max(...graph.map(node => getNodeDepth(node, graph)));
-    metrics.avg_depth = calculateAverageDepth(graph);
-    metrics.root_pages = graph.filter(node => !node.parent).length;
-    metrics.orphaned_blocks = graph.filter(node => !node.parent && !isRootNode(node)).length;
-    metrics.deep_pages_count = graph.filter(node => getNodeDepth(node, graph) > 5).length;
-    metrics.template_count = graph.filter(node => node.type === 'template').length;
-    metrics.linked_database_count = graph.filter(node => node.type === 'collection' && node.parent).length;
-    metrics.duplicate_count = findDuplicateTitles(graph).length;
-    metrics.bottleneck_count = graph.filter(node => getChildCount(node, graph) > 20).length;
-    metrics.unfindable_pages = metrics.orphaned_blocks + metrics.deep_pages_count;
+    try {
+        // Basic graph metrics
+        metrics.max_depth = Math.max(...graph.map(node => getNodeDepth(node, graph)));
+        metrics.avg_depth = calculateAverageDepth(graph);
+        metrics.root_pages = graph.filter(node => !node.parent).length;
+        metrics.orphaned_blocks = graph.filter(node => !node.parent && !isRootNode(node)).length;
+        metrics.deep_pages_count = graph.filter(node => getNodeDepth(node, graph) > 5).length;
+        metrics.template_count = graph.filter(node => node.type === 'template').length;
+        metrics.linked_database_count = graph.filter(node => node.type === 'collection' && node.parent).length;
+        metrics.duplicate_count = findDuplicateTitles(graph).length;
+        metrics.bottleneck_count = graph.filter(node => getChildCount(node, graph) > 20).length;
+        metrics.unfindable_pages = metrics.orphaned_blocks + metrics.deep_pages_count;
 
-    return metrics;
+        // Additional graph metrics
+        metrics.avg_nav_depth = metrics.avg_depth;
+        metrics.scatter_index = (metrics.orphaned_blocks / graph.length) * 100;
+        metrics.nav_depth_score = (metrics.avg_depth * 0.4) + (metrics.max_depth * 0.6);
+        metrics.duplicate_content_rate = (metrics.duplicate_count / graph.length) * 100;
+
+        return metrics;
+    } catch (error) {
+        console.error('Error in calculateGraphMetrics:', error);
+        return metrics;
+    }
 }
 
 function calculateGrowthMetrics(data) {
-    return {
-        growth_rate: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks),
-        blocks_created_last_month: (data.current_month_blocks - data.previous_month_blocks) || 0,
-        blocks_created_last_year: (data.current_year_blocks - data.previous_year_blocks) || 0,
-        pages_created_last_month: (data.current_month_pages - data.previous_month_pages) || 0,
-        monthly_member_growth_rate: calculateGrowthRate(data.current_month_members, data.previous_month_members),
-        expected_members_in_next_year: calculateProjectedGrowth(data.total_num_members, data.monthly_member_growth_rate),
-        monthly_content_growth_rate: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks)
-    };
+    try {
+        const metrics = {
+            growth_rate: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks),
+            blocks_created_last_month: (data.current_month_blocks - data.previous_month_blocks) || 0,
+            blocks_created_last_year: (data.current_year_blocks - data.previous_year_blocks) || 0,
+            pages_created_last_month: (data.current_month_pages - data.previous_month_pages) || 0,
+            monthly_member_growth_rate: calculateGrowthRate(data.current_month_members, data.previous_month_members),
+            expected_members_in_next_year: calculateProjectedGrowth(data.total_num_members, data.monthly_member_growth_rate),
+            monthly_content_growth_rate: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks)
+        };
+
+        // Additional growth metrics
+        metrics.growth_capacity = data.system_limit ? (1 - (data.num_blocks / data.system_limit)) * 100 : null;
+        metrics.potential_teamspace_growth = data.industry_benchmark_team_size ? 
+            (data.industry_benchmark_team_size - (data.total_num_members / data.total_num_teamspaces)) * data.total_num_teamspaces : null;
+
+        return metrics;
+    } catch (error) {
+        console.error('Error in calculateGrowthMetrics:', error);
+        return {};
+    }
 }
 
 function calculateUsageMetrics(data) {
-    return {
-        active_users: data.active_users || 0,
-        daily_active_users: data.daily_active_users || 0,
-        weekly_active_users: data.weekly_active_users || 0,
-        monthly_active_users: data.monthly_active_users || 0,
-        average_daily_edits: data.average_daily_edits || 0,
-        average_weekly_edits: data.average_weekly_edits || 0,
-        pages_per_user: (data.num_pages / data.total_num_members) || 0,
-        edits_per_user: (data.total_edits / data.total_num_members) || 0,
-        collaboration_rate: ((data.collaborative_pages / data.num_total_pages) * 100) || 0,
-        engagement_score: calculateEngagementScore(data)
-    };
+    try {
+        const metrics = {
+            active_users: data.active_users || 0,
+            daily_active_users: data.daily_active_users || 0,
+            weekly_active_users: data.weekly_active_users || 0,
+            monthly_active_users: data.monthly_active_users || 0,
+            average_daily_edits: data.average_daily_edits || 0,
+            average_weekly_edits: data.average_weekly_edits || 0,
+            pages_per_user: (data.num_pages / data.total_num_members) || 0,
+            edits_per_user: (data.total_edits / data.total_num_members) || 0,
+            collaboration_rate: ((data.collaborative_pages / data.num_total_pages) * 100) || 0,
+            engagement_score: calculateEngagementScore(data)
+        };
+
+        // Additional usage metrics
+        metrics.average_teamspace_members = (data.total_num_members / data.total_num_teamspaces) || 0;
+        metrics.teamspaces_with_guests = data.total_num_guests || 0;
+        metrics.automation_usage_rate = (data.total_num_bots / data.total_num_members) * 100;
+        metrics.current_integration_coverage = (data.total_num_integrations / data.total_num_members) * 100;
+        metrics.underutilised_teamspaces = data.teamspaces_below_average || 0;
+
+        return metrics;
+    } catch (error) {
+        console.error('Error in calculateUsageMetrics:', error);
+        return {};
+    }
 }
 
 function calculateEngagementScore(data) {
@@ -153,117 +238,114 @@ function calculateKeyInsights(data) {
 }
 
 function calculateCombinedMetrics(metrics) {
-    return {
-        nav_complexity: calculateNavComplexity(metrics),
-        duplicate_content_rate: (metrics.duplicate_count / metrics.total_pages * 100) || 0,
-        percentage_unlinked: (metrics.orphaned_blocks / metrics.total_pages * 100) || 0,
-        current_collaboration_score: calculateCollaborationScore(metrics),
-        current_visibility_score: calculateVisibilityScore(metrics),
-        projected_visibility_score: calculateVisibilityScore(metrics) * 1.3,
-        current_productivity_score: calculateProductivityScore(metrics),
-        ai_productivity_gain: calculateProductivityScore(metrics) * 1.4,
-        automation_potential: calculateAutomationPotential(metrics),
-        projected_time_savings: calculateProjectedTimeSavings(metrics),
-        current_organization_score: calculateOrganizationScore(metrics),
-        projected_organisation_score: calculateOrganizationScore(metrics) * 1.3,
-        security_improvement_score: calculateSecurityScore(metrics),
-        success_improvement: calculateSuccessImprovement(metrics)
-    };
+    try {
+        return {
+            nav_complexity: calculateNavComplexity(metrics),
+            duplicate_content_rate: (metrics.duplicate_count / metrics.total_pages * 100) || 0,
+            percentage_unlinked: (metrics.orphaned_blocks / metrics.total_pages * 100) || 0,
+            current_collaboration_score: calculateCollaborationScore(metrics),
+            current_visibility_score: calculateVisibilityScore(metrics),
+            projected_visibility_score: calculateVisibilityScore(metrics) * 1.3,
+            current_productivity_score: calculateProductivityScore(metrics),
+            ai_productivity_gain: calculateProductivityScore(metrics) * 1.4,
+            automation_potential: calculateAutomationPotential(metrics),
+            projected_time_savings: calculateProjectedTimeSavings(metrics),
+            current_organization_score: calculateOrganizationScore(metrics),
+            projected_organisation_score: calculateOrganizationScore(metrics) * 1.3,
+            security_improvement_score: calculateSecurityScore(metrics),
+            success_improvement: calculateSuccessImprovement(metrics),
+            teamspace_optimisation_potential: (metrics.underutilised_teamspaces / metrics.total_num_teamspaces * 100) || 0,
+            automation_efficiency_gain: metrics.automation_usage_rate ? metrics.automation_usage_rate * 1.5 : 0
+        };
+    } catch (error) {
+        console.error('Error in calculateCombinedMetrics:', error);
+        return {};
+    }
 }
 
 function calculateROIMetrics(data, metrics) {
-    const enterpriseCost = 20;
-    const enterpriseAICost = 25;
-    const current = data.total_arr / data.total_paid_seats;
-    const enterprise = enterpriseCost * data.total_paid_seats;
-    const enterpriseAI = enterpriseAICost * data.total_paid_seats;
+    try {
+        const enterpriseCost = 20;
+        const enterpriseAICost = 25;
+        const implementationCost = 5000;
+        const current = data.total_arr / data.total_paid_seats;
+        const enterprise = enterpriseCost * data.total_paid_seats;
+        const enterpriseAI = enterpriseAICost * data.total_paid_seats;
 
-    return {
-        current_plan: current,
-        enterprise_plan: enterprise,
-        enterprise_plan_w_ai: enterpriseAI,
-        '10_percent_increase': calculateIncrease(0.1, data.total_paid_seats, enterprise, current),
-        '20_percent_increase': calculateIncrease(0.2, data.total_paid_seats, enterprise, current),
-        '50_percent_increase': calculateIncrease(0.5, data.total_paid_seats, enterprise, current),
-        '10_percent_increase_w_ai': calculateIncrease(0.1, data.total_paid_seats, enterpriseAI, current),
-        '20_percent_increase_w_ai': calculateIncrease(0.2, data.total_paid_seats, enterpriseAI, current),
-        '50_percent_increase_w_ai': calculateIncrease(0.5, data.total_paid_seats, enterpriseAI, current),
-        enterprise_plan_roi: calculateEnterpriseROI(metrics, current, enterprise),
-        enterprise_plan_w_ai_roi: calculateEnterpriseROI(metrics, current, enterpriseAI, true)
-    };
+        return {
+            current_plan: current,
+            enterprise_plan: enterprise,
+            enterprise_plan_w_ai: enterpriseAI,
+            '10_percent_increase': calculateIncrease(0.1, data.total_paid_seats, enterprise, current),
+            '20_percent_increase': calculateIncrease(0.2, data.total_paid_seats, enterprise, current),
+            '50_percent_increase': calculateIncrease(0.5, data.total_paid_seats, enterprise, current),
+            '10_percent_increase_w_ai': calculateIncrease(0.1, data.total_paid_seats, enterpriseAI, current),
+            '20_percent_increase_w_ai': calculateIncrease(0.2, data.total_paid_seats, enterpriseAI, current),
+            '50_percent_increase_w_ai': calculateIncrease(0.5, data.total_paid_seats, enterpriseAI, current),
+            enterprise_plan_roi: calculateEnterpriseROI(metrics, current, enterprise, implementationCost),
+            enterprise_plan_w_ai_roi: calculateEnterpriseROI(metrics, current, enterpriseAI, implementationCost, true)
+        };
+    } catch (error) {
+        console.error('Error in calculateROIMetrics:', error);
+        return {};
+    }
 }
 
-// Helper functions
-function getNodeDepth(node, graph, cache = new Map()) {
-    if (cache.has(node.id)) return cache.get(node.id);
-    if (!node.parent) return 0;
-    const parentNode = graph.find(n => n.id === node.parent);
-    if (!parentNode) return 0;
-    const depth = 1 + getNodeDepth(parentNode, graph, cache);
-    cache.set(node.id, depth);
-    return depth;
-}
-
-function calculateAverageDepth(graph) {
-    const depths = graph.map(node => getNodeDepth(node, graph));
-    return depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
-}
-
-function getChildCount(node, graph) {
-    return graph.filter(n => n.parent === node.id).length;
-}
-
-function isRootNode(node) {
-    return node.type === 'page' && !node.parent;
-}
-
-function findDuplicateTitles(graph) {
-    const titles = {};
-    return graph.filter(node => {
-        if (!node.title) return false;
-        if (titles[node.title]) return true;
-        titles[node.title] = true;
-        return false;
-    });
-}
-
-function calculateGrowthRate(current, previous) {
-    return previous ? ((current - previous) / previous * 100) : 0;
-}
-
-function calculateProjectedGrowth(current, monthlyRate) {
-    return current * Math.pow(1 + monthlyRate/100, 12);
-}
-
-function calculateTotalBots(data) {
-    return (data.total_num_bots || 0) + 
-           (data.total_num_internal_bots || 0) + 
-           (data.total_num_public_bots || 0);
-}
-
-function calculateTotalIntegrations(data) {
-    return (data.total_num_link_preview_integrations || 0) + 
-           (data.total_num_public_integrations || 0);
-}
-
-function calculateNavComplexity(metrics) {
-    return (metrics.max_depth * 0.3) + 
-           (metrics.avg_depth * 0.3) + 
-           (metrics.orphaned_blocks / metrics.total_pages * 0.4);
-}
-
-function calculateCollaborationScore(metrics) {
-    return ((metrics.teamspaces_with_guests / metrics.total_num_teamspaces * 0.5) +
-            (metrics.average_teamspace_members / 10 * 0.5)) * 100;
+function calculateEnterpriseROI(metrics, currentCost, newCost, implementationCost, includeAI = false) {
+    try {
+        const projectedBenefit = metrics.current_productivity_score * (includeAI ? 1.4 : 1.2);
+        return ((projectedBenefit - currentCost) / implementationCost) * 100;
+    } catch (error) {
+        console.error('Error in calculateEnterpriseROI:', error);
+        return 0;
+    }
 }
 
 function calculateVisibilityScore(metrics) {
-    return (metrics.num_public_pages / metrics.num_total_pages * 0.4) +
-           (metrics.num_permission_groups / metrics.total_num_members * 0.6) * 100;
+    try {
+        return (metrics.num_public_pages / metrics.num_total_pages * 0.4) +
+               (metrics.num_permission_groups / metrics.total_num_members * 0.6) * 100;
+    } catch (error) {
+        console.error('Error in calculateVisibilityScore:', error);
+        return 0;
+    }
+}
+
+function calculateCollaborationScore(metrics) {
+    try {
+        return ((metrics.teamspaces_with_guests / metrics.total_num_teamspaces * 0.5) +
+                (metrics.average_teamspace_members / 10 * 0.5)) * 100;
+    } catch (error) {
+        console.error('Error in calculateCollaborationScore:', error);
+        return 0;
+    }
 }
 
 function calculateProductivityScore(metrics) {
-    return (metrics.num_alive_blocks / metrics.total_num_members) / 100;
+    try {
+        return (metrics.num_alive_blocks / metrics.total_num_members) / 100;
+    } catch (error) {
+        console.error('Error in calculateProductivityScore:', error);
+        return 0;
+    }
+}
+
+function calculateSecurityScore(metrics) {
+    try {
+        return (metrics.num_private_pages / metrics.num_total_pages * 0.4) +
+               (metrics.num_permission_groups / metrics.total_num_members * 0.6) * 100;
+    } catch (error) {
+        console.error('Error in calculateSecurityScore:', error);
+        return 0;
+    }
+}
+
+function calculateSuccessImprovement(metrics) {
+    return metrics.projected_organisation_score - metrics.current_organization_score;
+}
+
+function calculateIncrease(percentage, seats, newPlan, currentPlan) {
+    return seats * (1 + percentage) * (newPlan - currentPlan);
 }
 
 function calculateAutomationPotential(metrics) {
@@ -281,23 +363,25 @@ function calculateOrganizationScore(metrics) {
            (metrics.current_productivity_score * 0.3);
 }
 
-function calculateSecurityScore(metrics) {
-    return (metrics.num_private_pages / metrics.num_total_pages * 0.4) +
-           (metrics.num_permission_groups / metrics.total_num_members * 0.6) * 100;
+function calculateNavComplexity(metrics) {
+    return (metrics.max_depth * 0.3) + 
+           (metrics.avg_depth * 0.3) + 
+           (metrics.orphaned_blocks / metrics.total_pages * 0.4);
 }
 
-function calculateSuccessImprovement(metrics) {
-    return metrics.projected_organisation_score - metrics.current_organization_score;
+function calculateProjectedGrowth(current, monthlyRate) {
+    return current * Math.pow(1 + monthlyRate/100, 12);
 }
 
-function calculateIncrease(percentage, seats, newPlan, currentPlan) {
-    return seats * (1 + percentage) * (newPlan - currentPlan);
+function calculateTotalBots(data) {
+    return (data.total_num_bots || 0) + 
+           (data.total_num_internal_bots || 0) + 
+           (data.total_num_public_bots || 0);
 }
 
-function calculateEnterpriseROI(metrics, currentCost, newCost, includeAI = false) {
-    const implementationCost = 5000;
-    const projectedBenefit = metrics.current_productivity_score * (includeAI ? 1.4 : 1.2);
-    return ((projectedBenefit - currentCost) / implementationCost) * 100;
+function calculateTotalIntegrations(data) {
+    return (data.total_num_link_preview_integrations || 0) + 
+           (data.total_num_public_integrations || 0);
 }
 
 function markUnavailableMetrics(metrics) {
@@ -338,4 +422,42 @@ export function generateReport(markdownTemplate, metrics) {
         console.error('Error generating report:', error);
         throw error;
     }
+}
+
+// Helper functions
+function getNodeDepth(node, graph, cache = new Map()) {
+    if (cache.has(node.id)) return cache.get(node.id);
+    if (!node.parent) return 0;
+    const parentNode = graph.find(n => n.id === node.parent);
+    if (!parentNode) return 0;
+    const depth = 1 + getNodeDepth(parentNode, graph, cache);
+    cache.set(node.id, depth);
+    return depth;
+}
+
+function calculateAverageDepth(graph) {
+    const depths = graph.map(node => getNodeDepth(node, graph));
+    return depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+}
+
+function getChildCount(node, graph) {
+    return graph.filter(n => n.parent === node.id).length;
+}
+
+function isRootNode(node) {
+    return node.type === 'page' && !node.parent;
+}
+
+function findDuplicateTitles(graph) {
+    const titles = {};
+    return graph.filter(node => {
+        if (!node.title) return false;
+        if (titles[node.title]) return true;
+        titles[node.title] = true;
+        return false;
+    });
+}
+
+function calculateGrowthRate(current, previous) {
+    return previous ? ((current - previous) / previous * 100) : 0;
 }

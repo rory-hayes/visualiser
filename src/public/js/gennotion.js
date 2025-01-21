@@ -559,380 +559,214 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
 
 // Initialize the force-directed graph
 function initializeGraph(graphData, container) {
-    try {
-        // Clear any existing graph
-        container.innerHTML = '';
+    // Clear any existing graph
+    container.innerHTML = '';
 
-        // Extract data from the response
-        const df2 = graphData.data?.dataframe_2 || graphData;
-        const df3 = graphData.data?.dataframe_3;
+    // Extract data from the response
+    const df2 = graphData.data?.dataframe_2 || graphData;
+    const df3 = graphData.data?.dataframe_3;
 
-        // Create nodes array with proper date handling
-        const nodes = df2.map(item => {
-            let createdTime = null;
-            
-            // Handle both string and number timestamps
-            if (item.CREATED_TIME) {
-                const timestamp = typeof item.CREATED_TIME === 'string' ? 
-                    Date.parse(item.CREATED_TIME) : 
-                    item.CREATED_TIME;
+    // Create nodes array with proper date handling
+    const nodes = df2.map(item => {
+        let createdTime = null;
+        
+        // Handle both string and number timestamps
+        if (item.CREATED_TIME) {
+            const timestamp = typeof item.CREATED_TIME === 'string' ? 
+                Date.parse(item.CREATED_TIME) : 
+                item.CREATED_TIME;
                 
-                if (!isNaN(timestamp)) {
-                    const date = new Date(timestamp);
-                    const year = date.getFullYear();
-                    
-                    // Validate year is reasonable
-                    if (year >= 2000 && year <= 2100) {
-                        createdTime = date;
-                    } else {
-                        console.warn(`Invalid year ${year} for node ${item.id}`);
-                    }
+            if (!isNaN(timestamp)) {
+                const date = new Date(timestamp);
+                const year = date.getFullYear();
+                
+                // Validate year is reasonable
+                if (year >= 2000 && year <= 2100) {
+                    createdTime = date;
+                } else {
+                    console.warn(`Invalid year ${year} for node ${item.id}`);
                 }
             }
-            
-            return {
-                id: item.id,
-                title: item.title,
-                url: item.url,
-                createdTime: createdTime,
-                parent: item.parent
-            };
-        });
-
-        // Log date range information
-        const timelineValidDates = nodes.map(n => n.createdTime).filter(Boolean);
-        const startDate = new Date(Math.min(...timelineValidDates));
-        const endDate = new Date(Math.max(...timelineValidDates));
-        
-        console.log(`
-            Date Range Info:
-            Total nodes: ${nodes.length}
-            Nodes with valid dates: ${timelineValidDates.length}
-            Nodes without dates: ${nodes.length - timelineValidDates.length}
-            Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
-        `);
-
-        // Create links array
-        const links = [];
-        nodes.forEach(node => {
-            if (node.parent) {
-                const parentNode = nodes.find(n => n.id === node.parent);
-                if (parentNode) {
-                    links.push({
-                        source: parentNode,
-                        target: node
-                    });
-                }
-            }
-        });
-
-        // Store the data for resize handling
-        window._lastGraphData = {
-            graphData: df2,
-            nodes,
-            links
-        };
-
-        // Get container and clear existing content
-        const container = document.getElementById('graph-container');
-        container.innerHTML = '';
-
-        // Add insights section if df3 exists
-        if (df3 && df3.length > 0) {
-            const insights = df3[0]; // Get the first row of insights
-            const insightsContainer = document.createElement('div');
-            insightsContainer.className = 'absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-4 rounded-lg shadow-lg z-10 max-w-sm';
-            insightsContainer.innerHTML = `
-                <h3 class="text-sm font-semibold text-gray-900 mb-2">Workspace Insights</h3>
-                <div class="space-y-2">
-                    ${Object.entries(insights)
-                        .map(([key, value]) => `
-                            <div class="flex justify-between text-xs">
-                                <span class="text-gray-500">${formatKey(key)}:</span>
-                                <span class="font-medium text-gray-900">${formatValue(value)}</span>
-                            </div>
-                        `).join('')}
-                </div>
-            `;
-            container.appendChild(insightsContainer);
         }
-
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-
-        // Create SVG
-        const svg = d3.select(container)
-            .append('svg')
-            .attr('width', width)
-            .attr('height', height)
-            .attr('viewBox', [0, 0, width, height])
-            .attr('class', 'graph-svg');
-
-        // Create container group for zoom
-        const g = svg.append('g');
-
-        // Add zoom behavior
-        const zoom = d3.zoom()
-            .scaleExtent([0.2, 4])
-            .on('zoom', (event) => g.attr('transform', event.transform));
-
-        svg.call(zoom);
-
-        // Create force simulation
-        const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links)
-                .id(d => d.id)
-                .distance(100))
-            .force('charge', d3.forceManyBody()
-                .strength(-150))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(50))
-            .force('x', d3.forceX(width / 2).strength(0.02))
-            .force('y', d3.forceY(height / 2).strength(0.02))
-            .alphaDecay(0.05)
-            .velocityDecay(0.6);
-
-        // Create arrow marker for links
-        svg.append('defs').selectAll('marker')
-            .data(['end'])
-            .join('marker')
-            .attr('id', 'arrow')
-            .attr('viewBox', '0 -5 10 10')
-            .attr('refX', 25)
-            .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
-            .attr('orient', 'auto')
-            .append('path')
-            .attr('fill', '#999')
-            .attr('d', 'M0,-5L10,0L0,5');
-
-        // Create links
-        const link = g.append('g')
-            .attr('class', 'links')
-            .selectAll('line')
-            .data(links)
-            .join('line')
-            .attr('class', 'link')
-            .attr('stroke', '#999')
-            .attr('stroke-width', 1.5)
-            .attr('marker-end', 'url(#arrow)');
-
-        // Create nodes
-        const node = g.append('g')
-            .attr('class', 'nodes')
-            .selectAll('g')
-            .data(nodes)
-            .join('g')
-            .attr('class', d => `node ${d.type}`)
-            .call(drag(simulation));
-
-        // Add circles for nodes
-        node.append('circle')
-            .attr('r', d => Math.max(8, 12 - d.depth))
-            .attr('fill', d => colorScale(d.type))
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 2);
-
-        // Add labels
-        node.append('text')
-            .attr('dy', -10)
-            .attr('text-anchor', 'middle')
-            .text(d => d.name.substring(0, 20))
-            .attr('class', 'node-label')
-            .clone(true).lower()
-            .attr('stroke', 'white')
-            .attr('stroke-width', 3);
-
-        // Add tooltip
-        const tooltip = d3.select(container)
-            .append('div')
-            .attr('id', 'graph-tooltip');
-
-        // Node hover effects
-        node.on('mouseover', (event, d) => {
-            // Pause the simulation and fix the node position
-            simulation.alphaTarget(0);
-            d.fx = d.x;
-            d.fy = d.y;
-
-            // Fix positions of connected nodes too
-            const connectedNodes = new Set();
-            links.forEach(l => {
-                if (l.source.id === d.id) {
-                    connectedNodes.add(l.target.id);
-                    l.target.fx = l.target.x;
-                    l.target.fy = l.target.y;
-                }
-                if (l.target.id === d.id) {
-                    connectedNodes.add(l.source.id);
-                    l.source.fx = l.source.x;
-                    l.source.fy = l.source.y;
-                }
-            });
-
-            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.2);
-            link.style('opacity', l => 
-                l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
-            );
-
-            // Show tooltip
-            const nodeRect = event.target.getBoundingClientRect();
-            const containerRect = container.getBoundingClientRect();
-            
-            tooltip
-                .style('display', 'block')
-                .style('left', `${nodeRect.right - containerRect.left + 10}px`)
-                .style('top', `${nodeRect.top - containerRect.top}px`)
-                .html(`
-                    <div class="bg-white p-3 rounded-lg shadow-lg">
-                        <div class="font-bold text-gray-900 flex items-center gap-2">
-                            <span class="w-3 h-3 rounded-full" style="background: ${colorScale(d.type)}"></span>
-                            ${d.name}
-                        </div>
-                        <div class="mt-2 space-y-1 text-sm">
-                            <div class="flex justify-between">
-                                <span class="text-gray-500">Type:</span>
-                                <span class="font-medium">${d.type}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500">Created:</span>
-                                <span class="font-medium">${d.createdTime?.toLocaleDateString() || 'Unknown'}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500">Depth:</span>
-                                <span class="font-medium">${d.depth}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500">Connections:</span>
-                                <span class="font-medium">${connectedNodes.size}</span>
-                            </div>
-                        </div>
-                    </div>
-                `);
-        })
-        .on('mouseout', (event, d) => {
-            // Release all fixed positions
-            nodes.forEach(n => {
-                n.fx = null;
-                n.fy = null;
-            });
-            
-            // Restart simulation with low alpha
-            simulation.alphaTarget(0.1).restart();
-            
-            node.style('opacity', 1);
-            link.style('opacity', 0.6);
-            tooltip.style('display', 'none');
-
-            // After a short delay, stop the simulation again
-            setTimeout(() => {
-                simulation.alphaTarget(0);
-            }, 300);
-        });
-
-        // Add timeline slider
-        const timelineContainer = document.createElement('div');
-        timelineContainer.className = 'timeline-container';
         
-        // Find valid date range
-        const timelineValidDates = nodes.map(n => n.createdTime).filter(Boolean);
-        const startDate = new Date(Math.min(...timelineValidDates));
-        const endDate = new Date(Math.max(...timelineValidDates));
-        
-        timelineContainer.innerHTML = `
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
-                <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
-                <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
-            </div>
-            <input type="range" 
-                min="${startDate?.getTime() || 0}" 
-                max="${endDate?.getTime() || 100}" 
-                value="${endDate?.getTime() || 100}" 
-                step="86400000"
-                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                id="timelineSlider">
-        `;
-        container.appendChild(timelineContainer);
+        return {
+            id: item.id,
+            title: item.title,
+            url: item.url,
+            createdTime: createdTime,
+            parent: item.parent
+        };
+    });
 
-        // Timeline slider functionality
-        const slider = document.getElementById('timelineSlider');
-        
-        // Set initial state to show all nodes
-        updateNodesVisibility(endDate, node, link, nodes);
-
-        slider.addEventListener('input', (event) => {
-            const currentTime = new Date(parseInt(event.target.value));
-            updateNodesVisibility(currentTime, node, link, nodes);
-        });
-
-        // Reset visibility when clicking outside nodes
-        svg.on('click', (event) => {
-            if (event.target.tagName === 'svg') {
-                const currentTime = new Date(parseInt(slider.value));
-                updateNodesVisibility(currentTime, node, link, nodes);
+    // Create links array
+    const links = [];
+    nodes.forEach(node => {
+        if (node.parent) {
+            const parentNode = nodes.find(n => n.id === node.parent);
+            if (parentNode) {
+                links.push({
+                    source: parentNode,
+                    target: node
+                });
             }
-        });
+        }
+    });
 
-        // Add zoom controls
-        const controlsContainer = document.createElement('div');
-        controlsContainer.className = 'graph-controls';
-        controlsContainer.innerHTML = `
-            <button class="graph-control-button" id="zoomIn" title="Zoom In">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                </svg>
-            </button>
-            <button class="graph-control-button" id="zoomOut" title="Zoom Out">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                </svg>
-            </button>
-            <button class="graph-control-button" id="resetZoom" title="Reset View">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-            </button>
-        `;
-        container.appendChild(controlsContainer);
+    // Initialize the visualization
+    const width = container.clientWidth;
+    const height = container.clientHeight || 600;
 
-        // Initialize zoom controls
-        d3.select('#zoomIn').on('click', () => zoom.scaleBy(svg.transition().duration(300), 1.5));
-        d3.select('#zoomOut').on('click', () => zoom.scaleBy(svg.transition().duration(300), 0.75));
-        d3.select('#resetZoom').on('click', () => {
-            const bounds = g.node().getBBox();
-            const scale = 0.9 / Math.max(bounds.width / width, bounds.height / height);
-            const translate = [
-                (width - scale * bounds.width) / 2 - scale * bounds.x,
-                (height - scale * bounds.height) / 2 - scale * bounds.y
-            ];
-            svg.transition()
-                .duration(300)
-                .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
-        });
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
 
-        // Update positions on simulation tick
-        simulation.on('tick', () => {
-            link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
+    // Create the force simulation
+    const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links).id(d => d.id))
+        .force('charge', d3.forceManyBody().strength(-300))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(40))
+        .force('x', d3.forceX().strength(0.05))
+        .force('y', d3.forceY().strength(0.05))
+        .alphaDecay(0.05)
+        .velocityDecay(0.3);
 
-            node
-                .attr('transform', d => `translate(${d.x},${d.y})`);
-        });
+    // Add links
+    const link = svg.append('g')
+        .selectAll('line')
+        .data(links)
+        .join('line')
+        .attr('stroke', '#999')
+        .attr('stroke-opacity', 0.6)
+        .attr('stroke-width', 2);
 
-        // Initial zoom to fit
-        setTimeout(() => {
-            d3.select('#resetZoom').dispatch('click');
-        }, 100);
+    // Add nodes
+    const node = svg.append('g')
+        .selectAll('circle')
+        .data(nodes)
+        .join('circle')
+        .attr('r', 10)
+        .attr('fill', '#69b3a2')
+        .call(drag(simulation));
 
-    } catch (error) {
-        console.error('Error in initializeGraph:', error);
-        showStatus('Error initializing graph visualization', false);
-    }
+    // Initialize timeline
+    initializeTimeline(container, nodes, node, link);
+
+    // Update positions on each tick
+    simulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+
+        node
+            .attr('cx', d => d.x)
+            .attr('cy', d => d.y);
+    });
+
+    // Add tooltips
+    const tooltip = d3.select(container)
+        .append('div')
+        .attr('class', 'tooltip')
+        .style('opacity', 0)
+        .style('position', 'absolute')
+        .style('pointer-events', 'none')
+        .style('background-color', 'white')
+        .style('padding', '10px')
+        .style('border-radius', '5px')
+        .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+        .style('max-width', '300px')
+        .style('z-index', '1000');
+
+    node.on('mouseover', (event, d) => {
+        d.fx = d.x;
+        d.fy = d.y;
+        
+        tooltip.transition()
+            .duration(200)
+            .style('opacity', .9);
+            
+        tooltip.html(`
+            <strong>${d.title}</strong><br/>
+            ${d.url ? `<a href="${d.url}" target="_blank">Open in Notion</a>` : ''}
+            ${d.createdTime ? `<br/>Created: ${d.createdTime.toLocaleDateString()}` : ''}
+        `)
+        .style('left', (event.pageX + 10) + 'px')
+        .style('top', (event.pageY - 10) + 'px');
+    })
+    .on('mouseout', (event, d) => {
+        d.fx = null;
+        d.fy = null;
+        
+        tooltip.transition()
+            .duration(500)
+            .style('opacity', 0);
+    });
+
+    // Store data for resize handling
+    container._graphData = {
+        nodes,
+        links,
+        width,
+        height
+    };
+}
+
+function initializeTimeline(container, nodes, node, link) {
+    // Find valid date range
+    const validDates = nodes.map(n => n.createdTime).filter(Boolean);
+    const startDate = new Date(Math.min(...validDates));
+    const endDate = new Date(Math.max(...validDates));
+
+    // Log date range information
+    console.log(`
+        Date Range Info:
+        Total nodes: ${nodes.length}
+        Nodes with valid dates: ${validDates.length}
+        Nodes without dates: ${nodes.length - validDates.length}
+        Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
+    `);
+
+    // Add timeline slider
+    const timelineContainer = document.createElement('div');
+    timelineContainer.className = 'timeline-container';
+    
+    timelineContainer.innerHTML = `
+        <div class="flex justify-between items-center mb-2">
+            <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
+            <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
+            <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
+        </div>
+        <input type="range" 
+            min="${startDate?.getTime() || 0}" 
+            max="${endDate?.getTime() || 100}" 
+            value="${endDate?.getTime() || 100}" 
+            step="86400000"
+            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+            id="timelineSlider">
+    `;
+    container.appendChild(timelineContainer);
+
+    // Timeline slider functionality
+    const slider = document.getElementById('timelineSlider');
+    
+    // Set initial state to show all nodes
+    updateNodesVisibility(endDate, node, link, nodes);
+
+    slider.addEventListener('input', (event) => {
+        const currentTime = new Date(parseInt(event.target.value));
+        updateNodesVisibility(currentTime, node, link, nodes);
+    });
+
+    // Reset visibility when clicking outside nodes
+    svg.on('click', (event) => {
+        if (event.target.tagName === 'svg') {
+            const currentTime = new Date(parseInt(slider.value));
+            updateNodesVisibility(currentTime, node, link, nodes);
+        }
+    });
 }
 
 // Drag behavior for nodes

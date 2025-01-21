@@ -193,7 +193,7 @@ function displayResults(data) {
                 insightsData = data.data.dataframe_3;
             } else {
                 graphData = data.dataframe_2;
-                insightsData = data.dataframe_3;
+                insightsData = data.data.dataframe_3;
             }
         }
 
@@ -216,7 +216,7 @@ function displayResults(data) {
         // Get graph container after HTML is updated
         const container = document.getElementById('graph-container');
         if (!container) {
-            console.error('Graph container not found');
+            console.error('Graph container not found after HTML update');
             showStatus('Error: Graph container not found', false);
             return;
         }
@@ -224,29 +224,22 @@ function displayResults(data) {
         // Reset graph initialization flag
         window._graphInitialized = false;
 
-        // Wait for next frame to ensure container is rendered
-        requestAnimationFrame(() => {
-            try {
-                // Scroll results into view
-                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                
-                // Initialize graph with delay to ensure DOM is ready
-                setTimeout(() => {
-                    try {
-                        initializeGraph(graphData, container);
-                        window._graphInitialized = true;
-                        
-                        // Force a resize event to ensure proper dimensions
-                        window.dispatchEvent(new Event('resize'));
-                    } catch (graphError) {
-                        console.error('Error initializing graph:', graphError);
-                        showStatus('Error initializing graph visualization', false);
-                    }
-                }, 500);
-            } catch (scrollError) {
-                console.error('Error in scroll/animation handling:', scrollError);
-            }
-        });
+        // Initialize graph immediately
+        try {
+            initializeGraph(graphData, container);
+            window._graphInitialized = true;
+            
+            // Scroll results into view
+            resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            // Force a resize event to ensure proper dimensions
+            window.dispatchEvent(new Event('resize'));
+            
+            console.log('Graph initialization completed successfully');
+        } catch (graphError) {
+            console.error('Error initializing graph:', graphError);
+            showStatus('Error initializing graph visualization', false);
+        }
     } catch (error) {
         console.error('Error in displayResults:', error);
         console.error('Data that caused error:', JSON.stringify(data, null, 2));
@@ -401,10 +394,28 @@ function formatValue(value) {
 // Add resize handler for graph responsiveness
 window.addEventListener('resize', debounce(() => {
     const container = document.getElementById('graph-container');
-    if (container && container.querySelector('svg')) {
-        const data = window._lastGraphData?.graphData;
-        if (data) {
-            initializeGraph(data);
+    if (container && window._lastGraphData?.graphData) {
+        // Get the stored data
+        const { graphData } = window._lastGraphData;
+        
+        // Only reinitialize if we have both container and data
+        if (container && graphData) {
+            try {
+                // Clear existing graph
+                container.innerHTML = '';
+                
+                // Reinitialize with current container and data
+                initializeGraph(graphData, container);
+                
+                // Log resize event for debugging
+                console.log('Graph reinitialized on resize:', {
+                    containerWidth: container.clientWidth,
+                    containerHeight: container.clientHeight,
+                    nodesCount: graphData.length
+                });
+            } catch (error) {
+                console.error('Error reinitializing graph on resize:', error);
+            }
         }
     }
 }, 250));
@@ -539,6 +550,12 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
         Total nodes: ${nodes.length}
     `);
 }
+
+// Color scale for different node types
+const colorScale = d3.scaleOrdinal()
+    .domain(['page', 'collection_view_page', 'collection', 'database', 'table'])
+    .range(['#4F46E5', '#10B981', '#EC4899', '#F59E0B', '#6366F1'])
+    .unknown('#94A3B8'); // Default color for unknown types
 
 // Initialize the force-directed graph
 function initializeGraph(graphData, container) {
@@ -878,11 +895,6 @@ function drag(simulation) {
         .on('drag', dragged)
         .on('end', dragended);
 }
-
-// Color scale for different types
-const colorScale = d3.scaleOrdinal()
-    .domain(['page', 'collection_view_page', 'collection'])
-    .range(['#4F46E5', '#10B981', '#EC4899']);
 
 function showStatus(message, showSpinner = false) {
     statusSection.classList.remove('hidden');

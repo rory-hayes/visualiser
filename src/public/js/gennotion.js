@@ -184,16 +184,19 @@ function displayResults(data) {
         resultsSection.classList.remove('hidden');
         
         // Extract the dataframes with proper error handling
-        let graphData, insightsData;
+        let graphData = null;
+        let insightsData = null;
         
+        // Handle different data structures
         if (data && typeof data === 'object') {
-            // Try different possible data structures
-            if (data.data) {
+            if (data.data?.dataframe_2) {
                 graphData = data.data.dataframe_2;
                 insightsData = data.data.dataframe_3;
-            } else {
+            } else if (data.dataframe_2) {
                 graphData = data.dataframe_2;
-                insightsData = data.data.dataframe_3;
+                insightsData = data.dataframe_3;
+            } else if (Array.isArray(data)) {
+                graphData = data;
             }
         }
 
@@ -260,16 +263,22 @@ function formatResults(graphData, insightsData) {
         pageDepthDistribution: {},
         collections: graphData.filter(item => item.TYPE === 'collection').length,
         collectionViews: graphData.filter(item => item.TYPE === 'collection_view_page').length,
-        maxDepth: Math.max(...graphData.map(item => item.DEPTH)),
-        maxPageDepth: Math.max(...graphData.map(item => item.PAGE_DEPTH)),
+        maxDepth: Math.max(...graphData.map(item => item.DEPTH || 0)),
+        maxPageDepth: Math.max(...graphData.map(item => item.PAGE_DEPTH || 0)),
         rootPages: graphData.filter(item => item.DEPTH === 0).length
     };
 
     // Calculate distributions
     graphData.forEach(item => {
-        insights.typeDistribution[item.TYPE] = (insights.typeDistribution[item.TYPE] || 0) + 1;
-        insights.depthDistribution[item.DEPTH] = (insights.depthDistribution[item.DEPTH] || 0) + 1;
-        insights.pageDepthDistribution[item.PAGE_DEPTH] = (insights.pageDepthDistribution[item.PAGE_DEPTH] || 0) + 1;
+        if (item.TYPE) {
+            insights.typeDistribution[item.TYPE] = (insights.typeDistribution[item.TYPE] || 0) + 1;
+        }
+        if (typeof item.DEPTH === 'number') {
+            insights.depthDistribution[item.DEPTH] = (insights.depthDistribution[item.DEPTH] || 0) + 1;
+        }
+        if (typeof item.PAGE_DEPTH === 'number') {
+            insights.pageDepthDistribution[item.PAGE_DEPTH] = (insights.pageDepthDistribution[item.PAGE_DEPTH] || 0) + 1;
+        }
     });
 
     // Format workspace insights from dataframe_3

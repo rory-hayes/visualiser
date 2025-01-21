@@ -498,16 +498,16 @@ app.post('/api/hex-results', async (req, res) => {
         // Extract and validate dataframe_2 (graph data)
         if (results.data && Array.isArray(results.data.dataframe_2)) {
             transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
-                id: item.ID || item.id || '',
-                type: item.TYPE || item.type || '',
-                parent_id: item.PARENT_ID || item.parent_id || '',
-                space_id: item.SPACE_ID || item.space_id || '',
-                ancestors: item.ANCESTORS || item.ancestors || [],
-                depth: Number(item.DEPTH || item.depth || 0),
-                page_depth: Number(item.PAGE_DEPTH || item.page_depth || 0),
-                parent_page_id: item.PARENT_PAGE_ID || item.parent_page_id || '',
-                text: item.TEXT || item.text || '',
-                created_time: item.CREATED_TIME || item.created_time || ''
+                ID: item.ID || item.id || '',
+                TYPE: item.TYPE || item.type || '',
+                PARENT_ID: item.PARENT_ID || item.parent_id || '',
+                SPACE_ID: item.SPACE_ID || item.space_id || '',
+                ANCESTORS: item.ANCESTORS || item.ancestors || [],
+                DEPTH: Number(item.DEPTH || item.depth || 0),
+                PAGE_DEPTH: Number(item.PAGE_DEPTH || item.page_depth || 0),
+                PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',
+                TEXT: item.TEXT || item.text || '',
+                CREATED_TIME: item.CREATED_TIME || item.created_time || ''
             }));
         }
 

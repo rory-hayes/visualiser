@@ -560,7 +560,6 @@ function initializeGraph(graphData, container) {
 
         // Extract data from the response
         const df2 = graphData.data?.dataframe_2 || graphData;
-        const df3 = graphData.data?.dataframe_3;
 
         // Validate df2
         if (!Array.isArray(df2) || df2.length === 0) {
@@ -596,6 +595,7 @@ function initializeGraph(graphData, container) {
                 id: item.ID || item.id,
                 title: item.TEXT || item.title || item.TYPE || 'Untitled',
                 url: item.URL || item.url,
+                type: item.TYPE || 'page',
                 createdTime: createdTime,
                 parent: item.PARENT_ID || item.parent
             };
@@ -619,10 +619,18 @@ function initializeGraph(graphData, container) {
         const width = container.clientWidth || 800;
         const height = container.clientHeight || 600;
 
+        // Create SVG with zoom support
         const svg = d3.select(container)
             .append('svg')
             .attr('width', width)
             .attr('height', height);
+
+        // Add zoom behavior
+        const g = svg.append('g');
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+        svg.call(zoom);
 
         // Create the force simulation
         const simulation = d3.forceSimulation(nodes)
@@ -636,7 +644,7 @@ function initializeGraph(graphData, container) {
             .velocityDecay(0.3);
 
         // Add links
-        const link = svg.append('g')
+        const link = g.append('g')
             .selectAll('line')
             .data(links)
             .join('line')
@@ -645,13 +653,24 @@ function initializeGraph(graphData, container) {
             .attr('stroke-width', 2);
 
         // Add nodes
-        const node = svg.append('g')
+        const node = g.append('g')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
             .attr('r', 10)
-            .attr('fill', '#69b3a2')
+            .attr('fill', d => colorScale(d.type))
             .call(drag(simulation));
+
+        // Add labels
+        const labels = g.append('g')
+            .selectAll('text')
+            .data(nodes)
+            .join('text')
+            .attr('dx', 15)
+            .attr('dy', 4)
+            .text(d => d.title.substring(0, 20))
+            .style('font-size', '10px')
+            .style('fill', '#666');
 
         // Initialize timeline
         initializeTimeline(container, nodes, node, link, svg);
@@ -667,6 +686,10 @@ function initializeGraph(graphData, container) {
             node
                 .attr('cx', d => d.x)
                 .attr('cy', d => d.y);
+
+            labels
+                .attr('x', d => d.x)
+                .attr('y', d => d.y);
         });
 
         // Add tooltips
@@ -684,28 +707,51 @@ function initializeGraph(graphData, container) {
             .style('z-index', '1000');
 
         node.on('mouseover', (event, d) => {
+            // Fix node position during hover
             d.fx = d.x;
             d.fy = d.y;
             
+            // Show tooltip
             tooltip.transition()
                 .duration(200)
                 .style('opacity', .9);
                 
             tooltip.html(`
-                <strong>${d.title}</strong><br/>
-                ${d.url ? `<a href="${d.url}" target="_blank">Open in Notion</a>` : ''}
-                ${d.createdTime ? `<br/>Created: ${d.createdTime.toLocaleDateString()}` : ''}
+                <div class="p-2">
+                    <strong class="block text-lg mb-1">${d.title}</strong>
+                    <span class="block text-sm text-gray-500">Type: ${d.type}</span>
+                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
+                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
+                </div>
             `)
             .style('left', (event.pageX + 10) + 'px')
             .style('top', (event.pageY - 10) + 'px');
+
+            // Highlight connected nodes
+            const connectedNodes = new Set();
+            links.forEach(l => {
+                if (l.source.id === d.id) connectedNodes.add(l.target.id);
+                if (l.target.id === d.id) connectedNodes.add(l.source.id);
+            });
+
+            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.1);
+            link.style('opacity', l => 
+                l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
+            );
         })
         .on('mouseout', (event, d) => {
+            // Release fixed position
             d.fx = null;
             d.fy = null;
             
+            // Hide tooltip
             tooltip.transition()
                 .duration(500)
                 .style('opacity', 0);
+
+            // Reset node visibility
+            const currentTime = new Date(parseInt(document.getElementById('timelineSlider').value));
+            updateNodesVisibility(currentTime, node, link, nodes);
         });
 
         // Store data for resize handling
@@ -715,6 +761,15 @@ function initializeGraph(graphData, container) {
             width,
             height
         };
+
+        // Initial zoom to fit
+        const bounds = g.node().getBBox();
+        const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
+        const translate = [
+            (width - scale * bounds.width) / 2 - scale * bounds.x,
+            (height - scale * bounds.height) / 2 - scale * bounds.y
+        ];
+        svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);

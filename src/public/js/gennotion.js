@@ -880,8 +880,12 @@ function initializeTimeline(container, nodes, node, link, svg) {
             return;
         }
 
+        // Set start date to beginning of day and end date to end of day
         const startDate = new Date(Math.min(...validDates));
+        startDate.setHours(0, 0, 0, 0);  // Start of day
+
         const endDate = new Date(Math.max(...validDates));
+        endDate.setHours(23, 59, 59, 999);  // End of day
 
         // Log date range information
         console.log(`
@@ -890,6 +894,8 @@ function initializeTimeline(container, nodes, node, link, svg) {
             Nodes with valid dates: ${validDates.length}
             Nodes without dates: ${nodes.length - validDates.length}
             Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
+            Start timestamp: ${startDate.getTime()}
+            End timestamp: ${endDate.getTime()}
         `);
 
         // Add timeline slider
@@ -924,6 +930,8 @@ function initializeTimeline(container, nodes, node, link, svg) {
 
         slider.addEventListener('input', (event) => {
             const currentTime = new Date(parseInt(event.target.value));
+            // Set to end of selected day
+            currentTime.setHours(23, 59, 59, 999);
             updateNodesVisibility(currentTime, node, link, nodes);
         });
 
@@ -931,6 +939,8 @@ function initializeTimeline(container, nodes, node, link, svg) {
         svg.on('click', (event) => {
             if (event.target.tagName === 'svg') {
                 const currentTime = new Date(parseInt(slider.value));
+                // Set to end of selected day
+                currentTime.setHours(23, 59, 59, 999);
                 updateNodesVisibility(currentTime, node, link, nodes);
             }
         });

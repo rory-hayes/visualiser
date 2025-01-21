@@ -175,11 +175,10 @@ function listenForResults() {
 
 function displayResults(data) {
     try {
-        console.log('Starting displayResults with data:', {
+        console.log('Starting displayResults with data structure:', {
             hasData: !!data,
             dataType: typeof data,
-            dataStructure: data ? Object.keys(data) : null,
-            rawData: data
+            dataStructure: data ? Object.keys(data) : null
         });
 
         // Show results section
@@ -205,7 +204,90 @@ function displayResults(data) {
         // Calculate metrics using reportGenerator
         if (graphData && insightsData) {
             const metrics = calculateMetrics(graphData, insightsData);
-            console.log('Calculated Metrics:', metrics);
+            
+            // Log all metrics by category
+            console.log('Calculated Metrics:', {
+                sqlMetrics: {
+                    total_pages: metrics.total_pages,
+                    page_count: metrics.page_count,
+                    collections_count: metrics.collections_count,
+                    collection_views: metrics.collection_views,
+                    public_pages_count: metrics.public_pages_count,
+                    connected_tool_count: metrics.connected_tool_count,
+                    total_num_members: metrics.total_num_members,
+                    total_num_guests: metrics.total_num_guests,
+                    total_num_teamspaces: metrics.total_num_teamspaces,
+                    num_alive_pages: metrics.num_alive_pages,
+                    num_private_pages: metrics.num_private_pages,
+                    num_alive_blocks: metrics.num_alive_blocks,
+                    num_blocks: metrics.num_blocks,
+                    num_alive_collections: metrics.num_alive_collections,
+                    total_arr: metrics.total_arr,
+                    total_paid_seats: metrics.total_paid_seats
+                },
+                graphMetrics: {
+                    max_depth: metrics.max_depth,
+                    avg_depth: metrics.avg_depth,
+                    root_pages: metrics.root_pages,
+                    orphaned_blocks: metrics.orphaned_blocks,
+                    deep_pages_count: metrics.deep_pages_count,
+                    template_count: metrics.template_count,
+                    linked_database_count: metrics.linked_database_count,
+                    duplicate_count: metrics.duplicate_count,
+                    bottleneck_count: metrics.bottleneck_count,
+                    unfindable_pages: metrics.unfindable_pages
+                },
+                growthMetrics: {
+                    growth_rate: metrics.growth_rate,
+                    blocks_created_last_month: metrics.blocks_created_last_month,
+                    blocks_created_last_year: metrics.blocks_created_last_year,
+                    pages_created_last_month: metrics.pages_created_last_month,
+                    monthly_member_growth_rate: metrics.monthly_member_growth_rate,
+                    expected_members_in_next_year: metrics.expected_members_in_next_year,
+                    monthly_content_growth_rate: metrics.monthly_content_growth_rate
+                },
+                usageMetrics: {
+                    active_users: metrics.active_users,
+                    daily_active_users: metrics.daily_active_users,
+                    weekly_active_users: metrics.weekly_active_users,
+                    monthly_active_users: metrics.monthly_active_users,
+                    average_daily_edits: metrics.average_daily_edits,
+                    average_weekly_edits: metrics.average_weekly_edits,
+                    pages_per_user: metrics.pages_per_user,
+                    edits_per_user: metrics.edits_per_user,
+                    collaboration_rate: metrics.collaboration_rate,
+                    engagement_score: metrics.engagement_score
+                },
+                combinedMetrics: {
+                    nav_complexity: metrics.nav_complexity,
+                    duplicate_content_rate: metrics.duplicate_content_rate,
+                    percentage_unlinked: metrics.percentage_unlinked,
+                    current_collaboration_score: metrics.current_collaboration_score,
+                    current_visibility_score: metrics.current_visibility_score,
+                    projected_visibility_score: metrics.projected_visibility_score,
+                    current_productivity_score: metrics.current_productivity_score,
+                    ai_productivity_gain: metrics.ai_productivity_gain,
+                    automation_potential: metrics.automation_potential,
+                    projected_time_savings: metrics.projected_time_savings,
+                    current_organization_score: metrics.current_organization_score,
+                    projected_organisation_score: metrics.projected_organisation_score,
+                    security_improvement_score: metrics.security_improvement_score,
+                    success_improvement: metrics.success_improvement
+                },
+                roiMetrics: {
+                    current_plan: metrics.current_plan,
+                    enterprise_plan: metrics.enterprise_plan,
+                    enterprise_plan_w_ai: metrics.enterprise_plan_w_ai,
+                    '10_percent_increase': metrics['10_percent_increase'],
+                    '20_percent_increase': metrics['20_percent_increase'],
+                    '50_percent_increase': metrics['50_percent_increase'],
+                    '10_percent_increase_w_ai': metrics['10_percent_increase_w_ai'],
+                    '20_percent_increase_w_ai': metrics['20_percent_increase_w_ai'],
+                    '50_percent_increase_w_ai': metrics['50_percent_increase_w_ai'],
+                    enterprise_plan_roi: metrics.enterprise_plan_roi,
+                    enterprise_plan_w_ai_roi: metrics.enterprise_plan_w_ai_roi
+                }
+            });
 
             // Generate report if template is available
             const template = "# Workspace Analysis Report\n\n" +
@@ -254,13 +336,9 @@ function displayResults(data) {
             return;
         }
 
-        // Reset graph initialization flag
-        window._graphInitialized = false;
-
         // Initialize graph immediately
         try {
             initializeGraph(graphData, container);
-            window._graphInitialized = true;
             
             // Scroll results into view
             resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -275,7 +353,6 @@ function displayResults(data) {
         }
     } catch (error) {
         console.error('Error in displayResults:', error);
-        console.error('Data that caused error:', JSON.stringify(data, null, 2));
         showStatus('Error displaying results: ' + error.message, false);
     }
 }
@@ -293,10 +370,10 @@ function formatResults(graphData, insightsData) {
         <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
             <h2 class="text-2xl font-bold mb-4">Workspace Structure Insights</h2>
             
+            <!-- Structure Metrics -->
             <div class="mb-8 p-4 bg-indigo-50 rounded-lg">
-                <h3 class="font-semibold text-lg text-indigo-900 mb-3">Workspace Overview</h3>
+                <h3 class="font-semibold text-lg text-indigo-900 mb-3">Structure Metrics</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <!-- Structure Metrics -->
                     <div class="bg-white p-3 rounded shadow-sm">
                         <div class="text-sm text-gray-500">Total Pages</div>
                         <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.total_pages)}</div>
@@ -309,51 +386,145 @@ function formatResults(graphData, insightsData) {
                         <div class="text-sm text-gray-500">Collections</div>
                         <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.collections_count)}</div>
                     </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Max Depth</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.max_depth)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Average Depth</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.avg_depth)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Deep Pages</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.deep_pages_count)}</div>
+                    </div>
+                </div>
+            </div>
 
-                    <!-- Usage Metrics -->
+            <!-- Usage Metrics -->
+            <div class="mb-8 p-4 bg-green-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-green-900 mb-3">Usage Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Total Members</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.total_num_members)}</div>
+                        <div class="text-sm text-gray-500">Daily Active Users</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.daily_active_users)}</div>
                     </div>
                     <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Total Guests</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.total_num_guests)}</div>
+                        <div class="text-sm text-gray-500">Weekly Active Users</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.weekly_active_users)}</div>
                     </div>
                     <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Connected Tools</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.connected_tool_count)}</div>
+                        <div class="text-sm text-gray-500">Monthly Active Users</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_active_users)}</div>
                     </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Pages per User</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.pages_per_user)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Engagement Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.engagement_score)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Collaboration Rate</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.collaboration_rate)}%</div>
+                    </div>
+                </div>
+            </div>
 
-                    <!-- Growth Metrics -->
+            <!-- Growth Metrics -->
+            <div class="mb-8 p-4 bg-blue-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-blue-900 mb-3">Growth Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="bg-white p-3 rounded shadow-sm">
                         <div class="text-sm text-gray-500">Growth Rate</div>
                         <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.growth_rate)}%</div>
                     </div>
                     <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Monthly Member Growth</div>
+                        <div class="text-sm text-gray-500">Member Growth Rate</div>
                         <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_member_growth_rate)}%</div>
                     </div>
                     <div class="bg-white p-3 rounded shadow-sm">
                         <div class="text-sm text-gray-500">Content Growth Rate</div>
                         <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_content_growth_rate)}%</div>
                     </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Pages Created (Month)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.pages_created_last_month)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Expected Members (Year)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.expected_members_in_next_year)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Blocks Created (Year)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.blocks_created_last_year)}</div>
+                    </div>
+                </div>
+            </div>
 
-                    <!-- Organization Metrics -->
+            <!-- Performance Metrics -->
+            <div class="mb-8 p-4 bg-purple-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-purple-900 mb-3">Performance Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="bg-white p-3 rounded shadow-sm">
                         <div class="text-sm text-gray-500">Organization Score</div>
                         <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_organization_score)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Productivity Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_productivity_score)}</div>
                     </div>
                     <div class="bg-white p-3 rounded shadow-sm">
                         <div class="text-sm text-gray-500">Collaboration Score</div>
                         <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_collaboration_score)}</div>
                     </div>
                     <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Productivity Score</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_productivity_score)}</div>
+                        <div class="text-sm text-gray-500">AI Productivity Gain</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.ai_productivity_gain)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Automation Potential</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.automation_potential)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Time Savings (hrs)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.projected_time_savings)}</div>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- ROI Metrics -->
+            <div class="mb-8 p-4 bg-yellow-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-yellow-900 mb-3">ROI Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Current Plan Cost</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics.current_plan)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Enterprise Plan ROI</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_roi)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Enterprise AI ROI</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_w_ai_roi)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">10% Growth Savings</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['10_percent_increase'])}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">20% Growth Savings</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['20_percent_increase'])}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">50% Growth Savings</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['50_percent_increase'])}</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
                 <div id="graph-container" class="w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden">
@@ -375,9 +546,6 @@ function formatResults(graphData, insightsData) {
                             </svg>
                         </button>
                     </div>
-
-                    <!-- Tooltip Container -->
-                    <div id="graph-tooltip" class="hidden absolute z-20 bg-white/95 backdrop-blur-sm rounded-lg shadow-lg p-3 max-w-xs text-sm"></div>
 
                     <!-- Timeline Container -->
                     <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
@@ -567,18 +735,6 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
 
         // Update visibility based on creation time
         node.style('opacity', d => {
-            // Debug individual node dates
-            if (d.createdTime) {
-                console.log('Node date check:', {
-                    nodeTitle: d.title,
-                    nodeCreatedTime: d.createdTime.toLocaleDateString(),
-                    nodeTimestamp: d.createdTime.getTime(),
-                    currentTime: currentTime.toLocaleDateString(),
-                    currentTimestamp: currentTime.getTime(),
-                    wouldBeVisible: d.createdTime.getTime() <= currentTime.getTime()
-                });
-            }
-
             if (!d.createdTime) {
                 noDateCount++;
                 return 1; // Show nodes without dates

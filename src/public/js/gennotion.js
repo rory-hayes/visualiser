@@ -566,6 +566,25 @@ const colorScale = d3.scaleOrdinal()
     .range(['#4F46E5', '#10B981', '#EC4899', '#F59E0B', '#6366F1'])
     .unknown('#94A3B8'); // Default color for unknown types
 
+// Drag behavior for nodes
+function drag(simulation) {
+    return d3.drag()
+        .on('start', (event) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            event.subject.fx = event.subject.x;
+            event.subject.fy = event.subject.y;
+        })
+        .on('drag', (event) => {
+            event.subject.fx = event.x;
+            event.subject.fy = event.y;
+        })
+        .on('end', (event) => {
+            if (!event.active) simulation.alphaTarget(0);
+            event.subject.fx = null;
+            event.subject.fy = null;
+        });
+}
+
 // Initialize the force-directed graph
 function initializeGraph(graphData, container) {
     try {
@@ -649,7 +668,8 @@ function initializeGraph(graphData, container) {
         const svg = d3.select(container)
             .append('svg')
             .attr('width', width)
-            .attr('height', height);
+            .attr('height', height)
+            .attr('viewBox', [0, 0, width, height]);
 
         // Add zoom behavior
         const g = svg.append('g');
@@ -660,17 +680,22 @@ function initializeGraph(graphData, container) {
 
         // Create the force simulation
         const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links).id(d => d.id))
-            .force('charge', d3.forceManyBody().strength(-300))
+            .force('link', d3.forceLink(links)
+                .id(d => d.id)
+                .distance(100))
+            .force('charge', d3.forceManyBody()
+                .strength(-500)
+                .distanceMax(500))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(40))
-            .force('x', d3.forceX().strength(0.05))
-            .force('y', d3.forceY().strength(0.05))
-            .alphaDecay(0.05)
-            .velocityDecay(0.3);
+            .force('collision', d3.forceCollide().radius(30))
+            .force('x', d3.forceX(width / 2).strength(0.1))
+            .force('y', d3.forceY(height / 2).strength(0.1))
+            .alphaDecay(0.01)
+            .velocityDecay(0.2);
 
         // Add links
         const link = g.append('g')
+            .attr('class', 'links')
             .selectAll('line')
             .data(links)
             .join('line')
@@ -680,21 +705,23 @@ function initializeGraph(graphData, container) {
 
         // Add nodes
         const node = g.append('g')
+            .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
-            .attr('r', 10)
+            .attr('r', 8)
             .attr('fill', d => colorScale(d.type))
             .call(drag(simulation));
 
         // Add labels
         const labels = g.append('g')
+            .attr('class', 'labels')
             .selectAll('text')
             .data(nodes)
             .join('text')
-            .attr('dx', 15)
+            .attr('dx', 12)
             .attr('dy', 4)
-            .text(d => d.title.substring(0, 20))
+            .text(d => d.title?.substring(0, 20))
             .style('font-size', '10px')
             .style('fill', '#666');
 
@@ -797,6 +824,9 @@ function initializeGraph(graphData, container) {
         ];
         svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
+        // Start simulation with higher alpha
+        simulation.alpha(1).restart();
+
     } catch (error) {
         console.error('Error in initializeGraph:', error);
         if (container) {
@@ -878,31 +908,6 @@ function initializeTimeline(container, nodes, node, link, svg) {
     } catch (error) {
         console.error('Error in initializeTimeline:', error);
     }
-}
-
-// Drag behavior for nodes
-function drag(simulation) {
-    function dragstarted(event) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        event.subject.fx = event.subject.x;
-        event.subject.fy = event.subject.y;
-    }
-
-    function dragged(event) {
-        event.subject.fx = event.x;
-        event.subject.fy = event.y;
-    }
-
-    function dragended(event) {
-        if (!event.active) simulation.alphaTarget(0);
-        event.subject.fx = null;
-        event.subject.fy = null;
-    }
-
-    return d3.drag()
-        .on('start', dragstarted)
-        .on('drag', dragged)
-        .on('end', dragended);
 }
 
 function showStatus(message, showSpinner = false) {

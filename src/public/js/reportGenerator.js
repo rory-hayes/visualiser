@@ -8,16 +8,24 @@ export function calculateMetrics(dataframe_2, dataframe_3) {
             throw new Error('Missing required dataframes');
         }
 
-        // Log input data for debugging
-        console.log('Input Data:', {
+        // Detailed logging of input data
+        console.log('Detailed Input Data:', {
             dataframe_2: {
                 length: dataframe_2.length,
                 sample: dataframe_2[0],
-                fields: dataframe_2[0] ? Object.keys(dataframe_2[0]) : []
+                fields: dataframe_2[0] ? Object.keys(dataframe_2[0]) : [],
+                hasParentField: dataframe_2[0]?.parent !== undefined,
+                hasTypeField: dataframe_2[0]?.type !== undefined,
+                hasTitleField: dataframe_2[0]?.title !== undefined
             },
             dataframe_3: {
-                sample: dataframe_3,
-                fields: Object.keys(dataframe_3)
+                fields: Object.keys(dataframe_3),
+                num_blocks: dataframe_3.num_blocks,
+                num_total_pages: dataframe_3.num_total_pages,
+                total_num_members: dataframe_3.total_num_members,
+                total_num_teamspaces: dataframe_3.total_num_teamspaces,
+                current_month_blocks: dataframe_3.current_month_blocks,
+                previous_month_blocks: dataframe_3.previous_month_blocks
             }
         });
 
@@ -77,42 +85,111 @@ export function calculateMetrics(dataframe_2, dataframe_3) {
 }
 
 function calculateSQLMetrics(data) {
-    // Log input data
-    console.log('Calculating SQL Metrics from:', data);
+    try {
+        // Validate required fields
+        const requiredFields = [
+            'num_total_pages',
+            'num_pages',
+            'num_collections',
+            'total_num_collection_views',
+            'num_public_pages',
+            'total_num_integrations',
+            'total_num_members',
+            'total_num_guests',
+            'total_num_teamspaces',
+            'num_alive_pages',
+            'num_private_pages',
+            'num_alive_blocks',
+            'num_blocks',
+            'num_alive_collections',
+            'total_arr',
+            'total_paid_seats'
+        ];
 
-    return {
-        total_pages: data.num_total_pages || 0,
-        page_count: data.num_pages || 0,
-        collections_count: data.num_collections || 0,
-        collection_views: data.total_num_collection_views || 0,
-        public_pages_count: data.num_public_pages || 0,
-        connected_tool_count: data.total_num_integrations || 0,
-        total_num_members: data.total_num_members || 0,
-        total_num_guests: data.total_num_guests || 0,
-        total_num_teamspaces: data.total_num_teamspaces || 0,
-        num_alive_pages: data.num_alive_pages || 0,
-        num_private_pages: data.num_private_pages || 0,
-        num_alive_blocks: data.num_alive_blocks || 0,
-        num_blocks: data.num_blocks || 0,
-        num_alive_collections: data.num_alive_collections || 0,
-        total_arr: data.total_arr || 0,
-        total_paid_seats: data.total_paid_seats || 0,
-        num_permission_groups: data.num_permission_groups || 0,
-        total_num_bots: data.total_num_bots || 0,
-        total_num_internal_bots: data.total_num_internal_bots || 0,
-        total_num_public_bots: data.total_num_public_bots || 0,
-        total_num_link_preview_integrations: data.total_num_link_preview_integrations || 0,
-        total_num_public_integrations: data.total_num_public_integrations || 0,
-        current_month_blocks: data.current_month_blocks || 0,
-        previous_month_blocks: data.previous_month_blocks || 0,
-        current_year_blocks: data.current_year_blocks || 0,
-        previous_year_blocks: data.previous_year_blocks || 0,
-        current_month_pages: data.current_month_pages || 0,
-        previous_month_pages: data.previous_month_pages || 0,
-        current_month_members: data.current_month_members || 0,
-        previous_month_members: data.previous_month_members || 0,
-        collaborative_pages: data.collaborative_pages || 0
-    };
+        const missingFields = requiredFields.filter(field => data[field] === undefined);
+        if (missingFields.length > 0) {
+            console.warn('Missing required fields in SQL data:', missingFields);
+        }
+
+        // Log input data for debugging
+        console.log('SQL Metrics Input:', {
+            pages: {
+                total: data.num_total_pages,
+                alive: data.num_alive_pages,
+                public: data.num_public_pages,
+                private: data.num_private_pages
+            },
+            blocks: {
+                total: data.num_blocks,
+                alive: data.num_alive_blocks
+            },
+            collections: {
+                total: data.num_collections,
+                alive: data.num_alive_collections,
+                views: data.total_num_collection_views
+            },
+            users: {
+                members: data.total_num_members,
+                guests: data.total_num_guests,
+                teamspaces: data.total_num_teamspaces
+            }
+        });
+
+        const metrics = {
+            // Page metrics
+            total_pages: data.num_total_pages || 0,
+            page_count: data.num_pages || 0,
+            collections_count: data.num_collections || 0,
+            collection_views: data.total_num_collection_views || 0,
+            public_pages_count: data.num_public_pages || 0,
+            num_alive_pages: data.num_alive_pages || 0,
+            num_private_pages: data.num_private_pages || 0,
+
+            // Block metrics
+            num_alive_blocks: data.num_alive_blocks || 0,
+            num_blocks: data.num_blocks || 0,
+            num_alive_collections: data.num_alive_collections || 0,
+
+            // User metrics
+            total_num_members: data.total_num_members || 0,
+            total_num_guests: data.total_num_guests || 0,
+            total_num_teamspaces: data.total_num_teamspaces || 0,
+
+            // Integration metrics
+            connected_tool_count: data.total_num_integrations || 0,
+            total_num_bots: data.total_num_bots || 0,
+            total_num_internal_bots: data.total_num_internal_bots || 0,
+            total_num_public_bots: data.total_num_public_bots || 0,
+            total_num_link_preview_integrations: data.total_num_link_preview_integrations || 0,
+            total_num_public_integrations: data.total_num_public_integrations || 0,
+
+            // Historical metrics
+            current_month_blocks: data.current_month_blocks || 0,
+            previous_month_blocks: data.previous_month_blocks || 0,
+            current_year_blocks: data.current_year_blocks || 0,
+            previous_year_blocks: data.previous_year_blocks || 0,
+            current_month_pages: data.current_month_pages || 0,
+            previous_month_pages: data.previous_month_pages || 0,
+            current_month_members: data.current_month_members || 0,
+            previous_month_members: data.previous_month_members || 0,
+
+            // Collaboration metrics
+            collaborative_pages: data.collaborative_pages || 0,
+            num_permission_groups: data.num_permission_groups || 0,
+
+            // Business metrics
+            total_arr: data.total_arr || 0,
+            total_paid_seats: data.total_paid_seats || 0
+        };
+
+        // Log calculated metrics for debugging
+        console.log('Calculated SQL Metrics:', metrics);
+
+        return metrics;
+    } catch (error) {
+        console.error('Error in calculateSQLMetrics:', error);
+        return {};
+    }
 }
 
 function calculateGraphMetrics(graph) {
@@ -215,26 +292,94 @@ function calculateEngagementScore(data) {
 }
 
 function calculateKeyInsights(data) {
-    return {
-        key_metrics_insight_1: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks),
-        key_metrics_insight_2: calculateGrowthRate(data.current_month_members, data.previous_month_members),
-        key_metrics_insight_3: data.num_alive_blocks / data.total_num_members || 0,
-        key_metrics_insight_4: (data.total_num_members + data.total_num_guests) || 0,
-        key_metrics_insight_5: data.total_num_members / data.total_num_teamspaces || 0,
-        key_metrics_insight_6: data.num_alive_pages / data.total_num_members || 0,
-        key_metrics_insight_7: (data.num_alive_blocks / data.num_blocks * 100) || 0,
-        key_metrics_insight_8: (data.num_alive_collections / data.num_collections * 100) || 0,
-        key_metrics_insight_9: data.num_blocks / data.total_num_teamspaces || 0,
-        key_metrics_insight_10: data.total_num_integrations || 0,
-        key_metrics_insight_11: calculateTotalBots(data),
-        key_metrics_insight_12: calculateTotalIntegrations(data),
-        key_metrics_insight_13: (data.num_alive_pages / data.num_total_pages * 100) || 0,
-        key_metrics_insight_14: (data.num_private_pages / data.num_total_pages * 100) || 0,
-        key_metrics_insight_15: (data.total_num_collection_views / data.num_total_pages * 100) || 0,
-        key_metrics_insight_16: (data.num_alive_blocks / data.num_blocks * 100) || 0,
-        key_metrics_insight_17: data.num_alive_blocks / data.total_num_members || 0,
-        key_metrics_insight_18: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks)
-    };
+    try {
+        // Log input data for debugging
+        console.log('Calculating Key Insights from:', {
+            blocks: {
+                current: data.current_month_blocks,
+                previous: data.previous_month_blocks
+            },
+            members: {
+                current: data.current_month_members,
+                previous: data.previous_month_members,
+                total: data.total_num_members
+            },
+            pages: {
+                total: data.num_total_pages,
+                alive: data.num_alive_pages,
+                private: data.num_private_pages
+            },
+            collections: {
+                total: data.num_collections,
+                alive: data.num_alive_collections,
+                views: data.total_num_collection_views
+            }
+        });
+
+        const insights = {
+            // Monthly block growth rate
+            key_metrics_insight_1: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks),
+            
+            // User growth rate
+            key_metrics_insight_2: calculateGrowthRate(data.current_month_members, data.previous_month_members),
+            
+            // Content per user
+            key_metrics_insight_3: data.num_alive_blocks / data.total_num_members || 0,
+            
+            // Total user base
+            key_metrics_insight_4: (data.total_num_members + data.total_num_guests) || 0,
+            
+            // Team density
+            key_metrics_insight_5: data.total_num_members / data.total_num_teamspaces || 0,
+            
+            // Pages per user
+            key_metrics_insight_6: data.num_alive_pages / data.total_num_members || 0,
+            
+            // Content health
+            key_metrics_insight_7: (data.num_alive_blocks / data.num_blocks * 100) || 0,
+            
+            // Database health
+            key_metrics_insight_8: (data.num_alive_collections / data.num_collections * 100) || 0,
+            
+            // Team content density
+            key_metrics_insight_9: data.num_blocks / data.total_num_teamspaces || 0,
+            
+            // Integration adoption
+            key_metrics_insight_10: data.total_num_integrations || 0,
+            
+            // Automation adoption
+            key_metrics_insight_11: calculateTotalBots(data),
+            
+            // Integration diversity
+            key_metrics_insight_12: calculateTotalIntegrations(data),
+            
+            // Page utilization
+            key_metrics_insight_13: (data.num_alive_pages / data.num_total_pages * 100) || 0,
+            
+            // Privacy ratio
+            key_metrics_insight_14: (data.num_private_pages / data.num_total_pages * 100) || 0,
+            
+            // Database usage
+            key_metrics_insight_15: (data.total_num_collection_views / data.num_total_pages * 100) || 0,
+            
+            // Block utilization
+            key_metrics_insight_16: (data.num_alive_blocks / data.num_blocks * 100) || 0,
+            
+            // Content per user
+            key_metrics_insight_17: data.num_alive_blocks / data.total_num_members || 0,
+            
+            // Content growth rate
+            key_metrics_insight_18: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks)
+        };
+
+        // Log calculated insights for debugging
+        console.log('Calculated Key Insights:', insights);
+
+        return insights;
+    } catch (error) {
+        console.error('Error in calculateKeyInsights:', error);
+        return {};
+    }
 }
 
 function calculateCombinedMetrics(metrics) {
@@ -459,5 +604,9 @@ function findDuplicateTitles(graph) {
 }
 
 function calculateGrowthRate(current, previous) {
-    return previous ? ((current - previous) / previous * 100) : 0;
+    if (!current || !previous || previous === 0) {
+        console.log('Invalid growth rate inputs:', { current, previous });
+        return 0;
+    }
+    return ((current - previous) / previous * 100);
 }

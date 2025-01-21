@@ -180,21 +180,20 @@ function displayResults(data) {
             rawData: data
         });
 
+        // Show results section
         resultsSection.classList.remove('hidden');
         
         // Extract the dataframes with proper error handling
-        let graphData, insightsData, keyInsightsData;
+        let graphData, insightsData;
         
         if (data && typeof data === 'object') {
             // Try different possible data structures
             if (data.data) {
                 graphData = data.data.dataframe_2;
                 insightsData = data.data.dataframe_3;
-                keyInsightsData = data.data.dataframe_4;
             } else {
                 graphData = data.dataframe_2;
                 insightsData = data.dataframe_3;
-                keyInsightsData = data.dataframe_4;
             }
         }
 
@@ -208,21 +207,23 @@ function displayResults(data) {
         // Store the extracted data for later use
         window._lastGraphData = {
             graphData,
-            insightsData,
-            keyInsightsData
+            insightsData
         };
 
-        // Clear any existing graph
+        // Format and display results HTML
+        resultsContent.innerHTML = formatResults(graphData, insightsData);
+        
+        // Get graph container after HTML is updated
         const container = document.getElementById('graph-container');
-        if (container) {
-            container.innerHTML = '';
+        if (!container) {
+            console.error('Graph container not found');
+            showStatus('Error: Graph container not found', false);
+            return;
         }
 
         // Reset graph initialization flag
         window._graphInitialized = false;
 
-        resultsContent.innerHTML = formatResults(graphData, insightsData, keyInsightsData);
-        
         // Wait for next frame to ensure container is rendered
         requestAnimationFrame(() => {
             try {
@@ -253,7 +254,7 @@ function displayResults(data) {
     }
 }
 
-function formatResults(graphData, insightsData, keyInsightsData) {
+function formatResults(graphData, insightsData) {
     if (!Array.isArray(graphData) || graphData.length === 0) {
         return '<p class="text-gray-500">No results available</p>';
     }
@@ -281,10 +282,6 @@ function formatResults(graphData, insightsData, keyInsightsData) {
     // Format workspace insights from dataframe_3
     const workspaceInsights = insightsData && insightsData.length > 0 ? insightsData[0] : null;
 
-    // Format key insights from dataframe_4
-    const keyInsights = keyInsightsData || [];
-    console.log('Key insights from dataframe_4:', keyInsights);
-
     // Create HTML output
     let html = `
         <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
@@ -295,20 +292,6 @@ function formatResults(graphData, insightsData, keyInsightsData) {
                 <h3 class="font-semibold text-lg text-indigo-900 mb-3">Workspace Overview</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     ${Object.entries(workspaceInsights).map(([key, value]) => `
-                        <div class="bg-white p-3 rounded shadow-sm">
-                            <div class="text-sm text-gray-500">${formatKey(key)}</div>
-                            <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
-
-            ${keyInsights.length > 0 ? `
-            <div class="mb-8 p-4 bg-emerald-50 rounded-lg">
-                <h3 class="font-semibold text-lg text-emerald-900 mb-3">Key Insights</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    ${Object.entries(keyInsights[0] || {}).map(([key, value]) => `
                         <div class="bg-white p-3 rounded shadow-sm">
                             <div class="text-sm text-gray-500">${formatKey(key)}</div>
                             <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
@@ -559,214 +542,261 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
 
 // Initialize the force-directed graph
 function initializeGraph(graphData, container) {
-    // Clear any existing graph
-    container.innerHTML = '';
+    try {
+        // Validate container
+        if (!container) {
+            console.error('Graph container is null or undefined');
+            return;
+        }
 
-    // Extract data from the response
-    const df2 = graphData.data?.dataframe_2 || graphData;
-    const df3 = graphData.data?.dataframe_3;
+        // Validate graph data
+        if (!graphData || (!Array.isArray(graphData) && !graphData.data?.dataframe_2)) {
+            console.error('Invalid graph data:', graphData);
+            return;
+        }
 
-    // Create nodes array with proper date handling
-    const nodes = df2.map(item => {
-        let createdTime = null;
-        
-        // Handle both string and number timestamps
-        if (item.CREATED_TIME) {
-            const timestamp = typeof item.CREATED_TIME === 'string' ? 
-                Date.parse(item.CREATED_TIME) : 
-                item.CREATED_TIME;
-                
-            if (!isNaN(timestamp)) {
-                const date = new Date(timestamp);
-                const year = date.getFullYear();
-                
-                // Validate year is reasonable
-                if (year >= 2000 && year <= 2100) {
-                    createdTime = date;
-                } else {
-                    console.warn(`Invalid year ${year} for node ${item.id}`);
+        // Clear any existing graph
+        container.innerHTML = '';
+
+        // Extract data from the response
+        const df2 = graphData.data?.dataframe_2 || graphData;
+        const df3 = graphData.data?.dataframe_3;
+
+        // Validate df2
+        if (!Array.isArray(df2) || df2.length === 0) {
+            console.error('Invalid or empty dataframe_2:', df2);
+            container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
+            return;
+        }
+
+        // Create nodes array with proper date handling
+        const nodes = df2.map(item => {
+            let createdTime = null;
+            
+            // Handle both string and number timestamps
+            if (item.CREATED_TIME) {
+                const timestamp = typeof item.CREATED_TIME === 'string' ? 
+                    Date.parse(item.CREATED_TIME) : 
+                    item.CREATED_TIME;
+                    
+                if (!isNaN(timestamp)) {
+                    const date = new Date(timestamp);
+                    const year = date.getFullYear();
+                    
+                    // Validate year is reasonable
+                    if (year >= 2000 && year <= 2100) {
+                        createdTime = date;
+                    } else {
+                        console.warn(`Invalid year ${year} for node ${item.id}`);
+                    }
                 }
             }
-        }
-        
-        return {
-            id: item.id,
-            title: item.title,
-            url: item.url,
-            createdTime: createdTime,
-            parent: item.parent
-        };
-    });
-
-    // Create links array
-    const links = [];
-    nodes.forEach(node => {
-        if (node.parent) {
-            const parentNode = nodes.find(n => n.id === node.parent);
-            if (parentNode) {
-                links.push({
-                    source: parentNode,
-                    target: node
-                });
-            }
-        }
-    });
-
-    // Initialize the visualization
-    const width = container.clientWidth;
-    const height = container.clientHeight || 600;
-
-    const svg = d3.select(container)
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height);
-
-    // Create the force simulation
-    const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links).id(d => d.id))
-        .force('charge', d3.forceManyBody().strength(-300))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(40))
-        .force('x', d3.forceX().strength(0.05))
-        .force('y', d3.forceY().strength(0.05))
-        .alphaDecay(0.05)
-        .velocityDecay(0.3);
-
-    // Add links
-    const link = svg.append('g')
-        .selectAll('line')
-        .data(links)
-        .join('line')
-        .attr('stroke', '#999')
-        .attr('stroke-opacity', 0.6)
-        .attr('stroke-width', 2);
-
-    // Add nodes
-    const node = svg.append('g')
-        .selectAll('circle')
-        .data(nodes)
-        .join('circle')
-        .attr('r', 10)
-        .attr('fill', '#69b3a2')
-        .call(drag(simulation));
-
-    // Initialize timeline
-    initializeTimeline(container, nodes, node, link);
-
-    // Update positions on each tick
-    simulation.on('tick', () => {
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-
-        node
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y);
-    });
-
-    // Add tooltips
-    const tooltip = d3.select(container)
-        .append('div')
-        .attr('class', 'tooltip')
-        .style('opacity', 0)
-        .style('position', 'absolute')
-        .style('pointer-events', 'none')
-        .style('background-color', 'white')
-        .style('padding', '10px')
-        .style('border-radius', '5px')
-        .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
-        .style('max-width', '300px')
-        .style('z-index', '1000');
-
-    node.on('mouseover', (event, d) => {
-        d.fx = d.x;
-        d.fy = d.y;
-        
-        tooltip.transition()
-            .duration(200)
-            .style('opacity', .9);
             
-        tooltip.html(`
-            <strong>${d.title}</strong><br/>
-            ${d.url ? `<a href="${d.url}" target="_blank">Open in Notion</a>` : ''}
-            ${d.createdTime ? `<br/>Created: ${d.createdTime.toLocaleDateString()}` : ''}
-        `)
-        .style('left', (event.pageX + 10) + 'px')
-        .style('top', (event.pageY - 10) + 'px');
-    })
-    .on('mouseout', (event, d) => {
-        d.fx = null;
-        d.fy = null;
-        
-        tooltip.transition()
-            .duration(500)
-            .style('opacity', 0);
-    });
+            return {
+                id: item.ID || item.id,
+                title: item.TEXT || item.title || item.TYPE || 'Untitled',
+                url: item.URL || item.url,
+                createdTime: createdTime,
+                parent: item.PARENT_ID || item.parent
+            };
+        });
 
-    // Store data for resize handling
-    container._graphData = {
-        nodes,
-        links,
-        width,
-        height
-    };
+        // Create links array
+        const links = [];
+        nodes.forEach(node => {
+            if (node.parent) {
+                const parentNode = nodes.find(n => n.id === node.parent);
+                if (parentNode) {
+                    links.push({
+                        source: parentNode,
+                        target: node
+                    });
+                }
+            }
+        });
+
+        // Initialize the visualization
+        const width = container.clientWidth || 800;
+        const height = container.clientHeight || 600;
+
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        // Create the force simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links).id(d => d.id))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(40))
+            .force('x', d3.forceX().strength(0.05))
+            .force('y', d3.forceY().strength(0.05))
+            .alphaDecay(0.05)
+            .velocityDecay(0.3);
+
+        // Add links
+        const link = svg.append('g')
+            .selectAll('line')
+            .data(links)
+            .join('line')
+            .attr('stroke', '#999')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 2);
+
+        // Add nodes
+        const node = svg.append('g')
+            .selectAll('circle')
+            .data(nodes)
+            .join('circle')
+            .attr('r', 10)
+            .attr('fill', '#69b3a2')
+            .call(drag(simulation));
+
+        // Initialize timeline
+        initializeTimeline(container, nodes, node, link, svg);
+
+        // Update positions on each tick
+        simulation.on('tick', () => {
+            link
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            node
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+        });
+
+        // Add tooltips
+        const tooltip = d3.select(container)
+            .append('div')
+            .attr('class', 'tooltip')
+            .style('opacity', 0)
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background-color', 'white')
+            .style('padding', '10px')
+            .style('border-radius', '5px')
+            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+            .style('max-width', '300px')
+            .style('z-index', '1000');
+
+        node.on('mouseover', (event, d) => {
+            d.fx = d.x;
+            d.fy = d.y;
+            
+            tooltip.transition()
+                .duration(200)
+                .style('opacity', .9);
+                
+            tooltip.html(`
+                <strong>${d.title}</strong><br/>
+                ${d.url ? `<a href="${d.url}" target="_blank">Open in Notion</a>` : ''}
+                ${d.createdTime ? `<br/>Created: ${d.createdTime.toLocaleDateString()}` : ''}
+            `)
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px');
+        })
+        .on('mouseout', (event, d) => {
+            d.fx = null;
+            d.fy = null;
+            
+            tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
+        });
+
+        // Store data for resize handling
+        container._graphData = {
+            nodes,
+            links,
+            width,
+            height
+        };
+
+    } catch (error) {
+        console.error('Error in initializeGraph:', error);
+        if (container) {
+            container.innerHTML = '<div class="p-4 text-red-500">Error initializing graph visualization</div>';
+        }
+    }
 }
 
-function initializeTimeline(container, nodes, node, link) {
-    // Find valid date range
-    const validDates = nodes.map(n => n.createdTime).filter(Boolean);
-    const startDate = new Date(Math.min(...validDates));
-    const endDate = new Date(Math.max(...validDates));
-
-    // Log date range information
-    console.log(`
-        Date Range Info:
-        Total nodes: ${nodes.length}
-        Nodes with valid dates: ${validDates.length}
-        Nodes without dates: ${nodes.length - validDates.length}
-        Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
-    `);
-
-    // Add timeline slider
-    const timelineContainer = document.createElement('div');
-    timelineContainer.className = 'timeline-container';
-    
-    timelineContainer.innerHTML = `
-        <div class="flex justify-between items-center mb-2">
-            <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
-            <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
-            <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
-        </div>
-        <input type="range" 
-            min="${startDate?.getTime() || 0}" 
-            max="${endDate?.getTime() || 100}" 
-            value="${endDate?.getTime() || 100}" 
-            step="86400000"
-            class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-            id="timelineSlider">
-    `;
-    container.appendChild(timelineContainer);
-
-    // Timeline slider functionality
-    const slider = document.getElementById('timelineSlider');
-    
-    // Set initial state to show all nodes
-    updateNodesVisibility(endDate, node, link, nodes);
-
-    slider.addEventListener('input', (event) => {
-        const currentTime = new Date(parseInt(event.target.value));
-        updateNodesVisibility(currentTime, node, link, nodes);
-    });
-
-    // Reset visibility when clicking outside nodes
-    svg.on('click', (event) => {
-        if (event.target.tagName === 'svg') {
-            const currentTime = new Date(parseInt(slider.value));
-            updateNodesVisibility(currentTime, node, link, nodes);
+function initializeTimeline(container, nodes, node, link, svg) {
+    try {
+        // Validate inputs
+        if (!container || !nodes || !node || !link || !svg) {
+            console.error('Missing required parameters for timeline initialization');
+            return;
         }
-    });
+
+        // Find valid date range
+        const validDates = nodes.map(n => n.createdTime).filter(Boolean);
+        
+        if (validDates.length === 0) {
+            console.warn('No valid dates found in nodes');
+            return;
+        }
+
+        const startDate = new Date(Math.min(...validDates));
+        const endDate = new Date(Math.max(...validDates));
+
+        // Log date range information
+        console.log(`
+            Date Range Info:
+            Total nodes: ${nodes.length}
+            Nodes with valid dates: ${validDates.length}
+            Nodes without dates: ${nodes.length - validDates.length}
+            Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
+        `);
+
+        // Add timeline slider
+        const timelineContainer = document.createElement('div');
+        timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
+        
+        timelineContainer.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
+                <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
+                <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
+            </div>
+            <input type="range" 
+                min="${startDate?.getTime() || 0}" 
+                max="${endDate?.getTime() || 100}" 
+                value="${endDate?.getTime() || 100}" 
+                step="86400000"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                id="timelineSlider">
+        `;
+        container.appendChild(timelineContainer);
+
+        // Timeline slider functionality
+        const slider = document.getElementById('timelineSlider');
+        if (!slider) {
+            console.error('Failed to find timeline slider element');
+            return;
+        }
+        
+        // Set initial state to show all nodes
+        updateNodesVisibility(endDate, node, link, nodes);
+
+        slider.addEventListener('input', (event) => {
+            const currentTime = new Date(parseInt(event.target.value));
+            updateNodesVisibility(currentTime, node, link, nodes);
+        });
+
+        // Reset visibility when clicking outside nodes
+        svg.on('click', (event) => {
+            if (event.target.tagName === 'svg') {
+                const currentTime = new Date(parseInt(slider.value));
+                updateNodesVisibility(currentTime, node, link, nodes);
+            }
+        });
+    } catch (error) {
+        console.error('Error in initializeTimeline:', error);
+    }
 }
 
 // Drag behavior for nodes

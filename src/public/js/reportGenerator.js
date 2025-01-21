@@ -196,27 +196,77 @@ function calculateGraphMetrics(graph) {
     const metrics = {};
     
     try {
-        // Basic graph metrics
-        metrics.max_depth = Math.max(...graph.map(node => getNodeDepth(node, graph)));
-        metrics.avg_depth = calculateAverageDepth(graph);
+        // Validate input
+        if (!Array.isArray(graph) || graph.length === 0) {
+            console.warn('Invalid graph data:', { isArray: Array.isArray(graph), length: graph?.length });
+            return metrics;
+        }
+
+        // Log sample of input data
+        console.log('Graph Metrics Input:', {
+            totalNodes: graph.length,
+            sampleNode: graph[0],
+            hasRequiredFields: {
+                parent: graph[0]?.parent !== undefined,
+                type: graph[0]?.type !== undefined,
+                title: graph[0]?.title !== undefined
+            }
+        });
+
+        // Calculate depth metrics
+        const depths = graph.map(node => getNodeDepth(node, graph));
+        metrics.max_depth = Math.max(...depths);
+        metrics.avg_depth = depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+        metrics.avg_nav_depth = metrics.avg_depth;
+        metrics.nav_depth_score = (metrics.avg_depth * 0.4) + (metrics.max_depth * 0.6);
+
+        // Calculate page counts
         metrics.root_pages = graph.filter(node => !node.parent).length;
-        metrics.orphaned_blocks = graph.filter(node => !node.parent && !isRootNode(node)).length;
         metrics.deep_pages_count = graph.filter(node => getNodeDepth(node, graph) > 5).length;
         metrics.template_count = graph.filter(node => node.type === 'template').length;
         metrics.linked_database_count = graph.filter(node => node.type === 'collection' && node.parent).length;
-        metrics.duplicate_count = findDuplicateTitles(graph).length;
-        metrics.bottleneck_count = graph.filter(node => getChildCount(node, graph) > 20).length;
+
+        // Calculate organization metrics
+        metrics.orphaned_blocks = graph.filter(node => !node.parent && !isRootNode(node)).length;
+        metrics.scatter_index = (metrics.orphaned_blocks / graph.length) * 100;
         metrics.unfindable_pages = metrics.orphaned_blocks + metrics.deep_pages_count;
 
-        // Additional graph metrics
-        metrics.avg_nav_depth = metrics.avg_depth;
-        metrics.scatter_index = (metrics.orphaned_blocks / graph.length) * 100;
-        metrics.nav_depth_score = (metrics.avg_depth * 0.4) + (metrics.max_depth * 0.6);
+        // Calculate content quality metrics
+        const duplicates = findDuplicateTitles(graph);
+        metrics.duplicate_count = duplicates.length;
         metrics.duplicate_content_rate = (metrics.duplicate_count / graph.length) * 100;
+
+        // Calculate navigation metrics
+        metrics.bottleneck_count = graph.filter(node => getChildCount(node, graph) > 20).length;
+        metrics.nav_complexity = calculateNavComplexity(metrics);
+
+        // Log calculated metrics
+        console.log('Calculated Graph Metrics:', {
+            depthMetrics: {
+                max: metrics.max_depth,
+                avg: metrics.avg_depth,
+                navScore: metrics.nav_depth_score
+            },
+            organizationMetrics: {
+                rootPages: metrics.root_pages,
+                deepPages: metrics.deep_pages_count,
+                orphanedBlocks: metrics.orphaned_blocks,
+                scatterIndex: metrics.scatter_index
+            },
+            contentMetrics: {
+                duplicates: metrics.duplicate_count,
+                duplicateRate: metrics.duplicate_content_rate,
+                bottlenecks: metrics.bottleneck_count
+            }
+        });
 
         return metrics;
     } catch (error) {
         console.error('Error in calculateGraphMetrics:', error);
+        console.error('Error details:', {
+            graphLength: graph?.length,
+            sampleNode: graph?.[0]
+        });
         return metrics;
     }
 }
@@ -571,13 +621,28 @@ export function generateReport(markdownTemplate, metrics) {
 
 // Helper functions
 function getNodeDepth(node, graph, cache = new Map()) {
-    if (cache.has(node.id)) return cache.get(node.id);
-    if (!node.parent) return 0;
-    const parentNode = graph.find(n => n.id === node.parent);
-    if (!parentNode) return 0;
-    const depth = 1 + getNodeDepth(parentNode, graph, cache);
-    cache.set(node.id, depth);
-    return depth;
+    try {
+        if (!node || !node.id) {
+            console.warn('Invalid node in getNodeDepth:', node);
+            return 0;
+        }
+
+        if (cache.has(node.id)) return cache.get(node.id);
+        if (!node.parent) return 0;
+
+        const parentNode = graph.find(n => n.id === node.parent);
+        if (!parentNode) {
+            console.warn('Parent node not found:', { nodeId: node.id, parentId: node.parent });
+            return 0;
+        }
+
+        const depth = 1 + getNodeDepth(parentNode, graph, cache);
+        cache.set(node.id, depth);
+        return depth;
+    } catch (error) {
+        console.error('Error in getNodeDepth:', error);
+        return 0;
+    }
 }
 
 function calculateAverageDepth(graph) {

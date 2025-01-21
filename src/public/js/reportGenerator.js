@@ -8,29 +8,76 @@ export function calculateMetrics(dataframe_2, dataframe_3) {
             throw new Error('Missing required dataframes');
         }
 
-        // Detailed logging of input data
-        console.log('Detailed Input Data:', {
-            dataframe_2: {
-                length: dataframe_2.length,
-                sample: dataframe_2[0],
-                fields: dataframe_2[0] ? Object.keys(dataframe_2[0]) : [],
-                hasParentField: dataframe_2[0]?.parent !== undefined,
-                hasTypeField: dataframe_2[0]?.type !== undefined,
-                hasTitleField: dataframe_2[0]?.title !== undefined
-            },
-            dataframe_3: {
-                fields: Object.keys(dataframe_3),
-                num_blocks: dataframe_3.num_blocks,
-                num_total_pages: dataframe_3.num_total_pages,
-                total_num_members: dataframe_3.total_num_members,
-                total_num_teamspaces: dataframe_3.total_num_teamspaces,
-                current_month_blocks: dataframe_3.current_month_blocks,
-                previous_month_blocks: dataframe_3.previous_month_blocks
-            }
+        // Enhanced input data logging
+        console.log('========== DETAILED INPUT DATA ==========');
+        console.log('dataframe_2 (Graph Data):', {
+            length: dataframe_2.length,
+            sample: dataframe_2[0],
+            fields: dataframe_2[0] ? Object.keys(dataframe_2[0]) : [],
+            hasParentField: dataframe_2[0]?.parent !== undefined,
+            hasTypeField: dataframe_2[0]?.type !== undefined,
+            hasTitleField: dataframe_2[0]?.title !== undefined,
+            nodeTypes: [...new Set(dataframe_2.map(node => node.type))],
+            parentCount: dataframe_2.filter(node => node.parent).length,
+            rootCount: dataframe_2.filter(node => !node.parent).length
         });
 
-        // Direct SQL metrics with logging
-        const sqlMetrics = calculateSQLMetrics(dataframe_3);
+        console.log('dataframe_3 (SQL Data):', {
+            // Page metrics
+            pages: {
+                total: dataframe_3.num_total_pages,
+                alive: dataframe_3.num_alive_pages,
+                public: dataframe_3.num_public_pages,
+                private: dataframe_3.num_private_pages
+            },
+            // Block metrics
+            blocks: {
+                total: dataframe_3.num_blocks,
+                alive: dataframe_3.num_alive_blocks,
+                current: dataframe_3.current_month_blocks,
+                previous: dataframe_3.previous_month_blocks
+            },
+            // User metrics
+            users: {
+                members: dataframe_3.total_num_members,
+                guests: dataframe_3.total_num_guests,
+                teamspaces: dataframe_3.total_num_teamspaces,
+                currentMembers: dataframe_3.current_month_members,
+                previousMembers: dataframe_3.previous_month_members
+            },
+            // Collection metrics
+            collections: {
+                total: dataframe_3.num_collections,
+                alive: dataframe_3.num_alive_collections,
+                views: dataframe_3.total_num_collection_views
+            },
+            // Integration metrics
+            integrations: {
+                total: dataframe_3.total_num_integrations,
+                bots: dataframe_3.total_num_bots,
+                internalBots: dataframe_3.total_num_internal_bots,
+                publicBots: dataframe_3.total_num_public_bots,
+                linkPreviews: dataframe_3.total_num_link_preview_integrations,
+                publicIntegrations: dataframe_3.total_num_public_integrations
+            },
+            // Business metrics
+            business: {
+                arr: dataframe_3.total_arr,
+                paidSeats: dataframe_3.total_paid_seats
+            }
+        });
+        console.log('=======================================');
+
+        // Validate and transform data
+        const validatedData = validateAndTransformData(dataframe_3);
+        console.log('Validated Data Sample:', {
+            members: validatedData.total_num_members,
+            pages: validatedData.num_total_pages,
+            blocks: validatedData.num_blocks
+        });
+
+        // Use validated data for calculations
+        const sqlMetrics = calculateSQLMetrics(validatedData);
         console.log('SQL Metrics:', sqlMetrics);
         Object.assign(metrics, sqlMetrics);
 
@@ -434,66 +481,279 @@ function calculateKeyInsights(data) {
 
 function calculateCombinedMetrics(metrics) {
     try {
-        return {
+        // Log input metrics
+        console.log('Combined Metrics Input:', {
+            navMetrics: {
+                maxDepth: metrics.max_depth,
+                avgDepth: metrics.avg_depth,
+                orphanedBlocks: metrics.orphaned_blocks,
+                totalPages: metrics.total_pages
+            },
+            contentMetrics: {
+                duplicateCount: metrics.duplicate_count,
+                totalPages: metrics.total_pages
+            },
+            collaborationMetrics: {
+                teamspacesWithGuests: metrics.teamspaces_with_guests,
+                totalTeamspaces: metrics.total_num_teamspaces,
+                avgTeamspaceMembers: metrics.average_teamspace_members
+            }
+        });
+
+        const combinedMetrics = {
+            // Navigation metrics
             nav_complexity: calculateNavComplexity(metrics),
-            duplicate_content_rate: (metrics.duplicate_count / metrics.total_pages * 100) || 0,
-            percentage_unlinked: (metrics.orphaned_blocks / metrics.total_pages * 100) || 0,
+            duplicate_content_rate: safeDivide(metrics.duplicate_count, metrics.total_pages) * 100,
+            percentage_unlinked: safeDivide(metrics.orphaned_blocks, metrics.total_pages) * 100,
+
+            // Collaboration metrics
             current_collaboration_score: calculateCollaborationScore(metrics),
             current_visibility_score: calculateVisibilityScore(metrics),
-            projected_visibility_score: calculateVisibilityScore(metrics) * 1.3,
+            projected_visibility_score: (calculateVisibilityScore(metrics) || 0) * 1.3,
+
+            // Productivity metrics
             current_productivity_score: calculateProductivityScore(metrics),
-            ai_productivity_gain: calculateProductivityScore(metrics) * 1.4,
+            ai_productivity_gain: (calculateProductivityScore(metrics) || 0) * 1.4,
+
+            // Automation metrics
             automation_potential: calculateAutomationPotential(metrics),
             projected_time_savings: calculateProjectedTimeSavings(metrics),
+
+            // Organization metrics
             current_organization_score: calculateOrganizationScore(metrics),
-            projected_organisation_score: calculateOrganizationScore(metrics) * 1.3,
+            projected_organisation_score: (calculateOrganizationScore(metrics) || 0) * 1.3,
             security_improvement_score: calculateSecurityScore(metrics),
-            success_improvement: calculateSuccessImprovement(metrics),
-            teamspace_optimisation_potential: (metrics.underutilised_teamspaces / metrics.total_num_teamspaces * 100) || 0,
+            success_improvement: 0, // Will be calculated below
+
+            // Team metrics
+            teamspace_optimisation_potential: safeDivide(metrics.underutilised_teamspaces, metrics.total_num_teamspaces) * 100,
             automation_efficiency_gain: metrics.automation_usage_rate ? metrics.automation_usage_rate * 1.5 : 0
         };
+
+        // Calculate success improvement after other scores are calculated
+        combinedMetrics.success_improvement = 
+            (combinedMetrics.projected_organisation_score || 0) - 
+            (combinedMetrics.current_organization_score || 0);
+
+        // Log results
+        console.log('Combined Metrics Results:', combinedMetrics);
+
+        // Validate results
+        Object.keys(combinedMetrics).forEach(key => {
+            if (!isFinite(combinedMetrics[key])) {
+                console.warn(`Invalid ${key}:`, combinedMetrics[key]);
+                combinedMetrics[key] = 0;
+            }
+        });
+
+        return combinedMetrics;
     } catch (error) {
         console.error('Error in calculateCombinedMetrics:', error);
-        return {};
+        return {
+            nav_complexity: 0,
+            duplicate_content_rate: 0,
+            percentage_unlinked: 0,
+            current_collaboration_score: 0,
+            current_visibility_score: 0,
+            projected_visibility_score: 0,
+            current_productivity_score: 0,
+            ai_productivity_gain: 0,
+            automation_potential: 0,
+            projected_time_savings: 0,
+            current_organization_score: 0,
+            projected_organisation_score: 0,
+            security_improvement_score: 0,
+            success_improvement: 0,
+            teamspace_optimisation_potential: 0,
+            automation_efficiency_gain: 0
+        };
+    }
+}
+
+// Helper function for safe division
+function safeDivide(numerator, denominator) {
+    if (!numerator || !denominator || denominator === 0) {
+        return 0;
+    }
+    const result = numerator / denominator;
+    return isFinite(result) ? result : 0;
+}
+
+function calculateNavComplexity(metrics) {
+    try {
+        if (!metrics.max_depth || !metrics.avg_depth || !metrics.total_pages) {
+            return 0;
+        }
+        return (metrics.max_depth * 0.3) + 
+               (metrics.avg_depth * 0.3) + 
+               safeDivide(metrics.orphaned_blocks, metrics.total_pages) * 0.4;
+    } catch (error) {
+        console.error('Error in calculateNavComplexity:', error);
+        return 0;
+    }
+}
+
+function calculateOrganizationScore(metrics) {
+    try {
+        if (!metrics.current_visibility_score || 
+            !metrics.current_collaboration_score || 
+            !metrics.current_productivity_score) {
+            return 0;
+        }
+        return (metrics.current_visibility_score * 0.3) +
+               (metrics.current_collaboration_score * 0.4) +
+               (metrics.current_productivity_score * 0.3);
+    } catch (error) {
+        console.error('Error in calculateOrganizationScore:', error);
+        return 0;
+    }
+}
+
+function calculateAutomationPotential(metrics) {
+    try {
+        if (!metrics.total_num_integrations || !metrics.total_num_members) {
+            return 0;
+        }
+        return safeDivide(metrics.total_num_integrations, (metrics.total_num_members * 0.5)) * 100;
+    } catch (error) {
+        console.error('Error in calculateAutomationPotential:', error);
+        return 0;
+    }
+}
+
+function calculateProjectedTimeSavings(metrics) {
+    try {
+        const averageManualHours = 2;
+        if (!metrics.automation_potential || !metrics.total_num_members) {
+            return 0;
+        }
+        return (metrics.automation_potential / 100) * averageManualHours * metrics.total_num_members;
+    } catch (error) {
+        console.error('Error in calculateProjectedTimeSavings:', error);
+        return 0;
     }
 }
 
 function calculateROIMetrics(data, metrics) {
     try {
+        // Constants
         const enterpriseCost = 20;
         const enterpriseAICost = 25;
         const implementationCost = 5000;
-        const current = data.total_arr / data.total_paid_seats;
-        const enterprise = enterpriseCost * data.total_paid_seats;
-        const enterpriseAI = enterpriseAICost * data.total_paid_seats;
 
-        return {
+        // Validate inputs
+        const paidSeats = toNumber(data.total_paid_seats);
+        const totalArr = toNumber(data.total_arr);
+
+        // Calculate current cost per seat
+        const current = paidSeats > 0 ? totalArr / paidSeats : 0;
+        
+        // Calculate enterprise costs
+        const enterprise = paidSeats * enterpriseCost;
+        const enterpriseAI = paidSeats * enterpriseAICost;
+
+        // Log calculations
+        console.log('ROI Calculation Inputs:', {
+            paidSeats,
+            totalArr,
+            currentCostPerSeat: current,
+            enterpriseCost: enterprise,
+            enterpriseAICost: enterpriseAI
+        });
+
+        const roiMetrics = {
             current_plan: current,
             enterprise_plan: enterprise,
             enterprise_plan_w_ai: enterpriseAI,
-            '10_percent_increase': calculateIncrease(0.1, data.total_paid_seats, enterprise, current),
-            '20_percent_increase': calculateIncrease(0.2, data.total_paid_seats, enterprise, current),
-            '50_percent_increase': calculateIncrease(0.5, data.total_paid_seats, enterprise, current),
-            '10_percent_increase_w_ai': calculateIncrease(0.1, data.total_paid_seats, enterpriseAI, current),
-            '20_percent_increase_w_ai': calculateIncrease(0.2, data.total_paid_seats, enterpriseAI, current),
-            '50_percent_increase_w_ai': calculateIncrease(0.5, data.total_paid_seats, enterpriseAI, current),
+            '10_percent_increase': calculateIncrease(0.1, paidSeats, enterprise, current),
+            '20_percent_increase': calculateIncrease(0.2, paidSeats, enterprise, current),
+            '50_percent_increase': calculateIncrease(0.5, paidSeats, enterprise, current),
+            '10_percent_increase_w_ai': calculateIncrease(0.1, paidSeats, enterpriseAI, current),
+            '20_percent_increase_w_ai': calculateIncrease(0.2, paidSeats, enterpriseAI, current),
+            '50_percent_increase_w_ai': calculateIncrease(0.5, paidSeats, enterpriseAI, current),
             enterprise_plan_roi: calculateEnterpriseROI(metrics, current, enterprise, implementationCost),
             enterprise_plan_w_ai_roi: calculateEnterpriseROI(metrics, current, enterpriseAI, implementationCost, true)
         };
+
+        // Log results
+        console.log('ROI Calculation Results:', roiMetrics);
+
+        return roiMetrics;
     } catch (error) {
         console.error('Error in calculateROIMetrics:', error);
-        return {};
+        return {
+            current_plan: 0,
+            enterprise_plan: 0,
+            enterprise_plan_w_ai: 0,
+            '10_percent_increase': 0,
+            '20_percent_increase': 0,
+            '50_percent_increase': 0,
+            '10_percent_increase_w_ai': 0,
+            '20_percent_increase_w_ai': 0,
+            '50_percent_increase_w_ai': 0,
+            enterprise_plan_roi: 0,
+            enterprise_plan_w_ai_roi: 0
+        };
     }
 }
 
 function calculateEnterpriseROI(metrics, currentCost, newCost, implementationCost, includeAI = false) {
     try {
+        // Validate inputs
+        if (!metrics || !metrics.current_productivity_score || implementationCost <= 0) {
+            console.warn('Invalid inputs for ROI calculation:', {
+                hasMetrics: !!metrics,
+                productivityScore: metrics?.current_productivity_score,
+                implementationCost
+            });
+            return 0;
+        }
+
         const projectedBenefit = metrics.current_productivity_score * (includeAI ? 1.4 : 1.2);
-        return ((projectedBenefit - currentCost) / implementationCost) * 100;
+        const roi = ((projectedBenefit - currentCost) / implementationCost) * 100;
+
+        // Log calculation
+        console.log('Enterprise ROI Calculation:', {
+            currentCost,
+            newCost,
+            projectedBenefit,
+            implementationCost,
+            includeAI,
+            roi
+        });
+
+        return isFinite(roi) ? roi : 0;
     } catch (error) {
         console.error('Error in calculateEnterpriseROI:', error);
         return 0;
     }
+}
+
+function calculateIncrease(percentage, seats, newPlan, currentPlan) {
+    try {
+        if (!seats || !isFinite(newPlan) || !isFinite(currentPlan)) {
+            console.warn('Invalid inputs for increase calculation:', {
+                percentage,
+                seats,
+                newPlan,
+                currentPlan
+            });
+            return 0;
+        }
+
+        const increase = seats * (1 + percentage) * (newPlan - currentPlan);
+        return isFinite(increase) ? increase : 0;
+    } catch (error) {
+        console.error('Error in calculateIncrease:', error);
+        return 0;
+    }
+}
+
+// Helper function to safely convert to number
+function toNumber(value) {
+    if (value === undefined || value === null) return 0;
+    const num = Number(value);
+    return isNaN(num) ? 0 : num;
 }
 
 function calculateVisibilityScore(metrics) {
@@ -537,31 +797,6 @@ function calculateSecurityScore(metrics) {
 
 function calculateSuccessImprovement(metrics) {
     return metrics.projected_organisation_score - metrics.current_organization_score;
-}
-
-function calculateIncrease(percentage, seats, newPlan, currentPlan) {
-    return seats * (1 + percentage) * (newPlan - currentPlan);
-}
-
-function calculateAutomationPotential(metrics) {
-    return (metrics.total_num_integrations / (metrics.total_num_members * 0.5)) * 100;
-}
-
-function calculateProjectedTimeSavings(metrics) {
-    const averageManualHours = 2;
-    return (metrics.automation_potential / 100) * averageManualHours * metrics.total_num_members;
-}
-
-function calculateOrganizationScore(metrics) {
-    return (metrics.current_visibility_score * 0.3) +
-           (metrics.current_collaboration_score * 0.4) +
-           (metrics.current_productivity_score * 0.3);
-}
-
-function calculateNavComplexity(metrics) {
-    return (metrics.max_depth * 0.3) + 
-           (metrics.avg_depth * 0.3) + 
-           (metrics.orphaned_blocks / metrics.total_pages * 0.4);
 }
 
 function calculateProjectedGrowth(current, monthlyRate) {
@@ -674,4 +909,80 @@ function calculateGrowthRate(current, previous) {
         return 0;
     }
     return ((current - previous) / previous * 100);
+}
+
+function validateAndTransformData(data) {
+    // Create a new object with validated and transformed data
+    const validated = {};
+    
+    // Helper function to convert to number
+    const toNumber = (value) => {
+        if (value === undefined || value === null) return 0;
+        const num = Number(value);
+        return isNaN(num) ? 0 : num;
+    };
+
+    // Page metrics
+    validated.num_total_pages = toNumber(data.num_total_pages);
+    validated.num_pages = toNumber(data.num_pages);
+    validated.num_alive_pages = toNumber(data.num_alive_pages);
+    validated.num_public_pages = toNumber(data.num_public_pages);
+    validated.num_private_pages = toNumber(data.num_private_pages);
+
+    // Block metrics
+    validated.num_blocks = toNumber(data.num_blocks);
+    validated.num_alive_blocks = toNumber(data.num_alive_blocks);
+    validated.current_month_blocks = toNumber(data.current_month_blocks);
+    validated.previous_month_blocks = toNumber(data.previous_month_blocks);
+    validated.current_year_blocks = toNumber(data.current_year_blocks);
+    validated.previous_year_blocks = toNumber(data.previous_year_blocks);
+
+    // User metrics
+    validated.total_num_members = toNumber(data.total_num_members);
+    validated.total_num_guests = toNumber(data.total_num_guests);
+    validated.total_num_teamspaces = toNumber(data.total_num_teamspaces);
+    validated.current_month_members = toNumber(data.current_month_members);
+    validated.previous_month_members = toNumber(data.previous_month_members);
+
+    // Collection metrics
+    validated.num_collections = toNumber(data.num_collections);
+    validated.num_alive_collections = toNumber(data.num_alive_collections);
+    validated.total_num_collection_views = toNumber(data.total_num_collection_views);
+
+    // Integration metrics
+    validated.total_num_integrations = toNumber(data.total_num_integrations);
+    validated.total_num_bots = toNumber(data.total_num_bots);
+    validated.total_num_internal_bots = toNumber(data.total_num_internal_bots);
+    validated.total_num_public_bots = toNumber(data.total_num_public_bots);
+    validated.total_num_link_preview_integrations = toNumber(data.total_num_link_preview_integrations);
+    validated.total_num_public_integrations = toNumber(data.total_num_public_integrations);
+
+    // Business metrics
+    validated.total_arr = toNumber(data.total_arr);
+    validated.total_paid_seats = toNumber(data.total_paid_seats);
+
+    // Additional metrics
+    validated.collaborative_pages = toNumber(data.collaborative_pages);
+    validated.num_permission_groups = toNumber(data.num_permission_groups);
+    validated.active_users = toNumber(data.active_users);
+    validated.daily_active_users = toNumber(data.daily_active_users);
+    validated.weekly_active_users = toNumber(data.weekly_active_users);
+    validated.monthly_active_users = toNumber(data.monthly_active_users);
+    validated.average_daily_edits = toNumber(data.average_daily_edits);
+    validated.average_weekly_edits = toNumber(data.average_weekly_edits);
+    validated.total_edits = toNumber(data.total_edits);
+
+    // Log validation results
+    console.log('Data Validation Results:', {
+        hasZeroMembers: validated.total_num_members === 0,
+        hasZeroPages: validated.num_total_pages === 0,
+        hasZeroBlocks: validated.num_blocks === 0,
+        invalidRatios: {
+            pagesPerUser: validated.total_num_members === 0 ? 'Invalid (no members)' : 'Valid',
+            contentHealth: validated.num_blocks === 0 ? 'Invalid (no blocks)' : 'Valid',
+            teamDensity: validated.total_num_teamspaces === 0 ? 'Invalid (no teamspaces)' : 'Valid'
+        }
+    });
+
+    return validated;
 }

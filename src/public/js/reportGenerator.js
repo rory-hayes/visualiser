@@ -240,51 +240,74 @@ function calculateSQLMetrics(data) {
 }
 
 function calculateGraphMetrics(graph) {
-    const metrics = {};
+    const metrics = {
+        max_depth: 0,
+        avg_depth: 0,
+        avg_nav_depth: 0,
+        nav_depth_score: 0,
+        root_pages: 0,
+        deep_pages_count: 0,
+        template_count: 0,
+        linked_database_count: 0,
+        orphaned_blocks: 0,
+        scatter_index: 0,
+        unfindable_pages: 0,
+        duplicate_count: 0,
+        duplicate_content_rate: 0,
+        bottleneck_count: 0,
+        nav_complexity: 0
+    };
     
     try {
         // Validate input
-        if (!Array.isArray(graph) || graph.length === 0) {
-            console.warn('Invalid graph data:', { isArray: Array.isArray(graph), length: graph?.length });
+        if (!Array.isArray(graph)) {
+            console.warn('Invalid graph data: not an array');
+            return metrics;
+        }
+
+        const validNodes = graph.filter(node => node && typeof node === 'object');
+        if (validNodes.length === 0) {
+            console.warn('No valid nodes found in graph data');
             return metrics;
         }
 
         // Log sample of input data
         console.log('Graph Metrics Input:', {
             totalNodes: graph.length,
-            sampleNode: graph[0],
-            hasRequiredFields: {
-                parent: graph[0]?.parent !== undefined,
-                type: graph[0]?.type !== undefined,
-                title: graph[0]?.title !== undefined
-            }
+            validNodes: validNodes.length,
+            sampleNode: validNodes[0],
+            nodeFields: validNodes[0] ? Object.keys(validNodes[0]) : []
         });
 
         // Calculate depth metrics
-        const depths = graph.map(node => getNodeDepth(node, graph));
-        metrics.max_depth = Math.max(...depths);
-        metrics.avg_depth = depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
-        metrics.avg_nav_depth = metrics.avg_depth;
-        metrics.nav_depth_score = (metrics.avg_depth * 0.4) + (metrics.max_depth * 0.6);
+        const depths = validNodes.map(node => getNodeDepth(node, validNodes));
+        const validDepths = depths.filter(d => typeof d === 'number' && isFinite(d));
+        
+        if (validDepths.length > 0) {
+            metrics.max_depth = Math.max(...validDepths);
+            metrics.avg_depth = validDepths.reduce((sum, depth) => sum + depth, 0) / validDepths.length;
+            metrics.avg_nav_depth = metrics.avg_depth;
+            metrics.nav_depth_score = (metrics.avg_depth * 0.4) + (metrics.max_depth * 0.6);
+        }
 
         // Calculate page counts
-        metrics.root_pages = graph.filter(node => !node.parent).length;
-        metrics.deep_pages_count = graph.filter(node => getNodeDepth(node, graph) > 5).length;
-        metrics.template_count = graph.filter(node => node.type === 'template').length;
-        metrics.linked_database_count = graph.filter(node => node.type === 'collection' && node.parent).length;
+        metrics.root_pages = validNodes.filter(node => !node.parent).length;
+        metrics.deep_pages_count = validNodes.filter(node => getNodeDepth(node, validNodes) > 5).length;
+        metrics.template_count = validNodes.filter(node => node.type === 'template').length;
+        metrics.linked_database_count = validNodes.filter(node => node.type === 'collection' && node.parent).length;
 
         // Calculate organization metrics
-        metrics.orphaned_blocks = graph.filter(node => !node.parent && !isRootNode(node)).length;
-        metrics.scatter_index = (metrics.orphaned_blocks / graph.length) * 100;
+        metrics.orphaned_blocks = validNodes.filter(node => !node.parent && !isRootNode(node)).length;
+        metrics.scatter_index = validNodes.length > 0 ? (metrics.orphaned_blocks / validNodes.length) * 100 : 0;
         metrics.unfindable_pages = metrics.orphaned_blocks + metrics.deep_pages_count;
 
         // Calculate content quality metrics
-        const duplicates = findDuplicateTitles(graph);
+        const duplicates = findDuplicateTitles(validNodes);
         metrics.duplicate_count = duplicates.length;
-        metrics.duplicate_content_rate = (metrics.duplicate_count / graph.length) * 100;
+        metrics.duplicate_content_rate = validNodes.length > 0 ? (metrics.duplicate_count / validNodes.length) * 100 : 0;
 
         // Calculate navigation metrics
-        metrics.bottleneck_count = graph.filter(node => getChildCount(node, graph) > 20).length;
+        metrics.bottleneck_count = validNodes.filter(node => getChildCount(node, validNodes) > 20).length;
         metrics.nav_complexity = calculateNavComplexity(metrics);
 
         // Log calculated metrics
@@ -310,10 +333,6 @@ function calculateGraphMetrics(graph) {
         return metrics;
     } catch (error) {
         console.error('Error in calculateGraphMetrics:', error);
-        console.error('Error details:', {
-            graphLength: graph?.length,
-            sampleNode: graph?.[0]
-        });
         return metrics;
     }
 }
@@ -857,22 +876,42 @@ export function generateReport(markdownTemplate, metrics) {
 // Helper functions
 function getNodeDepth(node, graph, cache = new Map()) {
     try {
-        if (!node || !node.id) {
-            console.warn('Invalid node in getNodeDepth:', node);
+        // Early return if node is invalid
+        if (!node || typeof node !== 'object') {
             return 0;
         }
 
-        if (cache.has(node.id)) return cache.get(node.id);
-        if (!node.parent) return 0;
+        // Check if we have a valid node ID
+        const nodeId = node.id || node.nodeId || node.node_id;
+        if (!nodeId) {
+            return 0;
+        }
 
-        const parentNode = graph.find(n => n.id === node.parent);
+        // Use cached value if available
+        if (cache.has(nodeId)) {
+            return cache.get(nodeId);
+        }
+
+        // If no parent, it's a root node
+        if (!node.parent) {
+            cache.set(nodeId, 0);
+            return 0;
+        }
+
+        // Find parent node
+        const parentNode = graph.find(n => {
+            const nId = n.id || n.nodeId || n.node_id;
+            return nId === node.parent;
+        });
+
         if (!parentNode) {
-            console.warn('Parent node not found:', { nodeId: node.id, parentId: node.parent });
+            cache.set(nodeId, 0);
             return 0;
         }
 
+        // Calculate depth recursively
         const depth = 1 + getNodeDepth(parentNode, graph, cache);
-        cache.set(node.id, depth);
+        cache.set(nodeId, depth);
         return depth;
     } catch (error) {
         console.error('Error in getNodeDepth:', error);
@@ -881,26 +920,65 @@ function getNodeDepth(node, graph, cache = new Map()) {
 }
 
 function calculateAverageDepth(graph) {
-    const depths = graph.map(node => getNodeDepth(node, graph));
-    return depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+    if (!Array.isArray(graph) || graph.length === 0) {
+        return 0;
+    }
+
+    const validNodes = graph.filter(node => node && typeof node === 'object');
+    if (validNodes.length === 0) {
+        return 0;
+    }
+
+    const depths = validNodes.map(node => getNodeDepth(node, graph));
+    const sum = depths.reduce((acc, depth) => acc + depth, 0);
+    return sum / validNodes.length;
 }
 
 function getChildCount(node, graph) {
-    return graph.filter(n => n.parent === node.id).length;
+    if (!node || !Array.isArray(graph)) {
+        return 0;
+    }
+
+    const nodeId = node.id || node.nodeId || node.node_id;
+    if (!nodeId) {
+        return 0;
+    }
+
+    return graph.filter(n => {
+        if (!n || typeof n !== 'object') return false;
+        return n.parent === nodeId;
+    }).length;
 }
 
 function isRootNode(node) {
+    if (!node || typeof node !== 'object') {
+        return false;
+    }
     return node.type === 'page' && !node.parent;
 }
 
 function findDuplicateTitles(graph) {
-    const titles = {};
-    return graph.filter(node => {
-        if (!node.title) return false;
-        if (titles[node.title]) return true;
-        titles[node.title] = true;
-        return false;
+    if (!Array.isArray(graph)) {
+        return [];
+    }
+
+    const titles = new Map();
+    const duplicates = [];
+
+    graph.forEach(node => {
+        if (!node || typeof node !== 'object' || !node.title) {
+            return;
+        }
+
+        const normalizedTitle = node.title.trim().toLowerCase();
+        if (titles.has(normalizedTitle)) {
+            duplicates.push(node);
+        } else {
+            titles.set(normalizedTitle, true);
+        }
     });
+
+    return duplicates;
 }
 
 function calculateGrowthRate(current, previous) {

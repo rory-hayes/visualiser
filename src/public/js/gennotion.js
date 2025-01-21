@@ -2,6 +2,8 @@
 const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
 const HEX_API_URL = 'https://app.hex.tech/api/v1';
 
+import { calculateMetrics, generateReport } from './reportGenerator.js';
+
 // DOM Elements
 const workspaceIdsInput = document.getElementById('workspaceIds');
 const generateBtn = document.getElementById('generateBtn');
@@ -200,7 +202,35 @@ function displayResults(data) {
             }
         }
 
-        // Validate graphData
+        // Calculate metrics using reportGenerator
+        if (graphData && insightsData) {
+            const metrics = calculateMetrics(graphData, insightsData);
+            console.log('Calculated Metrics:', metrics);
+
+            // Generate report if template is available
+            const template = "# Workspace Analysis Report\n\n" +
+                           "## Overview\n" +
+                           "Total Pages: [[total_pages]]\n" +
+                           "Active Pages: [[num_alive_pages]]\n" +
+                           "Collections: [[collections_count]]\n\n" +
+                           "## Usage Metrics\n" +
+                           "Total Members: [[total_num_members]]\n" +
+                           "Total Guests: [[total_num_guests]]\n" +
+                           "Connected Tools: [[connected_tool_count]]\n\n" +
+                           "## Growth Metrics\n" +
+                           "Growth Rate: [[growth_rate]]%\n" +
+                           "Monthly Member Growth: [[monthly_member_growth_rate]]%\n\n" +
+                           "## ROI Metrics\n" +
+                           "Current Plan Cost: $[[current_plan]]\n" +
+                           "Enterprise Plan ROI: [[enterprise_plan_roi]]%\n";
+
+            const report = generateReport(template, metrics);
+            console.log('Generated Report:', report);
+        } else {
+            console.warn('Missing required data for metrics calculation');
+        }
+
+        // Validate graphData for visualization
         if (!Array.isArray(graphData) || graphData.length === 0) {
             console.error('Invalid or empty graphData:', graphData);
             showStatus('Error: Invalid graph data received', false);
@@ -255,84 +285,75 @@ function formatResults(graphData, insightsData) {
         return '<p class="text-gray-500">No results available</p>';
     }
 
-    // Calculate graph insights
-    const insights = {
-        totalPages: graphData.length,
-        typeDistribution: {},
-        depthDistribution: {},
-        pageDepthDistribution: {},
-        collections: graphData.filter(item => item.TYPE === 'collection').length,
-        collectionViews: graphData.filter(item => item.TYPE === 'collection_view_page').length,
-        maxDepth: Math.max(...graphData.map(item => item.DEPTH || 0)),
-        maxPageDepth: Math.max(...graphData.map(item => item.PAGE_DEPTH || 0)),
-        rootPages: graphData.filter(item => item.DEPTH === 0).length
-    };
-
-    // Calculate distributions
-    graphData.forEach(item => {
-        if (item.TYPE) {
-            insights.typeDistribution[item.TYPE] = (insights.typeDistribution[item.TYPE] || 0) + 1;
-        }
-        if (typeof item.DEPTH === 'number') {
-            insights.depthDistribution[item.DEPTH] = (insights.depthDistribution[item.DEPTH] || 0) + 1;
-        }
-        if (typeof item.PAGE_DEPTH === 'number') {
-            insights.pageDepthDistribution[item.PAGE_DEPTH] = (insights.pageDepthDistribution[item.PAGE_DEPTH] || 0) + 1;
-        }
-    });
-
-    // Format workspace insights from dataframe_3
-    const workspaceInsights = insightsData && insightsData.length > 0 ? insightsData[0] : null;
+    // Calculate metrics using reportGenerator
+    const metrics = calculateMetrics(graphData, insightsData);
 
     // Create HTML output
     let html = `
         <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6">
             <h2 class="text-2xl font-bold mb-4">Workspace Structure Insights</h2>
             
-            ${workspaceInsights ? `
             <div class="mb-8 p-4 bg-indigo-50 rounded-lg">
                 <h3 class="font-semibold text-lg text-indigo-900 mb-3">Workspace Overview</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    ${Object.entries(workspaceInsights).map(([key, value]) => `
-                        <div class="bg-white p-3 rounded shadow-sm">
-                            <div class="text-sm text-gray-500">${formatKey(key)}</div>
-                            <div class="text-lg font-semibold text-gray-900">${formatValue(value)}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            ` : ''}
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div class="p-4 bg-gray-50 rounded">
-                    <h3 class="font-semibold">Structure Overview</h3>
-                    <ul class="mt-2">
-                        <li>Total Pages: ${insights.totalPages}</li>
-                        <li>Root Pages: ${insights.rootPages}</li>
-                        <li>Max Depth: ${insights.maxDepth}</li>
-                        <li>Max Page Depth: ${insights.maxPageDepth}</li>
-                    </ul>
-                </div>
-                
-                <div class="p-4 bg-gray-50 rounded">
-                    <h3 class="font-semibold">Page Types</h3>
-                    <ul class="mt-2">
-                        ${Object.entries(insights.typeDistribution)
-                            .map(([type, count]) => `<li>${formatKey(type)}: ${count}</li>`)
-                            .join('')}
-                    </ul>
-                </div>
-                
-                <div class="p-4 bg-gray-50 rounded">
-                    <h3 class="font-semibold">Depth Distribution</h3>
-                    <ul class="mt-2">
-                        ${Object.entries(insights.depthDistribution)
-                            .map(([depth, count]) => `<li>Depth ${depth}: ${count} pages</li>`)
-                            .join('')}
-                    </ul>
-                </div>
-            </div>
+                    <!-- Structure Metrics -->
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Total Pages</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.total_pages)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Active Pages</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.num_alive_pages)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Collections</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.collections_count)}</div>
+                    </div>
 
+                    <!-- Usage Metrics -->
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Total Members</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.total_num_members)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Total Guests</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.total_num_guests)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Connected Tools</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.connected_tool_count)}</div>
+                    </div>
+
+                    <!-- Growth Metrics -->
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Growth Rate</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.growth_rate)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Monthly Member Growth</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_member_growth_rate)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Content Growth Rate</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_content_growth_rate)}%</div>
+                    </div>
+
+                    <!-- Organization Metrics -->
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Organization Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_organization_score)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Collaboration Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_collaboration_score)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Productivity Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_productivity_score)}</div>
+                    </div>
+                </div>
+            </div>
+            
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
                 <div id="graph-container" class="w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden">
@@ -379,23 +400,25 @@ function formatResults(graphData, insightsData) {
     return html;
 }
 
-// Helper function to format keys for display
-function formatKey(key) {
-    return key
-        .split('_')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(' ');
-}
-
 // Helper function to format values for display
 function formatValue(value) {
+    if (value === null || value === undefined) {
+        return 'N/A';
+    }
     if (typeof value === 'number') {
         // Format percentages
-        if (value >= 0 && value <= 1) {
+        if (value >= -1 && value <= 1) {
             return `${(value * 100).toFixed(1)}%`;
         }
         // Format large numbers
-        return value.toLocaleString();
+        if (value >= 1000) {
+            return value.toLocaleString();
+        }
+        // Format decimals
+        if (value % 1 !== 0) {
+            return value.toFixed(1);
+        }
+        return value.toString();
     }
     return value;
 }
@@ -545,26 +568,29 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
         // Update visibility based on creation time
         node.style('opacity', d => {
             // Debug individual node dates
-            console.log('Node date check:', {
-                nodeTitle: d.title,
-                nodeCreatedTime: d.createdTime?.toLocaleDateString(),
-                nodeTimestamp: d.createdTime?.getTime(),
-                currentTime: currentTime.toLocaleDateString(),
-                currentTimestamp: currentTime.getTime(),
-                wouldBeVisible: !d.createdTime || d.createdTime.getTime() <= currentTime.getTime()
-            });
+            if (d.createdTime) {
+                console.log('Node date check:', {
+                    nodeTitle: d.title,
+                    nodeCreatedTime: d.createdTime.toLocaleDateString(),
+                    nodeTimestamp: d.createdTime.getTime(),
+                    currentTime: currentTime.toLocaleDateString(),
+                    currentTimestamp: currentTime.getTime(),
+                    wouldBeVisible: d.createdTime.getTime() <= currentTime.getTime()
+                });
+            }
 
             if (!d.createdTime) {
                 noDateCount++;
                 return 1; // Show nodes without dates
             }
 
-            // Compare timestamps instead of date objects
+            // Compare timestamps and ensure proper visibility
             const isVisible = d.createdTime.getTime() <= currentTime.getTime();
             if (isVisible) {
                 visibleCount++;
+                return 1;
             }
-            return isVisible ? 1 : 0.1;
+            return 0.1;
         });
         
         // Update links visibility only between visible nodes
@@ -577,11 +603,22 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
         console.log(`
             Date Range Info:
             Current Time: ${currentTime.toLocaleDateString()}
+            Current Timestamp: ${currentTime.getTime()}
             Visible nodes: ${visibleCount}
             Nodes without dates: ${noDateCount}
             Total nodes: ${nodes.length}
-            Timestamp comparison: ${currentTime.getTime()}
         `);
+
+        // Verify visibility counts match expectations
+        const expectedVisible = nodes.filter(n => !n.createdTime || n.createdTime.getTime() <= currentTime.getTime()).length;
+        if (visibleCount + noDateCount !== expectedVisible) {
+            console.warn('Visibility count mismatch:', {
+                counted: visibleCount + noDateCount,
+                expected: expectedVisible,
+                difference: expectedVisible - (visibleCount + noDateCount)
+            });
+        }
+
     } catch (error) {
         console.error('Error in updateNodesVisibility:', error);
         console.error('Current Time:', currentTime);
@@ -889,7 +926,7 @@ function initializeTimeline(container, nodes, node, link, svg) {
 
         // Log date range information
         console.log(`
-            Date Range Info:
+            Timeline Initialization:
             Total nodes: ${nodes.length}
             Nodes with valid dates: ${validDates.length}
             Nodes without dates: ${nodes.length - validDates.length}
@@ -926,12 +963,21 @@ function initializeTimeline(container, nodes, node, link, svg) {
         }
         
         // Set initial state to show all nodes
-        updateNodesVisibility(endDate, node, link, nodes);
+        const initialTime = new Date(endDate);
+        console.log('Setting initial timeline state:', {
+            date: initialTime.toLocaleDateString(),
+            timestamp: initialTime.getTime()
+        });
+        updateNodesVisibility(initialTime, node, link, nodes);
 
         slider.addEventListener('input', (event) => {
             const currentTime = new Date(parseInt(event.target.value));
             // Set to end of selected day
             currentTime.setHours(23, 59, 59, 999);
+            console.log('Timeline slider moved:', {
+                date: currentTime.toLocaleDateString(),
+                timestamp: currentTime.getTime()
+            });
             updateNodesVisibility(currentTime, node, link, nodes);
         });
 
@@ -946,6 +992,10 @@ function initializeTimeline(container, nodes, node, link, svg) {
         });
     } catch (error) {
         console.error('Error in initializeTimeline:', error);
+        console.error('Error details:', {
+            error: error.message,
+            stack: error.stack
+        });
     }
 }
 

@@ -526,38 +526,67 @@ function createLinks(nodes) {
 
 // Timeline slider functionality
 function updateNodesVisibility(currentTime, node, link, nodes) {
-    const currentDateDisplay = document.getElementById('currentDate');
-    currentDateDisplay.textContent = currentTime.toLocaleDateString();
-
-    // Count visible nodes for debugging
-    let visibleCount = 0;
-    let noDateCount = 0;
-
-    // Update visibility based on creation time
-    node.style('opacity', d => {
-        if (!d.createdTime) {
-            noDateCount++;
-            return 1; // Show nodes without dates
+    try {
+        const currentDateDisplay = document.getElementById('currentDate');
+        if (currentDateDisplay) {
+            currentDateDisplay.textContent = currentTime.toLocaleDateString();
         }
-        const isVisible = d.createdTime <= currentTime;
-        if (isVisible) visibleCount++;
-        return isVisible ? 1 : 0.1;
-    });
-    
-    // Update links visibility only between visible nodes
-    link.style('opacity', d => {
-        const sourceVisible = !d.source.createdTime || d.source.createdTime <= currentTime;
-        const targetVisible = !d.target.createdTime || d.target.createdTime <= currentTime;
-        return sourceVisible && targetVisible ? 0.6 : 0.1;
-    });
 
-    console.log(`
-        Date Range Info:
-        Current Time: ${currentTime.toLocaleDateString()}
-        Visible nodes: ${visibleCount}
-        Nodes without dates: ${noDateCount}
-        Total nodes: ${nodes.length}
-    `);
+        // Count visible nodes for debugging
+        let visibleCount = 0;
+        let noDateCount = 0;
+
+        // Debug log before update
+        console.log('Updating visibility for date:', currentTime.toLocaleDateString(), {
+            totalNodes: nodes.length,
+            currentTimestamp: currentTime.getTime()
+        });
+
+        // Update visibility based on creation time
+        node.style('opacity', d => {
+            // Debug individual node dates
+            console.log('Node date check:', {
+                nodeTitle: d.title,
+                nodeCreatedTime: d.createdTime?.toLocaleDateString(),
+                nodeTimestamp: d.createdTime?.getTime(),
+                currentTime: currentTime.toLocaleDateString(),
+                currentTimestamp: currentTime.getTime(),
+                wouldBeVisible: !d.createdTime || d.createdTime.getTime() <= currentTime.getTime()
+            });
+
+            if (!d.createdTime) {
+                noDateCount++;
+                return 1; // Show nodes without dates
+            }
+
+            // Compare timestamps instead of date objects
+            const isVisible = d.createdTime.getTime() <= currentTime.getTime();
+            if (isVisible) {
+                visibleCount++;
+            }
+            return isVisible ? 1 : 0.1;
+        });
+        
+        // Update links visibility only between visible nodes
+        link.style('opacity', d => {
+            const sourceVisible = !d.source.createdTime || d.source.createdTime.getTime() <= currentTime.getTime();
+            const targetVisible = !d.target.createdTime || d.target.createdTime.getTime() <= currentTime.getTime();
+            return sourceVisible && targetVisible ? 0.6 : 0.1;
+        });
+
+        console.log(`
+            Date Range Info:
+            Current Time: ${currentTime.toLocaleDateString()}
+            Visible nodes: ${visibleCount}
+            Nodes without dates: ${noDateCount}
+            Total nodes: ${nodes.length}
+            Timestamp comparison: ${currentTime.getTime()}
+        `);
+    } catch (error) {
+        console.error('Error in updateNodesVisibility:', error);
+        console.error('Current Time:', currentTime);
+        console.error('Node sample:', node.data()[0]);
+    }
 }
 
 // Color scale for different node types

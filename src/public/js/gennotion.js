@@ -232,7 +232,7 @@ function displayResults(data) {
                 // Initialize graph with delay to ensure DOM is ready
                 setTimeout(() => {
                     try {
-                        initializeGraph(graphData);
+                        initializeGraph(graphData, container);
                         window._graphInitialized = true;
                         
                         // Force a resize event to ensure proper dimensions
@@ -449,13 +449,19 @@ function transformDataForGraph(data) {
 
         // Create nodes array with date validation
         const nodes = data.map(item => {
-            const createdTime = item.CREATED_TIME ? new Date(Number(item.CREATED_TIME)) : null;
-            
-            // Validate date
-            if (createdTime) {
-                const year = createdTime.getFullYear();
-                if (year < 2000 || year > 2100) {
-                    console.warn(`Invalid date for node ${item.ID}: ${createdTime}`);
+            let createdTime = null;
+            if (item.CREATED_TIME) {
+                // Handle both string and number timestamps
+                const timestamp = typeof item.CREATED_TIME === 'string' ? 
+                    parseInt(item.CREATED_TIME) : Number(item.CREATED_TIME);
+                
+                if (!isNaN(timestamp)) {
+                    createdTime = new Date(timestamp);
+                    // Validate date
+                    if (createdTime.getFullYear() < 2000 || createdTime.getFullYear() > 2100) {
+                        console.warn(`Invalid date for node ${item.ID}: ${createdTime}, timestamp: ${timestamp}`);
+                        createdTime = null;
+                    }
                 }
             }
 
@@ -480,44 +486,145 @@ function transformDataForGraph(data) {
             start: startDate.toLocaleDateString(),
             end: endDate.toLocaleDateString(),
             totalNodes: nodes.length,
-            nodesWithDates: dates.length
+            nodesWithDates: dates.length,
+            nodesWithoutDates: nodes.length - dates.length
         });
 
-        // Create links array
-        const links = [];
-        nodes.forEach(node => {
-            if (node.parentId) {
-                const parent = nodes.find(n => n.id === node.parentId);
-                if (parent) {
-                    links.push({
-                        source: parent.id,
-                        target: node.id,
-                        value: 1
-                    });
-                }
-            }
-        });
+        // Log nodes without dates for debugging
+        const nodesWithoutDates = nodes.filter(n => !n.createdTime);
+        if (nodesWithoutDates.length > 0) {
+            console.warn('Nodes without valid dates:', nodesWithoutDates);
+        }
 
-        return { nodes, links };
+        return { nodes, links: createLinks(nodes) };
     } catch (error) {
         console.error('Error transforming data:', error);
         return { nodes: [], links: [] };
     }
 }
 
+// Helper function to create links
+function createLinks(nodes) {
+    const links = [];
+    const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+    nodes.forEach(node => {
+        if (node.parentId && nodeMap.has(node.parentId)) {
+            links.push({
+                source: nodeMap.get(node.parentId),
+                target: node,
+                value: 1
+            });
+        }
+    });
+
+    return links;
+}
+
+// Timeline slider functionality
+function updateNodesVisibility(currentTime, node, link, nodes) {
+    const currentDateDisplay = document.getElementById('currentDate');
+    currentDateDisplay.textContent = currentTime.toLocaleDateString();
+
+    // Count visible nodes for debugging
+    let visibleCount = 0;
+    let noDateCount = 0;
+
+    // Update visibility based on creation time
+    node.style('opacity', d => {
+        if (!d.createdTime) {
+            noDateCount++;
+            return 1; // Show nodes without dates
+        }
+        const isVisible = d.createdTime <= currentTime;
+        if (isVisible) visibleCount++;
+        return isVisible ? 1 : 0.1;
+    });
+    
+    // Update links visibility only between visible nodes
+    link.style('opacity', d => {
+        const sourceVisible = !d.source.createdTime || d.source.createdTime <= currentTime;
+        const targetVisible = !d.target.createdTime || d.target.createdTime <= currentTime;
+        return sourceVisible && targetVisible ? 0.6 : 0.1;
+    });
+
+    console.log(`
+        Date Range Info:
+        Current Time: ${currentTime.toLocaleDateString()}
+        Visible nodes: ${visibleCount}
+        Nodes without dates: ${noDateCount}
+        Total nodes: ${nodes.length}
+    `);
+}
+
 // Initialize the force-directed graph
-function initializeGraph(graphData) {
+function initializeGraph(graphData, container) {
     try {
-        // Handle both direct data and response object formats
+        // Clear any existing graph
+        container.innerHTML = '';
+
+        // Extract data from the response
         const df2 = graphData.data?.dataframe_2 || graphData;
         const df3 = graphData.data?.dataframe_3;
 
-        // Transform and create graph
-        const { nodes, links } = transformDataForGraph(df2);
-        if (!nodes.length) {
-            console.error('No nodes to display');
-            return;
-        }
+        // Create nodes array with proper date handling
+        const nodes = df2.map(item => {
+            let createdTime = null;
+            
+            // Handle both string and number timestamps
+            if (item.CREATED_TIME) {
+                const timestamp = typeof item.CREATED_TIME === 'string' ? 
+                    Date.parse(item.CREATED_TIME) : 
+                    item.CREATED_TIME;
+                
+                if (!isNaN(timestamp)) {
+                    const date = new Date(timestamp);
+                    const year = date.getFullYear();
+                    
+                    // Validate year is reasonable
+                    if (year >= 2000 && year <= 2100) {
+                        createdTime = date;
+                    } else {
+                        console.warn(`Invalid year ${year} for node ${item.id}`);
+                    }
+                }
+            }
+            
+            return {
+                id: item.id,
+                title: item.title,
+                url: item.url,
+                createdTime: createdTime,
+                parent: item.parent
+            };
+        });
+
+        // Log date range information
+        const timelineValidDates = nodes.map(n => n.createdTime).filter(Boolean);
+        const startDate = new Date(Math.min(...timelineValidDates));
+        const endDate = new Date(Math.max(...timelineValidDates));
+        
+        console.log(`
+            Date Range Info:
+            Total nodes: ${nodes.length}
+            Nodes with valid dates: ${timelineValidDates.length}
+            Nodes without dates: ${nodes.length - timelineValidDates.length}
+            Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
+        `);
+
+        // Create links array
+        const links = [];
+        nodes.forEach(node => {
+            if (node.parent) {
+                const parentNode = nodes.find(n => n.id === node.parent);
+                if (parentNode) {
+                    links.push({
+                        source: parentNode,
+                        target: node
+                    });
+                }
+            }
+        });
 
         // Store the data for resize handling
         window._lastGraphData = {
@@ -728,8 +835,10 @@ function initializeGraph(graphData) {
         const timelineContainer = document.createElement('div');
         timelineContainer.className = 'timeline-container';
         
-        const startDate = d3.min(nodes, d => d.createdTime);
-        const endDate = d3.max(nodes, d => d.createdTime);
+        // Find valid date range
+        const timelineValidDates = nodes.map(n => n.createdTime).filter(Boolean);
+        const startDate = new Date(Math.min(...timelineValidDates));
+        const endDate = new Date(Math.max(...timelineValidDates));
         
         timelineContainer.innerHTML = `
             <div class="flex justify-between items-center mb-2">
@@ -749,48 +858,20 @@ function initializeGraph(graphData) {
 
         // Timeline slider functionality
         const slider = document.getElementById('timelineSlider');
-        const currentDateDisplay = document.getElementById('currentDate');
         
-        function updateNodesVisibility(currentTime) {
-            // Update current date display
-            currentDateDisplay.textContent = currentTime.toLocaleDateString();
-
-            // Count visible nodes for debugging
-            let visibleCount = 0;
-
-            // Update visibility based on creation time
-            node.style('opacity', d => {
-                const nodeTime = d.createdTime;
-                const isVisible = nodeTime && nodeTime <= currentTime;
-                if (isVisible) visibleCount++;
-                return isVisible ? 1 : 0.1;
-            });
-            
-            // Update links visibility only between visible nodes
-            link.style('opacity', d => {
-                const sourceTime = d.source.createdTime;
-                const targetTime = d.target.createdTime;
-                return sourceTime && targetTime && 
-                       sourceTime <= currentTime && 
-                       targetTime <= currentTime ? 0.6 : 0.1;
-            });
-
-            console.log(`Visible nodes at ${currentTime.toLocaleDateString()}: ${visibleCount} / ${nodes.length}`);
-        }
-
         // Set initial state to show all nodes
-        updateNodesVisibility(endDate);
+        updateNodesVisibility(endDate, node, link, nodes);
 
         slider.addEventListener('input', (event) => {
             const currentTime = new Date(parseInt(event.target.value));
-            updateNodesVisibility(currentTime);
+            updateNodesVisibility(currentTime, node, link, nodes);
         });
 
         // Reset visibility when clicking outside nodes
         svg.on('click', (event) => {
             if (event.target.tagName === 'svg') {
                 const currentTime = new Date(parseInt(slider.value));
-                updateNodesVisibility(currentTime);
+                updateNodesVisibility(currentTime, node, link, nodes);
             }
         });
 

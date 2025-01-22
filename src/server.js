@@ -502,9 +502,12 @@ app.post('/api/hex-results', async (req, res) => {
                 ID: item.ID || item.id || '',
                 TYPE: item.TYPE || item.type || '',
                 PARENT_ID: item.PARENT_ID || item.parent_id || '',
+                SPACE_ID: item.SPACE_ID || item.space_id || '',  // Needed for graph grouping
                 DEPTH: Number(item.DEPTH || item.depth || 0),
                 PAGE_DEPTH: Number(item.PAGE_DEPTH || item.page_depth || 0),
-                TEXT: item.TEXT || item.text || ''
+                PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',  // Needed for page hierarchy
+                TEXT: item.TEXT || item.text || '',
+                CREATED_TIME: item.CREATED_TIME || item.created_time || Date.now()  // Essential for slider
             }));
         }
 

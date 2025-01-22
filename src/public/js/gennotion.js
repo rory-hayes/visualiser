@@ -19,6 +19,35 @@ let eventSource = null;
 // Event Listeners
 generateBtn.addEventListener('click', handleGenerateReport);
 
+// Report template
+const template = `# Workspace Analysis Report
+
+## Overview
+Total Pages: [[total_pages]]
+Active Pages: [[num_alive_pages]]
+Total Members: [[total_num_members]]
+
+## Growth Metrics
+Monthly Growth Rate: [[growth_rate]]%
+Content Growth: [[monthly_content_growth_rate]]%
+Member Growth: [[monthly_member_growth_rate]]%
+
+## Usage Metrics
+Active Users: [[active_users]]
+Pages per User: [[pages_per_user]]
+Engagement Score: [[engagement_score]]%
+
+## Structure Metrics
+Max Depth: [[max_depth]]
+Average Depth: [[avg_depth]]
+Navigation Score: [[nav_depth_score]]
+
+## Performance Metrics
+Organization Score: [[current_organization_score]]
+Productivity Score: [[current_productivity_score]]
+Collaboration Score: [[current_collaboration_score]]
+`;
+
 async function handleGenerateReport() {
     try {
         const workspaceIds = workspaceIdsInput.value.split(',').map(id => id.trim()).filter(Boolean);
@@ -173,65 +202,92 @@ function listenForResults() {
     };
 }
 
+// Process metrics in smaller chunks with cleanup
+function processMetricsInChunks(graphData, insightsData, onComplete) {
+    const chunkSize = 500; // Reduced chunk size
+    const chunks = Math.ceil(graphData.length / chunkSize);
+    let processedMetrics = null;
+    let currentChunk = 0;
+
+    function processNextChunk() {
+        if (currentChunk >= chunks) {
+            // All chunks processed
+            if (onComplete) {
+                onComplete(processedMetrics);
+            }
+            // Clear references
+            processedMetrics = null;
+            return;
+        }
+
+        const start = currentChunk * chunkSize;
+        const end = Math.min(start + chunkSize, graphData.length);
+        const chunk = graphData.slice(start, end);
+
+        try {
+            const chunkMetrics = calculateMetrics(chunk, insightsData);
+            processedMetrics = processedMetrics ? mergeMetrics(processedMetrics, chunkMetrics) : chunkMetrics;
+        } catch (error) {
+            console.error('Error processing chunk:', error);
+        }
+
+        // Clear chunk reference
+        chunk.length = 0;
+
+        // Process next chunk with delay
+        currentChunk++;
+        setTimeout(processNextChunk, 10);
+    }
+
+    // Start processing
+    processNextChunk();
+}
+
+// Modified displayResults function
 function displayResults(data) {
     try {
-        console.log('Starting displayResults with raw data');
+        console.log('Starting displayResults');
 
         // Show results section with loading state
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = `
-            <div class="workspace-metrics-box" style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                <h3 style="margin: 0 0 10px 0; color: #333;">Workspace Metrics</h3>
-                <div id="current-nodes-count" style="font-size: 16px; color: #666;">
+            <div class="workspace-metrics-box">
+                <h3>Workspace Metrics</h3>
+                <div id="current-nodes-count">
                     Nodes in view: <span id="nodes-count">0</span>
                 </div>
             </div>
-            <div id="loading-indicator" style="text-align: center; padding: 20px;">
-                <div style="display: inline-block; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite;"></div>
-                <p style="margin-top: 10px; color: #666;">Loading graph visualization...</p>
-            </div>
-            <div id="graph-container" style="width: 100%; height: 800px; border: 1px solid #ddd; border-radius: 8px; display: none;"></div>
-            <style>
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-            </style>
+            <div id="loading-indicator">Loading graph visualization...</div>
+            <div id="graph-container"></div>
         `;
 
-        // Extract and process data with cleanup
+        // Extract data with cleanup
         let graphData = null;
         let insightsData = null;
         
-        if (data && typeof data === 'object') {
-            if (data.data) {
-                graphData = data.data.dataframe_2 || [];
-                insightsData = data.data.dataframe_3 || {};
-                // Clear references to large data objects
-                delete data.data.dataframe_2;
-                delete data.data.dataframe_3;
-            } else if (data.dataframe_2 || data.dataframe_3) {
-                graphData = data.dataframe_2 || [];
-                insightsData = data.dataframe_3 || {};
-                // Clear references
-                delete data.dataframe_2;
-                delete data.dataframe_3;
-            } else if (Array.isArray(data)) {
-                graphData = data;
-            }
+        if (data?.data) {
+            graphData = data.data.dataframe_2 || [];
+            insightsData = data.data.dataframe_3 || {};
+            delete data.data.dataframe_2;
+            delete data.data.dataframe_3;
+        } else if (data?.dataframe_2 || data?.dataframe_3) {
+            graphData = data.dataframe_2 || [];
+            insightsData = data.dataframe_3 || {};
+            delete data.dataframe_2;
+            delete data.dataframe_3;
+        } else if (Array.isArray(data)) {
+            graphData = data;
         }
 
-        // Clear the original data reference
+        // Clear original data reference
         data = null;
 
-        // Validate data
         if (!graphData || !Array.isArray(graphData)) {
-            console.error('Invalid or missing graphData');
-            showStatus('Error: Invalid graph data received', false);
+            console.error('Invalid graph data');
+            showStatus('Error: Invalid data received', false);
             return;
         }
 
-        // Initialize graph with cleanup
         const container = document.getElementById('graph-container');
         const loadingIndicator = document.getElementById('loading-indicator');
         
@@ -240,62 +296,27 @@ function displayResults(data) {
             return;
         }
 
-        // Process metrics and reports in chunks
-        setTimeout(() => {
-            try {
-                if (insightsData) {
-                    insightsData = transformInsightsData(insightsData);
-                }
+        // Process metrics with cleanup
+        processMetricsInChunks(graphData, insightsData, (metrics) => {
+            if (metrics) {
+                const report = generateReport(template, metrics);
+                
+                // Store minimal results
+                window._lastResults = { metrics, report };
 
-                // Process in smaller chunks
-                const chunkSize = 1000;
-                const chunks = Math.ceil(graphData.length / chunkSize);
-                let processedMetrics = null;
-
-                function processChunk(chunkIndex) {
-                    if (chunkIndex >= chunks) {
-                        // All chunks processed
-                        const report = generateReport(template, processedMetrics);
-                        
-                        // Store minimal results
-                        window._lastResults = {
-                            metrics: processedMetrics,
-                            report: report
-                        };
-
-                        // Log to server and clear references
-                        fetch('/api/log-data', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                type: 'final-results',
-                                data: { metrics: processedMetrics, report }
-                            })
-                        }).catch(err => console.error('Error logging results:', err));
-
-                        processedMetrics = null;
-                        return;
-                    }
-
-                    const start = chunkIndex * chunkSize;
-                    const end = Math.min(start + chunkSize, graphData.length);
-                    const chunk = graphData.slice(start, end);
-
-                    const chunkMetrics = calculateMetrics(chunk, insightsData);
-                    processedMetrics = processedMetrics ? mergeMetrics(processedMetrics, chunkMetrics) : chunkMetrics;
-
-                    // Process next chunk
-                    setTimeout(() => processChunk(chunkIndex + 1), 0);
-                }
-
-                // Start processing chunks
-                processChunk(0);
-            } catch (error) {
-                console.error('Error processing metrics:', error);
+                // Log to server
+                fetch('/api/log-data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'final-results',
+                        data: { metrics, report }
+                    })
+                }).catch(console.error);
             }
-        }, 0);
+        });
 
-        // Initialize graph with cleanup function
+        // Initialize graph with cleanup
         setTimeout(() => {
             try {
                 container.style.display = 'block';
@@ -316,17 +337,10 @@ function displayResults(data) {
                 insightsData = null;
             } catch (error) {
                 console.error('Error initializing graph:', error);
-                loadingIndicator.innerHTML = `
-                    <div style="color: #dc3545; padding: 20px;">
-                        Error loading graph visualization. Please try again.
-                    </div>
-                `;
+                loadingIndicator.innerHTML = 'Error loading graph visualization. Please try again.';
             }
         }, 100);
 
-        // Scroll results into view
-        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        
     } catch (error) {
         console.error('Error in displayResults:', error);
         showStatus('Error displaying results: ' + error.message, false);
@@ -822,13 +836,16 @@ function drag(simulation) {
         });
 }
 
-// Initialize the force-directed graph
+// Initialize the force-directed graph with memory optimization
 function initializeGraph(graphData, container, onVisibilityChange) {
     try {
-        // Clean up any existing graph to prevent memory leaks
+        // Clean up any existing graph
+        if (container._cleanup) {
+            container._cleanup();
+        }
         d3.select(container).selectAll('*').remove();
 
-        // Create SVG container with weak reference
+        // Create SVG container
         const width = container.clientWidth;
         const height = container.clientHeight;
         const svg = d3.select(container)
@@ -836,7 +853,7 @@ function initializeGraph(graphData, container, onVisibilityChange) {
             .attr('width', width)
             .attr('height', height);
 
-        // Process nodes and links with minimal data
+        // Process nodes with minimal data
         const nodes = graphData.map(d => ({
             id: d.ID,
             type: d.TYPE,
@@ -846,32 +863,39 @@ function initializeGraph(graphData, container, onVisibilityChange) {
             depth: d.DEPTH
         }));
 
-        // Clear source data reference
+        // Create links with minimal data
+        const links = [];
+        const nodeMap = new Map();
+        nodes.forEach(node => nodeMap.set(node.id, node));
+        
+        nodes.forEach(node => {
+            if (node.parentId && nodeMap.has(node.parentId)) {
+                links.push({
+                    source: nodeMap.get(node.parentId),
+                    target: node
+                });
+            }
+        });
+
+        // Clear references
+        nodeMap.clear();
         graphData = null;
 
-        const links = nodes
-            .filter(d => d.parentId)
-            .map(d => ({
-                source: d.parentId,
-                target: d.id
-            }));
-
-        // Create force simulation with cleanup
+        // Create force simulation
         const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links).id(d => d.id).distance(100))
-            .force('charge', d3.forceManyBody().strength(-300))
+            .force('link', d3.forceLink(links).id(d => d.id).distance(50))
+            .force('charge', d3.forceManyBody().strength(-100))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30));
+            .force('collision', d3.forceCollide().radius(20));
 
-        // Create elements with minimal references
+        // Create elements
         const g = svg.append('g');
         const link = g.append('g')
             .selectAll('line')
             .data(links)
             .join('line')
             .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 1);
+            .attr('stroke-opacity', 0.6);
 
         const node = g.append('g')
             .selectAll('g')
@@ -892,42 +916,14 @@ function initializeGraph(graphData, container, onVisibilityChange) {
             .attr('y', 4)
             .style('font-size', '10px');
 
-        // Add time slider with cleanup
-        const timeRange = d3.extent(nodes, d => d.createdTime);
-        const sliderContainer = document.createElement('div');
-        Object.assign(sliderContainer.style, {
-            position: 'absolute',
-            bottom: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: '80%',
-            background: 'white',
-            padding: '10px',
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-        });
-        container.appendChild(sliderContainer);
+        // Add zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+        
+        svg.call(zoom);
 
-        const slider = d3.sliderBottom()
-            .min(timeRange[0])
-            .max(timeRange[1])
-            .width(sliderContainer.clientWidth * 0.9)
-            .tickFormat(d3.timeFormat('%Y-%m-%d'))
-            .default(timeRange[1])
-            .on('onchange', val => {
-                const currentTime = new Date(val);
-                updateVisibility(currentTime);
-            });
-
-        d3.select(sliderContainer)
-            .append('svg')
-            .attr('width', sliderContainer.clientWidth)
-            .attr('height', 100)
-            .append('g')
-            .attr('transform', 'translate(30,30)')
-            .call(slider);
-
-        // Simulation tick function with minimal object creation
+        // Simulation tick with minimal object creation
         simulation.on('tick', () => {
             link
                 .attr('x1', d => d.source.x)
@@ -938,7 +934,7 @@ function initializeGraph(graphData, container, onVisibilityChange) {
             node.attr('transform', d => `translate(${d.x},${d.y})`);
         });
 
-        // Drag functions with minimal closures
+        // Drag functions
         function dragstarted(event) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             event.subject.fx = event.subject.x;
@@ -956,7 +952,44 @@ function initializeGraph(graphData, container, onVisibilityChange) {
             event.subject.fy = null;
         }
 
-        // Visibility update function with minimal object creation
+        // Add time slider
+        const timeRange = d3.extent(nodes, d => d.createdTime);
+        if (timeRange[0] && timeRange[1]) {
+            const sliderContainer = document.createElement('div');
+            Object.assign(sliderContainer.style, {
+                position: 'absolute',
+                bottom: '20px',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '80%',
+                background: 'white',
+                padding: '10px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            });
+            container.appendChild(sliderContainer);
+
+            const slider = d3.sliderBottom()
+                .min(timeRange[0])
+                .max(timeRange[1])
+                .width(sliderContainer.clientWidth * 0.9)
+                .tickFormat(d3.timeFormat('%Y-%m-%d'))
+                .default(timeRange[1])
+                .on('onchange', val => {
+                    const currentTime = new Date(val);
+                    updateVisibility(currentTime);
+                });
+
+            d3.select(sliderContainer)
+                .append('svg')
+                .attr('width', sliderContainer.clientWidth)
+                .attr('height', 100)
+                .append('g')
+                .attr('transform', 'translate(30,30)')
+                .call(slider);
+        }
+
+        // Visibility update function
         function updateVisibility(currentTime) {
             node.style('display', d => {
                 const isVisible = !d.createdTime || d.createdTime <= currentTime;
@@ -964,11 +997,9 @@ function initializeGraph(graphData, container, onVisibilityChange) {
             });
 
             link.style('display', d => {
-                const sourceNode = nodes.find(n => n.id === d.source.id);
-                const targetNode = nodes.find(n => n.id === d.target.id);
-                const isVisible = (!sourceNode.createdTime || sourceNode.createdTime <= currentTime) &&
-                                (!targetNode.createdTime || targetNode.createdTime <= currentTime);
-                return isVisible ? 'block' : 'none';
+                const sourceVisible = !d.source.createdTime || d.source.createdTime <= currentTime;
+                const targetVisible = !d.target.createdTime || d.target.createdTime <= currentTime;
+                return sourceVisible && targetVisible ? 'block' : 'none';
             });
 
             if (onVisibilityChange) {
@@ -978,12 +1009,27 @@ function initializeGraph(graphData, container, onVisibilityChange) {
         }
 
         // Initial visibility update
-        updateVisibility(timeRange[1]);
+        if (timeRange[0] && timeRange[1]) {
+            updateVisibility(timeRange[1]);
+        }
 
-        // Cleanup function
+        // Return cleanup function
         return () => {
+            // Stop simulation
             simulation.stop();
+            
+            // Remove all elements
             d3.select(container).selectAll('*').remove();
+            
+            // Clear references
+            nodes.length = 0;
+            links.length = 0;
+            
+            // Remove event listeners
+            svg.on('.zoom', null);
+            node.on('.drag', null);
+            
+            // Clear container
             container.innerHTML = '';
         };
 

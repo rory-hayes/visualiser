@@ -133,31 +133,6 @@ export function calculateMetrics(dataframe_2, dataframe_3) {
 
 function calculateSQLMetrics(data) {
     try {
-        // Validate required fields
-        const requiredFields = [
-            'num_total_pages',
-            'num_pages',
-            'num_collections',
-            'total_num_collection_views',
-            'num_public_pages',
-            'total_num_integrations',
-            'total_num_members',
-            'total_num_guests',
-            'total_num_teamspaces',
-            'num_alive_pages',
-            'num_private_pages',
-            'num_alive_blocks',
-            'num_blocks',
-            'num_alive_collections',
-            'total_arr',
-            'total_paid_seats'
-        ];
-
-        const missingFields = requiredFields.filter(field => data[field] === undefined);
-        if (missingFields.length > 0) {
-            console.warn('Missing required fields in SQL data:', missingFields);
-        }
-
         // Log input data for debugging
         console.log('SQL Metrics Input:', {
             pages: {
@@ -183,9 +158,9 @@ function calculateSQLMetrics(data) {
         });
 
         const metrics = {
-            // Page metrics
-            total_pages: data.num_total_pages || 0,
-            page_count: data.num_pages || 0,
+            // Page metrics - use num_pages as total_pages if num_total_pages is 0
+            total_pages: data.num_total_pages || data.num_pages || 0,
+            page_count: data.num_pages || data.num_total_pages || 0,
             collections_count: data.num_collections || 0,
             collection_views: data.total_num_collection_views || 0,
             public_pages_count: data.num_public_pages || 0,

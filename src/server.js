@@ -11,6 +11,7 @@ import session from 'express-session';
 import axios from 'axios';
 import { AIInsightsService } from './services/aiService.js';
 import fs from 'fs';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -481,94 +482,36 @@ app.post('/api/generate-report', async (req, res) => {
 app.post('/api/hex-results', async (req, res) => {
     try {
         const results = req.body;
-        console.log('Received raw request body:', {
+        console.log('Received Hex results:', {
             hasData: !!results.data,
             dataframe2Length: results.data?.dataframe_2?.length,
             dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
         });
 
-        // Transform and validate the data
-        let transformedData = {
+        // Store results immediately
+        storedResults = {
             data: {
-                dataframe_2: [],
-                dataframe_3: {}
+                dataframe_2: results.data?.dataframe_2 || [],
+                dataframe_3: results.data?.dataframe_3 || {}
             }
         };
 
-        // Extract and validate dataframe_2 (graph data)
-        if (results.data && Array.isArray(results.data.dataframe_2)) {
-            // Only keep essential fields to reduce payload size
-            transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
-                ID: item.ID || item.id || '',
-                TYPE: item.TYPE || item.type || '',
-                PARENT_ID: item.PARENT_ID || item.parent_id || '',
-                SPACE_ID: item.SPACE_ID || item.space_id || '',  // Needed for graph grouping
-                DEPTH: Number(item.DEPTH || item.depth || 0),
-                PAGE_DEPTH: Number(item.PAGE_DEPTH || item.page_depth || 0),
-                PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',  // Needed for page hierarchy
-                TEXT: item.TEXT || item.text || '',
-                CREATED_TIME: item.CREATED_TIME || item.created_time || Date.now()  // Essential for slider
-            }));
-        }
-
-        // Extract and validate dataframe_3 (metrics)
-        if (results.data && results.data.dataframe_3) {
-            const df3 = results.data.dataframe_3;
-            transformedData.data.dataframe_3 = {
-                // Page metrics
-                num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || 0),
-                num_pages: Number(df3.num_pages || df3.NUM_PAGES || 0),
-                num_alive_pages: Number(df3.num_alive_pages || df3.NUM_ALIVE_PAGES || 0),
-                num_public_pages: Number(df3.num_public_pages || df3.NUM_PUBLIC_PAGES || 0),
-                num_private_pages: Number(df3.num_private_pages || df3.NUM_PRIVATE_PAGES || 0),
-
-                // Block metrics
-                num_blocks: Number(df3.num_blocks || df3.NUM_BLOCKS || 0),
-                num_alive_blocks: Number(df3.num_alive_blocks || df3.NUM_ALIVE_BLOCKS || 0),
-                current_month_blocks: Number(df3.current_month_blocks || df3.CURRENT_MONTH_BLOCKS || 0),
-                previous_month_blocks: Number(df3.previous_month_blocks || df3.PREVIOUS_MONTH_BLOCKS || 0),
-
-                // Collection metrics
-                num_collections: Number(df3.num_collections || df3.NUM_COLLECTIONS || 0),
-                num_alive_collections: Number(df3.num_alive_collections || df3.NUM_ALIVE_COLLECTIONS || 0),
-                total_num_collection_views: Number(df3.total_num_collection_views || df3.TOTAL_NUM_COLLECTION_VIEWS || 0),
-
-                // User metrics
-                total_num_members: Number(df3.total_num_members || df3.TOTAL_NUM_MEMBERS || 0),
-                total_num_guests: Number(df3.total_num_guests || df3.TOTAL_NUM_GUESTS || 0),
-                total_num_teamspaces: Number(df3.total_num_teamspaces || df3.TOTAL_NUM_TEAMSPACES || 0),
-                current_month_members: Number(df3.current_month_members || df3.CURRENT_MONTH_MEMBERS || 0),
-                previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0)
-            };
-        }
-
-        console.log('Transformed data:', {
-            hasDataframe2: transformedData.data.dataframe_2.length > 0,
-            dataframe2Length: transformedData.data.dataframe_2.length,
-            hasDataframe3: Object.keys(transformedData.data.dataframe_3).length > 0,
-            dataframe3Keys: Object.keys(transformedData.data.dataframe_3)
-        });
-
-        // Store the transformed results
+        // Also save to file as backup
         const storedData = {
             timestamp: new Date(),
-            data: transformedData.data,
-            metadata: results.metadata || {}
+            data: storedResults.data
         };
-        saveResults(storedData);
         
-        // Notify all connected clients
-        if (connectedClients.size > 0) {
-            const eventData = JSON.stringify({
-                success: true,
-                data: transformedData
+        try {
+            writeFileSync(STORAGE_FILE, JSON.stringify(storedData));
+            console.log('Saved results to file:', {
+                path: STORAGE_FILE,
+                dataSize: JSON.stringify(storedData).length
             });
-            connectedClients.forEach(client => {
-                client.write(`data: ${eventData}\n\n`);
-            });
-            console.log('Notified connected clients:', connectedClients.size);
+        } catch (writeError) {
+            console.error('Error writing to storage file:', writeError);
         }
-        
+
         res.json({ success: true });
     } catch (error) {
         console.error('Error processing Hex results:', error);
@@ -586,24 +529,37 @@ app.get('/api/hex-results/stream', (req, res) => {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
 
-        // Send stored results if available
-        if (storedResults) {
-            const dataSize = JSON.stringify(storedResults).length;
-            console.log(`Sending stored results (${dataSize} bytes)`);
-            
+        // First try memory-stored results
+        if (storedResults && storedResults.data) {
+            console.log('Sending memory-stored results');
             res.write(`data: ${JSON.stringify({
                 success: true,
                 data: storedResults
             })}\n\n`);
-
-            // Clear stored results after sending
-            storedResults = null;
         } else {
-            console.log('No stored results available');
-            res.write(`data: ${JSON.stringify({
-                success: false,
-                error: 'No results available'
-            })}\n\n`);
+            // Try reading from file
+            try {
+                if (existsSync(STORAGE_FILE)) {
+                    const fileData = JSON.parse(readFileSync(STORAGE_FILE, 'utf8'));
+                    if (fileData && fileData.data) {
+                        console.log('Sending file-stored results');
+                        res.write(`data: ${JSON.stringify({
+                            success: true,
+                            data: fileData
+                        })}\n\n`);
+                    } else {
+                        throw new Error('No valid data in storage file');
+                    }
+                } else {
+                    throw new Error('No storage file found');
+                }
+            } catch (readError) {
+                console.error('Error reading stored results:', readError);
+                res.write(`data: ${JSON.stringify({
+                    success: false,
+                    error: 'No results available'
+                })}\n\n`);
+            }
         }
 
         res.end();

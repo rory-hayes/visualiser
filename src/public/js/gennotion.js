@@ -148,23 +148,19 @@ function listenForResults() {
                     dataStructure: {
                         hasDataframe2: data.data?.data?.dataframe_2 ? 'yes' : 'no',
                         hasDataframe3: data.data?.data?.dataframe_3 ? 'yes' : 'no',
-                        dataframe2Length: data.data?.data?.dataframe_2?.length,
-                        dataframe3Length: data.data?.data?.dataframe_3?.length
+                        dataframe2Length: data.data?.data?.dataframe_2?.length
                     }
                 });
 
-                // Send final results to server for logging
-                fetch('/api/log-data', {
+                // Store the results first
+                fetch('/api/store-results', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        type: 'final-results',
-                        data: data.data
-                    })
+                    body: JSON.stringify(data.data)
                 }).catch(error => {
-                    console.error('Error logging final results:', error);
+                    console.error('Error storing results:', error);
                 });
                 
                 // Hide spinner and update status
@@ -181,8 +177,12 @@ function listenForResults() {
                 
                 // Close event source
                 eventSource.close();
+            } else if (!data.success) {
+                console.warn('Received error response:', data.error);
+                showStatus(`Error: ${data.error}`, false);
+                eventSource.close();
             } else {
-                console.warn('Received data without success or data property:', data);
+                console.warn('Received incomplete data:', data);
                 showStatus('Received incomplete data. Please try again.', false);
                 eventSource.close();
             }

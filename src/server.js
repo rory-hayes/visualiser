@@ -11,7 +11,6 @@ import session from 'express-session';
 import axios from 'axios';
 import { AIInsightsService } from './services/aiService.js';
 import fs from 'fs';
-import { writeFileSync, readFileSync, existsSync } from 'fs';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -482,36 +481,91 @@ app.post('/api/generate-report', async (req, res) => {
 app.post('/api/hex-results', async (req, res) => {
     try {
         const results = req.body;
-        console.log('Received Hex results:', {
+        console.log('Received raw request body:', {
             hasData: !!results.data,
             dataframe2Length: results.data?.dataframe_2?.length,
             dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
         });
 
-        // Store results immediately
-        storedResults = {
+        // Transform and validate the data
+        let transformedData = {
             data: {
-                dataframe_2: results.data?.dataframe_2 || [],
-                dataframe_3: results.data?.dataframe_3 || {}
+                dataframe_2: [],
+                dataframe_3: {}
             }
         };
 
-        // Also save to file as backup
-        const storedData = {
-            timestamp: new Date(),
-            data: storedResults.data
-        };
-        
-        try {
-            writeFileSync(STORAGE_FILE, JSON.stringify(storedData));
-            console.log('Saved results to file:', {
-                path: STORAGE_FILE,
-                dataSize: JSON.stringify(storedData).length
-            });
-        } catch (writeError) {
-            console.error('Error writing to storage file:', writeError);
+        // Extract and validate dataframe_2 (graph data)
+        if (results.data && Array.isArray(results.data.dataframe_2)) {
+            // Only keep essential fields to reduce payload size
+            transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
+                ID: item.ID || item.id || '',
+                TYPE: item.TYPE || item.type || '',
+                PARENT_ID: item.PARENT_ID || item.parent_id || '',
+                DEPTH: Number(item.DEPTH || item.depth || 0),
+                PAGE_DEPTH: Number(item.PAGE_DEPTH || item.page_depth || 0),
+                TEXT: item.TEXT || item.text || ''
+            }));
         }
 
+        // Extract and validate dataframe_3 (metrics)
+        if (results.data && results.data.dataframe_3) {
+            const df3 = results.data.dataframe_3;
+            transformedData.data.dataframe_3 = {
+                // Page metrics
+                num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || 0),
+                num_pages: Number(df3.num_pages || df3.NUM_PAGES || 0),
+                num_alive_pages: Number(df3.num_alive_pages || df3.NUM_ALIVE_PAGES || 0),
+                num_public_pages: Number(df3.num_public_pages || df3.NUM_PUBLIC_PAGES || 0),
+                num_private_pages: Number(df3.num_private_pages || df3.NUM_PRIVATE_PAGES || 0),
+
+                // Block metrics
+                num_blocks: Number(df3.num_blocks || df3.NUM_BLOCKS || 0),
+                num_alive_blocks: Number(df3.num_alive_blocks || df3.NUM_ALIVE_BLOCKS || 0),
+                current_month_blocks: Number(df3.current_month_blocks || df3.CURRENT_MONTH_BLOCKS || 0),
+                previous_month_blocks: Number(df3.previous_month_blocks || df3.PREVIOUS_MONTH_BLOCKS || 0),
+
+                // Collection metrics
+                num_collections: Number(df3.num_collections || df3.NUM_COLLECTIONS || 0),
+                num_alive_collections: Number(df3.num_alive_collections || df3.NUM_ALIVE_COLLECTIONS || 0),
+                total_num_collection_views: Number(df3.total_num_collection_views || df3.TOTAL_NUM_COLLECTION_VIEWS || 0),
+
+                // User metrics
+                total_num_members: Number(df3.total_num_members || df3.TOTAL_NUM_MEMBERS || 0),
+                total_num_guests: Number(df3.total_num_guests || df3.TOTAL_NUM_GUESTS || 0),
+                total_num_teamspaces: Number(df3.total_num_teamspaces || df3.TOTAL_NUM_TEAMSPACES || 0),
+                current_month_members: Number(df3.current_month_members || df3.CURRENT_MONTH_MEMBERS || 0),
+                previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0)
+            };
+        }
+
+        console.log('Transformed data:', {
+            hasDataframe2: transformedData.data.dataframe_2.length > 0,
+            dataframe2Length: transformedData.data.dataframe_2.length,
+            hasDataframe3: Object.keys(transformedData.data.dataframe_3).length > 0,
+            dataframe3Keys: Object.keys(transformedData.data.dataframe_3)
+        });
+
+        // Store the transformed results
+        const storedData = {
+            timestamp: new Date(),
+            data: transformedData.data,
+            metadata: results.metadata || {}
+        };
+        saveResults(storedData);
+        
+        // Notify all connected clients
+        if (connectedClients.size > 0) {
+            const eventData = JSON.stringify({
+                success: true,
+                data: transformedData
+            });
+            connectedClients.forEach(client => {
+                client.write(`data: ${eventData}\n\n`);
+            });
+            console.log('Notified connected clients:', connectedClients.size);
+        }
+        
         res.json({ success: true });
     } catch (error) {
         console.error('Error processing Hex results:', error);
@@ -524,49 +578,41 @@ const connectedClients = new Set();
 
 // Add SSE endpoint for streaming results
 app.get('/api/hex-results/stream', (req, res) => {
-    try {
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
 
-        // First try memory-stored results
-        if (storedResults && storedResults.data) {
-            console.log('Sending memory-stored results');
-            res.write(`data: ${JSON.stringify({
-                success: true,
-                data: storedResults
-            })}\n\n`);
-        } else {
-            // Try reading from file
-            try {
-                if (existsSync(STORAGE_FILE)) {
-                    const fileData = JSON.parse(readFileSync(STORAGE_FILE, 'utf8'));
-                    if (fileData && fileData.data) {
-                        console.log('Sending file-stored results');
-                        res.write(`data: ${JSON.stringify({
-                            success: true,
-                            data: fileData
-                        })}\n\n`);
-                    } else {
-                        throw new Error('No valid data in storage file');
-                    }
-                } else {
-                    throw new Error('No storage file found');
+    res.write('data: {"type":"connected"}\n\n');
+    connectedClients.add(res);
+
+    const results = loadResults();
+    if (results && results.data) {
+        console.log('Sending stored results via SSE:', {
+            hasDataframe2: results.data.dataframe_2?.length > 0,
+            dataframe2Length: results.data.dataframe_2?.length,
+            hasDataframe3: Object.keys(results.data.dataframe_3 || {}).length > 0,
+            dataframe3Keys: Object.keys(results.data.dataframe_3 || {})
+        });
+
+        const eventData = JSON.stringify({
+            success: true,
+            data: {
+                data: {
+                    dataframe_2: results.data.dataframe_2 || [],
+                    dataframe_3: results.data.dataframe_3 || {}
                 }
-            } catch (readError) {
-                console.error('Error reading stored results:', readError);
-                res.write(`data: ${JSON.stringify({
-                    success: false,
-                    error: 'No results available'
-                })}\n\n`);
             }
-        }
-
-        res.end();
-    } catch (error) {
-        console.error('Error in stream endpoint:', error);
-        res.status(500).json({ error: 'Stream error' });
+        });
+        res.write(`data: ${eventData}\n\n`);
+    } else {
+        console.log('No stored results available');
     }
+
+    req.on('close', () => {
+        connectedClients.delete(res);
+    });
 });
 
 // Add an endpoint to fetch results
@@ -684,39 +730,6 @@ app.get('/api/logs', (req, res) => {
     } catch (error) {
         console.error('Error reading logs:', error);
         res.status(500).json({ error: error.message });
-    }
-});
-
-// Add at the top of the file
-const MAX_RESULTS_SIZE = 50 * 1024 * 1024; // 50MB limit
-let storedResults = null;
-
-// Replace or add the results storage endpoint
-app.post('/api/store-results', (req, res) => {
-    try {
-        // Clear previous results
-        if (storedResults) {
-            storedResults = null;
-        }
-
-        const data = req.body;
-        const dataSize = JSON.stringify(data).length;
-
-        if (dataSize > MAX_RESULTS_SIZE) {
-            console.warn(`Data size (${dataSize} bytes) exceeds limit (${MAX_RESULTS_SIZE} bytes)`);
-            return res.status(413).json({ error: 'Data size too large' });
-        }
-
-        // Store new results
-        storedResults = data;
-
-        // Log storage
-        console.log(`Stored results: ${dataSize} bytes`);
-        
-        res.json({ success: true, size: dataSize });
-    } catch (error) {
-        console.error('Error storing results:', error);
-        res.status(500).json({ error: 'Failed to store results' });
     }
 });
 

@@ -19,35 +19,6 @@ let eventSource = null;
 // Event Listeners
 generateBtn.addEventListener('click', handleGenerateReport);
 
-// Report template
-const template = `# Workspace Analysis Report
-
-## Overview
-Total Pages: [[total_pages]]
-Active Pages: [[num_alive_pages]]
-Total Members: [[total_num_members]]
-
-## Growth Metrics
-Monthly Growth Rate: [[growth_rate]]%
-Content Growth: [[monthly_content_growth_rate]]%
-Member Growth: [[monthly_member_growth_rate]]%
-
-## Usage Metrics
-Active Users: [[active_users]]
-Pages per User: [[pages_per_user]]
-Engagement Score: [[engagement_score]]%
-
-## Structure Metrics
-Max Depth: [[max_depth]]
-Average Depth: [[avg_depth]]
-Navigation Score: [[nav_depth_score]]
-
-## Performance Metrics
-Organization Score: [[current_organization_score]]
-Productivity Score: [[current_productivity_score]]
-Collaboration Score: [[current_collaboration_score]]
-`;
-
 async function handleGenerateReport() {
     try {
         const workspaceIds = workspaceIdsInput.value.split(',').map(id => id.trim()).filter(Boolean);
@@ -148,19 +119,23 @@ function listenForResults() {
                     dataStructure: {
                         hasDataframe2: data.data?.data?.dataframe_2 ? 'yes' : 'no',
                         hasDataframe3: data.data?.data?.dataframe_3 ? 'yes' : 'no',
-                        dataframe2Length: data.data?.data?.dataframe_2?.length
+                        dataframe2Length: data.data?.data?.dataframe_2?.length,
+                        dataframe3Length: data.data?.data?.dataframe_3?.length
                     }
                 });
 
-                // Store the results first
-                fetch('/api/store-results', {
+                // Send final results to server for logging
+                fetch('/api/log-data', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(data.data)
+                    body: JSON.stringify({
+                        type: 'final-results',
+                        data: data.data
+                    })
                 }).catch(error => {
-                    console.error('Error storing results:', error);
+                    console.error('Error logging final results:', error);
                 });
                 
                 // Hide spinner and update status
@@ -177,12 +152,8 @@ function listenForResults() {
                 
                 // Close event source
                 eventSource.close();
-            } else if (!data.success) {
-                console.warn('Received error response:', data.error);
-                showStatus(`Error: ${data.error}`, false);
-                eventSource.close();
             } else {
-                console.warn('Received incomplete data:', data);
+                console.warn('Received data without success or data property:', data);
                 showStatus('Received incomplete data. Please try again.', false);
                 eventSource.close();
             }
@@ -202,234 +173,167 @@ function listenForResults() {
     };
 }
 
-// Process metrics in smaller chunks with cleanup
-function processMetricsInChunks(graphData, insightsData, onComplete) {
-    const chunkSize = 500; // Reduced chunk size
-    const chunks = Math.ceil(graphData.length / chunkSize);
-    let processedMetrics = null;
-    let currentChunk = 0;
-
-    function processNextChunk() {
-        if (currentChunk >= chunks) {
-            // All chunks processed
-            if (onComplete) {
-                onComplete(processedMetrics);
-            }
-            // Clear references
-            processedMetrics = null;
-            return;
-        }
-
-        const start = currentChunk * chunkSize;
-        const end = Math.min(start + chunkSize, graphData.length);
-        const chunk = graphData.slice(start, end);
-
-        try {
-            const chunkMetrics = calculateMetrics(chunk, insightsData);
-            processedMetrics = processedMetrics ? mergeMetrics(processedMetrics, chunkMetrics) : chunkMetrics;
-        } catch (error) {
-            console.error('Error processing chunk:', error);
-        }
-
-        // Clear chunk reference
-        chunk.length = 0;
-
-        // Process next chunk with delay
-        currentChunk++;
-        setTimeout(processNextChunk, 10);
-    }
-
-    // Start processing
-    processNextChunk();
-}
-
-// Modified displayResults function with chunked processing
 function displayResults(data) {
     try {
-        console.log('Starting displayResults with data size:', JSON.stringify(data).length);
+        console.log('Starting displayResults with raw data:', data);
+
+        // Show results section
         resultsSection.classList.remove('hidden');
         
-        // Clear any existing content and show loading state
-        resultsContent.innerHTML = `
-            <div class="workspace-metrics-box">
-                <h3>Workspace Metrics</h3>
-                <div id="current-nodes-count">
-                    Nodes in view: <span id="nodes-count">0</span>
-                </div>
-            </div>
-            <div id="loading-indicator" class="text-center p-4">Processing data...</div>
-            <div id="graph-container" style="display: none;"></div>
-        `;
-
-        // Extract and validate data
+        // Extract the dataframes with proper error handling
         let graphData = null;
         let insightsData = null;
-
-        if (data?.data) {
-            graphData = data.data.dataframe_2;
-            insightsData = data.data.dataframe_3;
-            // Clear references immediately
-            delete data.data.dataframe_2;
-            delete data.data.dataframe_3;
-            data.data = null;
-        } else if (data?.dataframe_2 || data?.dataframe_3) {
-            graphData = data.dataframe_2;
-            insightsData = data.dataframe_3;
-            // Clear references immediately
-            delete data.dataframe_2;
-            delete data.dataframe_3;
-        }
-
-        // Clear original data reference
-        data = null;
-
-        if (!graphData || !Array.isArray(graphData)) {
-            console.error('Invalid graph data');
-            showStatus('Error: Invalid data received', false);
-            return;
-        }
-
-        const container = document.getElementById('graph-container');
-        const loadingIndicator = document.getElementById('loading-indicator');
         
-        if (!container || !loadingIndicator) {
-            console.error('Required elements not found');
-            return;
-        }
-
-        // Process data in smaller chunks
-        const chunkSize = 500; // Reduced chunk size
-        const totalChunks = Math.ceil(graphData.length / chunkSize);
-        let processedChunks = 0;
-        let processedNodes = [];
-
-        function processNextChunk() {
-            const start = processedChunks * chunkSize;
-            const end = Math.min(start + chunkSize, graphData.length);
-            const chunk = graphData.slice(start, end);
-
-            // Process chunk
-            chunk.forEach(node => {
-                if (node && node.ID) {
-                    processedNodes.push({
-                        id: node.ID,
-                        type: node.TYPE || 'unknown',
-                        text: node.TEXT || 'Untitled',
-                        createdTime: node.CREATED_TIME ? new Date(Number(node.CREATED_TIME)) : null,
-                        parentId: node.PARENT_ID,
-                        depth: Number(node.DEPTH) || 0
-                    });
-                }
-            });
-
-            // Update loading status
-            processedChunks++;
-            const progress = Math.round((processedChunks / totalChunks) * 100);
-            loadingIndicator.textContent = `Processing data: ${progress}%`;
-
-            // Clear chunk reference
-            chunk.length = 0;
-
-            if (processedChunks < totalChunks) {
-                // Process next chunk with delay
-                setTimeout(processNextChunk, 10);
-            } else {
-                // All chunks processed
-                loadingIndicator.textContent = 'Initializing graph...';
-                
-                // Clear original data
-                graphData = null;
-                
-                // Show container and initialize graph
-                container.style.display = 'block';
-                
-                try {
-                    const cleanup = initializeGraph(processedNodes, container, (visibleNodes) => {
-                        const nodesCountElement = document.getElementById('nodes-count');
-                        if (nodesCountElement) {
-                            nodesCountElement.textContent = visibleNodes.length;
-                        }
-                    });
-
-                    // Store cleanup function
-                    container._cleanup = cleanup;
-                    
-                    // Hide loading indicator
-                    loadingIndicator.style.display = 'none';
-
-                    // Process metrics if needed
-                    if (insightsData) {
-                        const metrics = calculateMetrics(processedNodes, insightsData);
-                        // Store minimal results
-                        window._lastResults = {
-                            metrics: {
-                                total_pages: metrics.total_pages,
-                                num_alive_pages: metrics.num_alive_pages,
-                                total_num_members: metrics.total_num_members
-                            }
-                        };
-                    }
-
-                    // Clear references
-                    processedNodes = null;
-                    insightsData = null;
-
-                } catch (error) {
-                    console.error('Error initializing graph:', error);
-                    loadingIndicator.textContent = 'Error loading graph visualization';
-                    // Clear references on error
-                    processedNodes = null;
-                    insightsData = null;
-                }
+        // Handle different data structures
+        if (data && typeof data === 'object') {
+            if (data.data) {
+                // Case 1: Nested under data property
+                graphData = data.data.dataframe_2 || [];
+                insightsData = data.data.dataframe_3 || {};
+                console.log('Case 1 - Data from data property:', {
+                    graphData: graphData?.length,
+                    insightsData: Object.keys(insightsData)
+                });
+            } else if (data.dataframe_2 || data.dataframe_3) {
+                // Case 2: Direct properties
+                graphData = data.dataframe_2 || [];
+                insightsData = data.dataframe_3 || {};
+                console.log('Case 2 - Direct data properties:', {
+                    graphData: graphData?.length,
+                    insightsData: Object.keys(insightsData)
+                });
+            } else if (Array.isArray(data)) {
+                // Case 3: Array data
+                graphData = data;
+                console.log('Case 3 - Array data:', {
+                    graphData: graphData?.length
+                });
             }
         }
 
-        // Start processing chunks
-        processNextChunk();
+        // Validate extracted data
+        if (!graphData || !Array.isArray(graphData)) {
+            console.error('Invalid or missing graphData:', graphData);
+            showStatus('Error: Invalid graph data received', false);
+            return;
+        }
 
+        // Transform insightsData if needed
+        if (insightsData) {
+            // Ensure all required fields are present with proper types
+            insightsData = {
+                num_total_pages: Number(insightsData.num_total_pages || 0),
+                num_pages: Number(insightsData.num_pages || 0),
+                num_collections: Number(insightsData.num_collections || 0),
+                total_num_collection_views: Number(insightsData.total_num_collection_views || 0),
+                num_public_pages: Number(insightsData.num_public_pages || 0),
+                total_num_integrations: Number(insightsData.total_num_integrations || 0),
+                total_num_members: Number(insightsData.total_num_members || 0),
+                total_num_guests: Number(insightsData.total_num_guests || 0),
+                total_num_teamspaces: Number(insightsData.total_num_teamspaces || 0),
+                num_alive_pages: Number(insightsData.num_alive_pages || 0),
+                num_private_pages: Number(insightsData.num_private_pages || 0),
+                num_alive_blocks: Number(insightsData.num_alive_blocks || 0),
+                num_blocks: Number(insightsData.num_blocks || 0),
+                num_alive_collections: Number(insightsData.num_alive_collections || 0),
+                total_arr: Number(insightsData.total_arr || 0),
+                total_paid_seats: Number(insightsData.total_paid_seats || 0),
+                current_month_blocks: Number(insightsData.current_month_blocks || 0),
+                previous_month_blocks: Number(insightsData.previous_month_blocks || 0),
+                current_month_members: Number(insightsData.current_month_members || 0),
+                previous_month_members: Number(insightsData.previous_month_members || 0),
+                collaborative_pages: Number(insightsData.collaborative_pages || 0),
+                num_permission_groups: Number(insightsData.num_permission_groups || 0)
+            };
+            
+            console.log('Transformed insightsData:', insightsData);
+        }
+
+        // Calculate metrics using reportGenerator
+        const metrics = calculateMetrics(graphData, insightsData);
+        
+        // Log all metrics by category
+        console.log('Calculated Metrics:', {
+            sqlMetrics: {
+                total_pages: metrics.total_pages,
+                page_count: metrics.page_count,
+                collections_count: metrics.collections_count,
+                collection_views: metrics.collection_views,
+                public_pages_count: metrics.public_pages_count,
+                connected_tool_count: metrics.connected_tool_count,
+                total_num_members: metrics.total_num_members,
+                total_num_guests: metrics.total_num_guests,
+                total_num_teamspaces: metrics.total_num_teamspaces,
+                num_alive_pages: metrics.num_alive_pages,
+                num_private_pages: metrics.num_private_pages,
+                num_alive_blocks: metrics.num_alive_blocks,
+                num_blocks: metrics.num_blocks,
+                num_alive_collections: metrics.num_alive_collections,
+                total_arr: metrics.total_arr,
+                total_paid_seats: metrics.total_paid_seats
+            },
+            graphMetrics: {
+                max_depth: metrics.max_depth,
+                avg_depth: metrics.avg_depth,
+                root_pages: metrics.root_pages,
+                orphaned_blocks: metrics.orphaned_blocks,
+                deep_pages_count: metrics.deep_pages_count,
+                template_count: metrics.template_count,
+                linked_database_count: metrics.linked_database_count,
+                duplicate_count: metrics.duplicate_count,
+                bottleneck_count: metrics.bottleneck_count,
+                unfindable_pages: metrics.unfindable_pages
+            }
+        });
+
+        // Generate report
+        const template = `# Workspace Analysis Report
+
+## Overview
+Total Pages: [[total_pages]]
+Active Pages: [[num_alive_pages]]
+Collections: [[collections_count]]
+
+## Usage Metrics
+Total Members: [[total_num_members]]
+Total Guests: [[total_num_guests]]
+Connected Tools: [[connected_tool_count]]
+
+## Growth Metrics
+Growth Rate: [[growth_rate]]%
+Monthly Member Growth: [[monthly_member_growth_rate]]%
+
+## ROI Metrics
+Current Plan Cost: $[[current_plan]]
+Enterprise Plan ROI: [[enterprise_plan_roi]]%`;
+
+        const report = generateReport(template, metrics);
+        console.log('Generated Report:', report);
+
+        // Format and display results HTML
+        resultsContent.innerHTML = formatResults(graphData, insightsData);
+        
+        // Initialize graph
+        const container = document.getElementById('graph-container');
+        if (!container) {
+            console.error('Graph container not found after HTML update');
+            showStatus('Error: Graph container not found', false);
+            return;
+        }
+
+        // Initialize graph
+        initializeGraph(graphData, container);
+        
+        // Scroll results into view
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Force a resize event
+        window.dispatchEvent(new Event('resize'));
+        
     } catch (error) {
         console.error('Error in displayResults:', error);
         showStatus('Error displaying results: ' + error.message, false);
     }
-}
-
-// Helper function to merge metrics from chunks
-function mergeMetrics(metrics1, metrics2) {
-    const merged = { ...metrics1 };
-    for (const [key, value] of Object.entries(metrics2)) {
-        if (typeof value === 'number') {
-            merged[key] = (merged[key] || 0) + value;
-        }
-    }
-    return merged;
-}
-
-// Helper function to transform insights data
-function transformInsightsData(data) {
-    return {
-        num_total_pages: Number(data.num_total_pages || 0),
-        num_pages: Number(data.num_pages || 0),
-        num_collections: Number(data.num_collections || 0),
-        total_num_collection_views: Number(data.total_num_collection_views || 0),
-        num_public_pages: Number(data.num_public_pages || 0),
-        total_num_integrations: Number(data.total_num_integrations || 0),
-        total_num_members: Number(data.total_num_members || 0),
-        total_num_guests: Number(data.total_num_guests || 0),
-        total_num_teamspaces: Number(data.total_num_teamspaces || 0),
-        num_alive_pages: Number(data.num_alive_pages || 0),
-        num_private_pages: Number(data.num_private_pages || 0),
-        num_alive_blocks: Number(data.num_alive_blocks || 0),
-        num_blocks: Number(data.num_blocks || 0),
-        num_alive_collections: Number(data.num_alive_collections || 0),
-        total_arr: Number(data.total_arr || 0),
-        total_paid_seats: Number(data.total_paid_seats || 0),
-        current_month_blocks: Number(data.current_month_blocks || 0),
-        previous_month_blocks: Number(data.previous_month_blocks || 0),
-        current_month_members: Number(data.current_month_members || 0),
-        previous_month_members: Number(data.previous_month_members || 0),
-        collaborative_pages: Number(data.collaborative_pages || 0),
-        num_permission_groups: Number(data.num_permission_groups || 0)
-    };
 }
 
 function formatResults(graphData, insightsData) {
@@ -882,94 +786,150 @@ function drag(simulation) {
         });
 }
 
-// Initialize the force-directed graph with memory optimization
-function initializeGraph(graphData, container, onVisibilityChange) {
+// Initialize the force-directed graph
+function initializeGraph(graphData, container) {
     try {
-        // Clean up any existing graph
-        if (container._cleanup) {
-            container._cleanup();
+        // Validate container
+        if (!container) {
+            console.error('Graph container is null or undefined');
+            return;
         }
-        d3.select(container).selectAll('*').remove();
 
-        // Create SVG container
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-        const svg = d3.select(container)
-            .append('svg')
-            .attr('width', width)
-            .attr('height', height);
+        // Validate graph data
+        if (!graphData || (!Array.isArray(graphData) && !graphData.data?.dataframe_2)) {
+            console.error('Invalid graph data:', graphData);
+            return;
+        }
 
-        // Process nodes with minimal data
-        const nodes = graphData.map(d => ({
-            id: d.ID,
-            type: d.TYPE,
-            text: d.TEXT || 'Untitled',
-            createdTime: d.CREATED_TIME ? new Date(Number(d.CREATED_TIME)) : null,
-            parentId: d.PARENT_ID,
-            depth: d.DEPTH
-        }));
+        // Clear any existing graph
+        container.innerHTML = '';
 
-        // Create links with minimal data
+        // Extract data from the response
+        const df2 = graphData.data?.dataframe_2 || graphData;
+
+        // Validate df2
+        if (!Array.isArray(df2) || df2.length === 0) {
+            console.error('Invalid or empty dataframe_2:', df2);
+            container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
+            return;
+        }
+
+        // Create nodes array with proper date handling
+        const nodes = df2.map(item => {
+            let createdTime = null;
+            
+            // Handle both string and number timestamps
+            if (item.CREATED_TIME) {
+                const timestamp = typeof item.CREATED_TIME === 'string' ? 
+                    Date.parse(item.CREATED_TIME) : 
+                    item.CREATED_TIME;
+                    
+                if (!isNaN(timestamp)) {
+                    const date = new Date(timestamp);
+                    const year = date.getFullYear();
+                    
+                    // Validate year is reasonable
+                    if (year >= 2000 && year <= 2100) {
+                        createdTime = date;
+                    } else {
+                        console.warn(`Invalid year ${year} for node ${item.id}`);
+                    }
+                }
+            }
+            
+            return {
+                id: item.ID || item.id,
+                title: item.TEXT || item.title || item.TYPE || 'Untitled',
+                url: item.URL || item.url,
+                type: item.TYPE || 'page',
+                createdTime: createdTime,
+                parent: item.PARENT_ID || item.parent
+            };
+        });
+
+        // Create links array
         const links = [];
-        const nodeMap = new Map();
-        nodes.forEach(node => nodeMap.set(node.id, node));
-        
         nodes.forEach(node => {
-            if (node.parentId && nodeMap.has(node.parentId)) {
-                links.push({
-                    source: nodeMap.get(node.parentId),
-                    target: node
-                });
+            if (node.parent) {
+                const parentNode = nodes.find(n => n.id === node.parent);
+                if (parentNode) {
+                    links.push({
+                        source: parentNode,
+                        target: node
+                    });
+                }
             }
         });
 
-        // Clear references
-        nodeMap.clear();
-        graphData = null;
+        // Initialize the visualization
+        const width = container.clientWidth || 800;
+        const height = container.clientHeight || 600;
 
-        // Create force simulation
-        const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links).id(d => d.id).distance(50))
-            .force('charge', d3.forceManyBody().strength(-100))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(20));
+        // Create SVG with zoom support
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height)
+            .attr('viewBox', [0, 0, width, height]);
 
-        // Create elements
+        // Add zoom behavior
         const g = svg.append('g');
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+        svg.call(zoom);
+
+        // Create the force simulation
+        const simulation = d3.forceSimulation(nodes)
+            .force('link', d3.forceLink(links)
+                .id(d => d.id)
+                .distance(100))
+            .force('charge', d3.forceManyBody()
+                .strength(-500)
+                .distanceMax(500))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(30))
+            .force('x', d3.forceX(width / 2).strength(0.1))
+            .force('y', d3.forceY(height / 2).strength(0.1))
+            .alphaDecay(0.01)
+            .velocityDecay(0.2);
+
+        // Add links
         const link = g.append('g')
+            .attr('class', 'links')
             .selectAll('line')
             .data(links)
             .join('line')
             .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6);
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 2);
 
+        // Add nodes
         const node = g.append('g')
-            .selectAll('g')
+            .attr('class', 'nodes')
+            .selectAll('circle')
             .data(nodes)
-            .join('g')
-            .call(d3.drag()
-                .on('start', dragstarted)
-                .on('drag', dragged)
-                .on('end', dragended));
+            .join('circle')
+            .attr('r', 8)
+            .attr('fill', d => colorScale(d.type))
+            .call(drag(simulation));
 
-        node.append('circle')
-            .attr('r', 5)
-            .attr('fill', d => getNodeColor(d.type));
+        // Add labels
+        const labels = g.append('g')
+            .attr('class', 'labels')
+            .selectAll('text')
+            .data(nodes)
+            .join('text')
+            .attr('dx', 12)
+            .attr('dy', 4)
+            .text(d => d.title?.substring(0, 20))
+            .style('font-size', '10px')
+            .style('fill', '#666');
 
-        node.append('text')
-            .text(d => d.text)
-            .attr('x', 8)
-            .attr('y', 4)
-            .style('font-size', '10px');
+        // Initialize timeline
+        initializeTimeline(container, nodes, node, link, svg);
 
-        // Add zoom behavior
-        const zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
-            .on('zoom', (event) => g.attr('transform', event.transform));
-        
-        svg.call(zoom);
-
-        // Simulation tick with minimal object creation
+        // Update positions on each tick
         simulation.on('tick', () => {
             link
                 .attr('x1', d => d.source.x)
@@ -977,123 +937,103 @@ function initializeGraph(graphData, container, onVisibilityChange) {
                 .attr('x2', d => d.target.x)
                 .attr('y2', d => d.target.y);
 
-            node.attr('transform', d => `translate(${d.x},${d.y})`);
+            node
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+
+            labels
+                .attr('x', d => d.x)
+                .attr('y', d => d.y);
         });
 
-        // Drag functions
-        function dragstarted(event) {
-            if (!event.active) simulation.alphaTarget(0.3).restart();
-            event.subject.fx = event.subject.x;
-            event.subject.fy = event.subject.y;
-        }
+        // Add tooltips
+        const tooltip = d3.select(container)
+            .append('div')
+            .attr('class', 'tooltip')
+            .style('opacity', 0)
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background-color', 'white')
+            .style('padding', '10px')
+            .style('border-radius', '5px')
+            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+            .style('max-width', '300px')
+            .style('z-index', '1000');
 
-        function dragged(event) {
-            event.subject.fx = event.x;
-            event.subject.fy = event.y;
-        }
+        node.on('mouseover', (event, d) => {
+            // Fix node position during hover
+            d.fx = d.x;
+            d.fy = d.y;
+            
+            // Show tooltip
+            tooltip.transition()
+                .duration(200)
+                .style('opacity', .9);
+                
+            tooltip.html(`
+                <div class="p-2">
+                    <strong class="block text-lg mb-1">${d.title}</strong>
+                    <span class="block text-sm text-gray-500">Type: ${d.type}</span>
+                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
+                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
+                </div>
+            `)
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px');
 
-        function dragended(event) {
-            if (!event.active) simulation.alphaTarget(0);
-            event.subject.fx = null;
-            event.subject.fy = null;
-        }
-
-        // Add time slider
-        const timeRange = d3.extent(nodes, d => d.createdTime);
-        if (timeRange[0] && timeRange[1]) {
-            const sliderContainer = document.createElement('div');
-            Object.assign(sliderContainer.style, {
-                position: 'absolute',
-                bottom: '20px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                width: '80%',
-                background: 'white',
-                padding: '10px',
-                borderRadius: '8px',
-                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            });
-            container.appendChild(sliderContainer);
-
-            const slider = d3.sliderBottom()
-                .min(timeRange[0])
-                .max(timeRange[1])
-                .width(sliderContainer.clientWidth * 0.9)
-                .tickFormat(d3.timeFormat('%Y-%m-%d'))
-                .default(timeRange[1])
-                .on('onchange', val => {
-                    const currentTime = new Date(val);
-                    updateVisibility(currentTime);
-                });
-
-            d3.select(sliderContainer)
-                .append('svg')
-                .attr('width', sliderContainer.clientWidth)
-                .attr('height', 100)
-                .append('g')
-                .attr('transform', 'translate(30,30)')
-                .call(slider);
-        }
-
-        // Visibility update function
-        function updateVisibility(currentTime) {
-            node.style('display', d => {
-                const isVisible = !d.createdTime || d.createdTime <= currentTime;
-                return isVisible ? 'block' : 'none';
+            // Highlight connected nodes
+            const connectedNodes = new Set();
+            links.forEach(l => {
+                if (l.source.id === d.id) connectedNodes.add(l.target.id);
+                if (l.target.id === d.id) connectedNodes.add(l.source.id);
             });
 
-            link.style('display', d => {
-                const sourceVisible = !d.source.createdTime || d.source.createdTime <= currentTime;
-                const targetVisible = !d.target.createdTime || d.target.createdTime <= currentTime;
-                return sourceVisible && targetVisible ? 'block' : 'none';
-            });
+            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.1);
+            link.style('opacity', l => 
+                l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
+            );
+        })
+        .on('mouseout', (event, d) => {
+            // Release fixed position
+            d.fx = null;
+            d.fy = null;
+            
+            // Hide tooltip
+            tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
 
-            if (onVisibilityChange) {
-                const visibleNodes = nodes.filter(n => !n.createdTime || n.createdTime <= currentTime);
-                onVisibilityChange(visibleNodes);
-            }
-        }
+            // Reset node visibility
+            const currentTime = new Date(parseInt(document.getElementById('timelineSlider').value));
+            updateNodesVisibility(currentTime, node, link, nodes);
+        });
 
-        // Initial visibility update
-        if (timeRange[0] && timeRange[1]) {
-            updateVisibility(timeRange[1]);
-        }
-
-        // Return cleanup function
-        return () => {
-            // Stop simulation
-            simulation.stop();
-            
-            // Remove all elements
-            d3.select(container).selectAll('*').remove();
-            
-            // Clear references
-            nodes.length = 0;
-            links.length = 0;
-            
-            // Remove event listeners
-            svg.on('.zoom', null);
-            node.on('.drag', null);
-            
-            // Clear container
-            container.innerHTML = '';
+        // Store data for resize handling
+        container._graphData = {
+            nodes,
+            links,
+            width,
+            height
         };
+
+        // Initial zoom to fit
+        const bounds = g.node().getBBox();
+        const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
+        const translate = [
+            (width - scale * bounds.width) / 2 - scale * bounds.x,
+            (height - scale * bounds.height) / 2 - scale * bounds.y
+        ];
+        svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
+
+        // Start simulation with higher alpha
+        simulation.alpha(1).restart();
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
-        throw error;
+        if (container) {
+            container.innerHTML = '<div class="p-4 text-red-500">Error initializing graph visualization</div>';
+        }
     }
-}
-
-function getNodeColor(type) {
-    const colors = {
-        'page': '#4CAF50',
-        'collection': '#2196F3',
-        'collection_view': '#9C27B0',
-        'template': '#FF9800',
-        'default': '#757575'
-    };
-    return colors[type] || colors.default;
 }
 
 function initializeTimeline(container, nodes, node, link, svg) {

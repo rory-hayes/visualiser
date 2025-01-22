@@ -497,6 +497,12 @@ app.post('/api/hex-results', async (req, res) => {
 
         // Extract and validate dataframe_2 (graph data)
         if (results.data && Array.isArray(results.data.dataframe_2)) {
+            console.log('Processing dataframe_2:', {
+                totalRecords: results.data.dataframe_2.length,
+                sampleDepths: results.data.dataframe_2.slice(0, 5).map(item => item.DEPTH || item.depth),
+                sampleTypes: results.data.dataframe_2.slice(0, 5).map(item => item.TYPE || item.type)
+            });
+
             transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
                 ID: item.ID || item.id || '',
                 TYPE: item.TYPE || item.type || '',
@@ -511,12 +517,25 @@ app.post('/api/hex-results', async (req, res) => {
             }));
 
             // Calculate depth-related metrics
-            const depths = transformedData.data.dataframe_2.map(item => item.DEPTH);
-            const pageDepths = transformedData.data.dataframe_2.map(item => item.PAGE_DEPTH);
-            const maxDepth = Math.max(...depths);
-            const maxPageDepth = Math.max(...pageDepths);
-            const avgDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
-            const avgPageDepth = pageDepths.reduce((a, b) => a + b, 0) / pageDepths.length;
+            const depths = transformedData.data.dataframe_2.map(item => item.DEPTH).filter(d => !isNaN(d));
+            const pageDepths = transformedData.data.dataframe_2.map(item => item.PAGE_DEPTH).filter(d => !isNaN(d));
+            const maxDepth = depths.length > 0 ? Math.max(...depths) : 0;
+            const maxPageDepth = pageDepths.length > 0 ? Math.max(...pageDepths) : 0;
+            const avgDepth = depths.length > 0 ? depths.reduce((a, b) => a + b, 0) / depths.length : 0;
+            const avgPageDepth = pageDepths.length > 0 ? pageDepths.reduce((a, b) => a + b, 0) / pageDepths.length : 0;
+
+            // Count pages and other metrics
+            const pageCount = transformedData.data.dataframe_2.filter(item => 
+                (item.TYPE || '').toLowerCase() === 'page'
+            ).length;
+
+            console.log('Calculated metrics from dataframe_2:', {
+                depths: depths.slice(0, 5),
+                maxDepth,
+                avgDepth,
+                pageCount,
+                totalRecords: transformedData.data.dataframe_2.length
+            });
 
             // Add calculated metrics to dataframe_3
             if (!transformedData.data.dataframe_3) {
@@ -529,21 +548,40 @@ app.post('/api/hex-results', async (req, res) => {
                 max_page_depth: maxPageDepth,
                 avg_depth: avgDepth,
                 avg_page_depth: avgPageDepth,
-                nav_depth_score: maxDepth > 0 ? (1 - (avgDepth / maxDepth)) * 100 : 0
+                nav_depth_score: maxDepth > 0 ? (1 - (avgDepth / maxDepth)) * 100 : 0,
+                total_pages: pageCount, // Set total_pages based on actual count
+                page_count: pageCount   // Ensure consistency
             };
         }
 
         // Extract and validate dataframe_3 (metrics)
         if (results.data && results.data.dataframe_3) {
             const df3 = results.data.dataframe_3;
+            console.log('Processing dataframe_3:', {
+                rawKeys: Object.keys(df3),
+                sampleValues: {
+                    num_total_pages: df3.num_total_pages || df3.NUM_TOTAL_PAGES,
+                    total_num_integrations: df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS,
+                    total_num_internal_bots: df3.total_num_internal_bots || df3.TOTAL_NUM_INTERNAL_BOTS
+                }
+            });
+
             transformedData.data.dataframe_3 = {
                 ...transformedData.data.dataframe_3,  // Keep the depth metrics we calculated
                 // Page metrics
-                num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || 0),
-                num_pages: Number(df3.num_pages || df3.NUM_PAGES || 0),
+                num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || transformedData.data.dataframe_3.total_pages || 0),
+                num_pages: Number(df3.num_pages || df3.NUM_PAGES || transformedData.data.dataframe_3.total_pages || 0),
                 num_alive_pages: Number(df3.num_alive_pages || df3.NUM_ALIVE_PAGES || 0),
                 num_public_pages: Number(df3.num_public_pages || df3.NUM_PUBLIC_PAGES || 0),
                 num_private_pages: Number(df3.num_private_pages || df3.NUM_PRIVATE_PAGES || 0),
+
+                // Integration metrics (combined)
+                total_num_integrations: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
+                total_num_bots: Number(df3.total_num_bots || df3.TOTAL_NUM_BOTS || 0),
+                total_num_internal_bots: Number(df3.total_num_internal_bots || df3.TOTAL_NUM_INTERNAL_BOTS || 0),
+                total_num_public_bots: Number(df3.total_num_public_bots || df3.TOTAL_NUM_PUBLIC_BOTS || 0),
+                total_num_public_integrations: Number(df3.total_num_public_integrations || df3.TOTAL_NUM_PUBLIC_INTEGRATIONS || 0),
+                connected_tool_count: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0), // Match with total integrations
 
                 // Block metrics
                 num_blocks: Number(df3.num_blocks || df3.NUM_BLOCKS || 0),
@@ -563,10 +601,6 @@ app.post('/api/hex-results', async (req, res) => {
                 current_month_members: Number(df3.current_month_members || df3.CURRENT_MONTH_MEMBERS || 0),
                 previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0),
 
-                // Integration metrics
-                total_num_integrations: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
-                total_num_bots: Number(df3.total_num_bots || df3.TOTAL_NUM_BOTS || 0),
-
                 // Business metrics
                 total_arr: Number(df3.total_arr || df3.TOTAL_ARR || 0),
                 total_paid_seats: Number(df3.total_paid_seats || df3.TOTAL_PAID_SEATS || 0),
@@ -577,11 +611,17 @@ app.post('/api/hex-results', async (req, res) => {
             };
         }
 
-        console.log('Transformed data:', {
-            hasDataframe2: transformedData.data.dataframe_2.length > 0,
-            dataframe2Length: transformedData.data.dataframe_2.length,
-            hasDataframe3: Object.keys(transformedData.data.dataframe_3).length > 0,
-            dataframe3Keys: Object.keys(transformedData.data.dataframe_3)
+        console.log('Final transformed metrics:', {
+            total_pages: transformedData.data.dataframe_3.total_pages,
+            page_count: transformedData.data.dataframe_3.page_count,
+            num_alive_pages: transformedData.data.dataframe_3.num_alive_pages,
+            avg_depth: transformedData.data.dataframe_3.avg_depth,
+            connected_tools: {
+                total_integrations: transformedData.data.dataframe_3.total_num_integrations,
+                internal_bots: transformedData.data.dataframe_3.total_num_internal_bots,
+                public_integrations: transformedData.data.dataframe_3.total_num_public_integrations,
+                connected_tool_count: transformedData.data.dataframe_3.connected_tool_count
+            }
         });
 
         // Store the transformed results

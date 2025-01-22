@@ -481,14 +481,13 @@ app.post('/api/generate-report', async (req, res) => {
 app.post('/api/hex-results', async (req, res) => {
     try {
         const results = req.body;
-        
-        // Early validation to prevent processing invalid data
-        if (!results?.data?.dataframe_2 || !Array.isArray(results.data.dataframe_2)) {
-            throw new Error('Invalid or missing dataframe_2');
-        }
+        console.log('Received raw request body:', {
+            hasData: !!results.data,
+            dataframe2Length: results.data?.dataframe_2?.length,
+            dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
+        });
 
-        // Process data in chunks to avoid memory issues
-        const CHUNK_SIZE = 1000;
+        // Transform and validate the data
         let transformedData = {
             data: {
                 dataframe_2: [],
@@ -496,94 +495,32 @@ app.post('/api/hex-results', async (req, res) => {
             }
         };
 
-        // Process dataframe_2 in chunks
-        const df2 = results.data.dataframe_2;
-        for (let i = 0; i < df2.length; i += CHUNK_SIZE) {
-            const chunk = df2.slice(i, i + CHUNK_SIZE);
-            const processedChunk = chunk.map(item => {
-                // Parse ANCESTORS if it's a string
-                let ancestors = item.ANCESTORS || item.ancestors || [];
-                if (typeof ancestors === 'string') {
-                    try {
-                        ancestors = JSON.parse(ancestors);
-                    } catch (e) {
-                        ancestors = [];
-                    }
-                }
-                
-                return {
-                    ID: item.ID || item.id || '',
-                    TYPE: item.TYPE || item.type || '',
-                    PARENT_ID: item.PARENT_ID || item.parent_id || '',
-                    SPACE_ID: item.SPACE_ID || item.space_id || '',
-                    ANCESTORS: ancestors,
-                    DEPTH: Number(item.DEPTH || item.depth || 0),
-                    PAGE_DEPTH: Number(item.PAGE_DEPTH || item.page_depth || 0),
-                    PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',
-                    TEXT: item.TEXT || item.text || '',
-                    CREATED_TIME: item.CREATED_TIME || item.created_time || ''
-                };
-            });
-            transformedData.data.dataframe_2.push(...processedChunk);
+        // Extract and validate dataframe_2 (graph data)
+        if (results.data && Array.isArray(results.data.dataframe_2)) {
+            transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
+                ID: item.ID || item.id || '',
+                TYPE: item.TYPE || item.type || '',
+                PARENT_ID: item.PARENT_ID || item.parent_id || '',
+                SPACE_ID: item.SPACE_ID || item.space_id || '',
+                ANCESTORS: item.ANCESTORS || item.ancestors || [],
+                DEPTH: Number(item.DEPTH || item.depth || 0),
+                PAGE_DEPTH: Number(item.PAGE_DEPTH || item.page_depth || 0),
+                PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',
+                TEXT: item.TEXT || item.text || '',
+                CREATED_TIME: item.CREATED_TIME || item.created_time || ''
+            }));
         }
 
-        // Calculate metrics efficiently
-        const metrics = transformedData.data.dataframe_2.reduce((acc, item) => {
-            // Update depths
-            if (!isNaN(item.DEPTH)) {
-                acc.depths.push(item.DEPTH);
-                acc.depthSum += item.DEPTH;
-            }
-            if (!isNaN(item.PAGE_DEPTH)) {
-                acc.pageDepths.push(item.PAGE_DEPTH);
-                acc.pageDepthSum += item.PAGE_DEPTH;
-            }
-            // Count pages
-            if ((item.TYPE || '').toLowerCase() === 'page') {
-                acc.pageCount++;
-            }
-            return acc;
-        }, {
-            depths: [],
-            pageDepths: [],
-            depthSum: 0,
-            pageDepthSum: 0,
-            pageCount: 0
-        });
-
-        // Calculate final metrics
-        const maxDepth = metrics.depths.length > 0 ? Math.max(...metrics.depths) : 0;
-        const avgDepth = metrics.depths.length > 0 ? metrics.depthSum / metrics.depths.length : 0;
-        const maxPageDepth = metrics.pageDepths.length > 0 ? Math.max(...metrics.pageDepths) : 0;
-        const avgPageDepth = metrics.pageDepths.length > 0 ? metrics.pageDepthSum / metrics.pageDepths.length : 0;
-
-        // Process dataframe_3
-        if (results.data?.dataframe_3) {
+        // Extract and validate dataframe_3 (metrics)
+        if (results.data && results.data.dataframe_3) {
             const df3 = results.data.dataframe_3;
             transformedData.data.dataframe_3 = {
-                // Calculated metrics
-                max_depth: maxDepth,
-                max_page_depth: maxPageDepth,
-                avg_depth: avgDepth,
-                avg_page_depth: avgPageDepth,
-                nav_depth_score: maxDepth > 0 ? (1 - (avgDepth / maxDepth)) * 100 : 0,
-                total_pages: metrics.pageCount,
-                page_count: metrics.pageCount,
-
                 // Page metrics
-                num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || metrics.pageCount || 0),
-                num_pages: Number(df3.num_pages || df3.NUM_PAGES || metrics.pageCount || 0),
+                num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || 0),
+                num_pages: Number(df3.num_pages || df3.NUM_PAGES || 0),
                 num_alive_pages: Number(df3.num_alive_pages || df3.NUM_ALIVE_PAGES || 0),
                 num_public_pages: Number(df3.num_public_pages || df3.NUM_PUBLIC_PAGES || 0),
                 num_private_pages: Number(df3.num_private_pages || df3.NUM_PRIVATE_PAGES || 0),
-
-                // Integration metrics
-                total_num_integrations: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
-                total_num_bots: Number(df3.total_num_bots || df3.TOTAL_NUM_BOTS || 0),
-                total_num_internal_bots: Number(df3.total_num_internal_bots || df3.TOTAL_NUM_INTERNAL_BOTS || 0),
-                total_num_public_bots: Number(df3.total_num_public_bots || df3.TOTAL_NUM_PUBLIC_BOTS || 0),
-                total_num_public_integrations: Number(df3.total_num_public_integrations || df3.TOTAL_NUM_PUBLIC_INTEGRATIONS || 0),
-                connected_tool_count: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
 
                 // Block metrics
                 num_blocks: Number(df3.num_blocks || df3.NUM_BLOCKS || 0),
@@ -603,6 +540,10 @@ app.post('/api/hex-results', async (req, res) => {
                 current_month_members: Number(df3.current_month_members || df3.CURRENT_MONTH_MEMBERS || 0),
                 previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0),
 
+                // Integration metrics
+                total_num_integrations: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
+                total_num_bots: Number(df3.total_num_bots || df3.TOTAL_NUM_BOTS || 0),
+
                 // Business metrics
                 total_arr: Number(df3.total_arr || df3.TOTAL_ARR || 0),
                 total_paid_seats: Number(df3.total_paid_seats || df3.TOTAL_PAID_SEATS || 0),
@@ -613,17 +554,22 @@ app.post('/api/hex-results', async (req, res) => {
             };
         }
 
-        // Store results
+        console.log('Transformed data:', {
+            hasDataframe2: transformedData.data.dataframe_2.length > 0,
+            dataframe2Length: transformedData.data.dataframe_2.length,
+            hasDataframe3: Object.keys(transformedData.data.dataframe_3).length > 0,
+            dataframe3Keys: Object.keys(transformedData.data.dataframe_3)
+        });
+
+        // Store the transformed results
         const storedData = {
             timestamp: new Date(),
             data: transformedData.data,
             metadata: results.metadata || {}
         };
+        saveResults(storedData);
         
-        // Save results before notifying clients
-        await saveResults(storedData);
-        
-        // Notify clients
+        // Notify all connected clients
         if (connectedClients.size > 0) {
             const eventData = JSON.stringify({
                 success: true,
@@ -632,11 +578,8 @@ app.post('/api/hex-results', async (req, res) => {
             connectedClients.forEach(client => {
                 client.write(`data: ${eventData}\n\n`);
             });
+            console.log('Notified connected clients:', connectedClients.size);
         }
-        
-        // Clean up
-        results = null;
-        transformedData = null;
         
         res.json({ success: true });
     } catch (error) {

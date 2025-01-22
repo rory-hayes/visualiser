@@ -246,8 +246,10 @@ function processMetricsInChunks(graphData, insightsData, onComplete) {
 // Modified displayResults function with chunked processing
 function displayResults(data) {
     try {
-        console.log('Starting displayResults');
+        console.log('Starting displayResults with data size:', JSON.stringify(data).length);
         resultsSection.classList.remove('hidden');
+        
+        // Clear any existing content and show loading state
         resultsContent.innerHTML = `
             <div class="workspace-metrics-box">
                 <h3>Workspace Metrics</h3>
@@ -255,24 +257,25 @@ function displayResults(data) {
                     Nodes in view: <span id="nodes-count">0</span>
                 </div>
             </div>
-            <div id="loading-indicator">Processing data...</div>
-            <div id="graph-container"></div>
+            <div id="loading-indicator" class="text-center p-4">Processing data...</div>
+            <div id="graph-container" style="display: none;"></div>
         `;
 
-        // Extract data
+        // Extract and validate data
         let graphData = null;
         let insightsData = null;
-        
+
         if (data?.data) {
             graphData = data.data.dataframe_2;
             insightsData = data.data.dataframe_3;
-            // Clear references
+            // Clear references immediately
             delete data.data.dataframe_2;
             delete data.data.dataframe_3;
+            data.data = null;
         } else if (data?.dataframe_2 || data?.dataframe_3) {
             graphData = data.dataframe_2;
             insightsData = data.dataframe_3;
-            // Clear references
+            // Clear references immediately
             delete data.dataframe_2;
             delete data.dataframe_3;
         }
@@ -294,8 +297,8 @@ function displayResults(data) {
             return;
         }
 
-        // Process data in chunks
-        const chunkSize = 1000;
+        // Process data in smaller chunks
+        const chunkSize = 500; // Reduced chunk size
         const totalChunks = Math.ceil(graphData.length / chunkSize);
         let processedChunks = 0;
         let processedNodes = [];
@@ -328,55 +331,56 @@ function displayResults(data) {
             chunk.length = 0;
 
             if (processedChunks < totalChunks) {
-                // Process next chunk
-                setTimeout(processNextChunk, 0);
+                // Process next chunk with delay
+                setTimeout(processNextChunk, 10);
             } else {
-                // All chunks processed, initialize graph
+                // All chunks processed
                 loadingIndicator.textContent = 'Initializing graph...';
-                setTimeout(() => {
-                    try {
-                        container.style.display = 'block';
-                        const cleanup = initializeGraph(processedNodes, container, (visibleNodes) => {
-                            const nodesCountElement = document.getElementById('nodes-count');
-                            if (nodesCountElement) {
-                                nodesCountElement.textContent = visibleNodes.length;
-                            }
-                        });
-
-                        // Store cleanup function
-                        container._cleanup = cleanup;
-                        
-                        loadingIndicator.style.display = 'none';
-
-                        // Process metrics
-                        if (insightsData) {
-                            const metrics = calculateMetrics(processedNodes, insightsData);
-                            const report = generateReport(template, metrics);
-                            
-                            // Store minimal results
-                            window._lastResults = { metrics, report };
-
-                            // Log to server
-                            fetch('/api/log-data', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    type: 'final-results',
-                                    data: { metrics, report }
-                                })
-                            }).catch(console.error);
+                
+                // Clear original data
+                graphData = null;
+                
+                // Show container and initialize graph
+                container.style.display = 'block';
+                
+                try {
+                    const cleanup = initializeGraph(processedNodes, container, (visibleNodes) => {
+                        const nodesCountElement = document.getElementById('nodes-count');
+                        if (nodesCountElement) {
+                            nodesCountElement.textContent = visibleNodes.length;
                         }
+                    });
 
-                        // Clear references
-                        graphData = null;
-                        insightsData = null;
-                        processedNodes = null;
+                    // Store cleanup function
+                    container._cleanup = cleanup;
+                    
+                    // Hide loading indicator
+                    loadingIndicator.style.display = 'none';
 
-                    } catch (error) {
-                        console.error('Error initializing graph:', error);
-                        loadingIndicator.innerHTML = 'Error loading graph visualization. Please try again.';
+                    // Process metrics if needed
+                    if (insightsData) {
+                        const metrics = calculateMetrics(processedNodes, insightsData);
+                        // Store minimal results
+                        window._lastResults = {
+                            metrics: {
+                                total_pages: metrics.total_pages,
+                                num_alive_pages: metrics.num_alive_pages,
+                                total_num_members: metrics.total_num_members
+                            }
+                        };
                     }
-                }, 100);
+
+                    // Clear references
+                    processedNodes = null;
+                    insightsData = null;
+
+                } catch (error) {
+                    console.error('Error initializing graph:', error);
+                    loadingIndicator.textContent = 'Error loading graph visualization';
+                    // Clear references on error
+                    processedNodes = null;
+                    insightsData = null;
+                }
             }
         }
 

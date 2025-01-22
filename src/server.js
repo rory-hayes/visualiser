@@ -581,41 +581,36 @@ const connectedClients = new Set();
 
 // Add SSE endpoint for streaming results
 app.get('/api/hex-results/stream', (req, res) => {
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-    });
+    try {
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
 
-    res.write('data: {"type":"connected"}\n\n');
-    connectedClients.add(res);
+        // Send stored results if available
+        if (storedResults) {
+            const dataSize = JSON.stringify(storedResults).length;
+            console.log(`Sending stored results (${dataSize} bytes)`);
+            
+            res.write(`data: ${JSON.stringify({
+                success: true,
+                data: storedResults
+            })}\n\n`);
 
-    const results = loadResults();
-    if (results && results.data) {
-        console.log('Sending stored results via SSE:', {
-            hasDataframe2: results.data.dataframe_2?.length > 0,
-            dataframe2Length: results.data.dataframe_2?.length,
-            hasDataframe3: Object.keys(results.data.dataframe_3 || {}).length > 0,
-            dataframe3Keys: Object.keys(results.data.dataframe_3 || {})
-        });
+            // Clear stored results after sending
+            storedResults = null;
+        } else {
+            console.log('No stored results available');
+            res.write(`data: ${JSON.stringify({
+                success: false,
+                error: 'No results available'
+            })}\n\n`);
+        }
 
-        const eventData = JSON.stringify({
-            success: true,
-            data: {
-                data: {
-                    dataframe_2: results.data.dataframe_2 || [],
-                    dataframe_3: results.data.dataframe_3 || {}
-                }
-            }
-        });
-        res.write(`data: ${eventData}\n\n`);
-    } else {
-        console.log('No stored results available');
+        res.end();
+    } catch (error) {
+        console.error('Error in stream endpoint:', error);
+        res.status(500).json({ error: 'Stream error' });
     }
-
-    req.on('close', () => {
-        connectedClients.delete(res);
-    });
 });
 
 // Add an endpoint to fetch results
@@ -733,6 +728,39 @@ app.get('/api/logs', (req, res) => {
     } catch (error) {
         console.error('Error reading logs:', error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Add at the top of the file
+const MAX_RESULTS_SIZE = 50 * 1024 * 1024; // 50MB limit
+let storedResults = null;
+
+// Replace or add the results storage endpoint
+app.post('/api/store-results', (req, res) => {
+    try {
+        // Clear previous results
+        if (storedResults) {
+            storedResults = null;
+        }
+
+        const data = req.body;
+        const dataSize = JSON.stringify(data).length;
+
+        if (dataSize > MAX_RESULTS_SIZE) {
+            console.warn(`Data size (${dataSize} bytes) exceeds limit (${MAX_RESULTS_SIZE} bytes)`);
+            return res.status(413).json({ error: 'Data size too large' });
+        }
+
+        // Store new results
+        storedResults = data;
+
+        // Log storage
+        console.log(`Stored results: ${dataSize} bytes`);
+        
+        res.json({ success: true, size: dataSize });
+    } catch (error) {
+        console.error('Error storing results:', error);
+        res.status(500).json({ error: 'Failed to store results' });
     }
 });
 

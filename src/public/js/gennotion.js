@@ -187,27 +187,13 @@ function displayResults(data) {
         // Handle different data structures
         if (data && typeof data === 'object') {
             if (data.data) {
-                // Case 1: Nested under data property
                 graphData = data.data.dataframe_2 || [];
                 insightsData = data.data.dataframe_3 || {};
-                console.log('Case 1 - Data from data property:', {
-                    graphData: graphData?.length,
-                    insightsData: Object.keys(insightsData)
-                });
             } else if (data.dataframe_2 || data.dataframe_3) {
-                // Case 2: Direct properties
                 graphData = data.dataframe_2 || [];
-                insightsData = data.dataframe_3 || {};
-                console.log('Case 2 - Direct data properties:', {
-                    graphData: graphData?.length,
-                    insightsData: Object.keys(insightsData)
-                });
+                insightsData = data.data.dataframe_3 || {};
             } else if (Array.isArray(data)) {
-                // Case 3: Array data
                 graphData = data;
-                console.log('Case 3 - Array data:', {
-                    graphData: graphData?.length
-                });
             }
         }
 
@@ -220,73 +206,15 @@ function displayResults(data) {
 
         // Transform insightsData if needed
         if (insightsData) {
-            // Ensure all required fields are present with proper types
-            insightsData = {
-                num_total_pages: Number(insightsData.num_total_pages || 0),
-                num_pages: Number(insightsData.num_pages || 0),
-                num_collections: Number(insightsData.num_collections || 0),
-                total_num_collection_views: Number(insightsData.total_num_collection_views || 0),
-                num_public_pages: Number(insightsData.num_public_pages || 0),
-                total_num_integrations: Number(insightsData.total_num_integrations || 0),
-                total_num_members: Number(insightsData.total_num_members || 0),
-                total_num_guests: Number(insightsData.total_num_guests || 0),
-                total_num_teamspaces: Number(insightsData.total_num_teamspaces || 0),
-                num_alive_pages: Number(insightsData.num_alive_pages || 0),
-                num_private_pages: Number(insightsData.num_private_pages || 0),
-                num_alive_blocks: Number(insightsData.num_alive_blocks || 0),
-                num_blocks: Number(insightsData.num_blocks || 0),
-                num_alive_collections: Number(insightsData.num_alive_collections || 0),
-                total_arr: Number(insightsData.total_arr || 0),
-                total_paid_seats: Number(insightsData.total_paid_seats || 0),
-                current_month_blocks: Number(insightsData.current_month_blocks || 0),
-                previous_month_blocks: Number(insightsData.previous_month_blocks || 0),
-                current_month_members: Number(insightsData.current_month_members || 0),
-                previous_month_members: Number(insightsData.previous_month_members || 0),
-                collaborative_pages: Number(insightsData.collaborative_pages || 0),
-                num_permission_groups: Number(insightsData.num_permission_groups || 0)
-            };
-            
+            insightsData = transformInsightsData(insightsData);
             console.log('Transformed insightsData:', insightsData);
         }
 
-        // Calculate metrics using reportGenerator
+        // Calculate metrics using reportGenerator (but don't display)
         const metrics = calculateMetrics(graphData, insightsData);
-        
-        // Log all metrics by category
-        console.log('Calculated Metrics:', {
-            sqlMetrics: {
-                total_pages: metrics.total_pages,
-                page_count: metrics.page_count,
-                collections_count: metrics.collections_count,
-                collection_views: metrics.collection_views,
-                public_pages_count: metrics.public_pages_count,
-                connected_tool_count: metrics.connected_tool_count,
-                total_num_members: metrics.total_num_members,
-                total_num_guests: metrics.total_num_guests,
-                total_num_teamspaces: metrics.total_num_teamspaces,
-                num_alive_pages: metrics.num_alive_pages,
-                num_private_pages: metrics.num_private_pages,
-                num_alive_blocks: metrics.num_alive_blocks,
-                num_blocks: metrics.num_blocks,
-                num_alive_collections: metrics.num_alive_collections,
-                total_arr: metrics.total_arr,
-                total_paid_seats: metrics.total_paid_seats
-            },
-            graphMetrics: {
-                max_depth: metrics.max_depth,
-                avg_depth: metrics.avg_depth,
-                root_pages: metrics.root_pages,
-                orphaned_blocks: metrics.orphaned_blocks,
-                deep_pages_count: metrics.deep_pages_count,
-                template_count: metrics.template_count,
-                linked_database_count: metrics.linked_database_count,
-                duplicate_count: metrics.duplicate_count,
-                bottleneck_count: metrics.bottleneck_count,
-                unfindable_pages: metrics.unfindable_pages
-            }
-        });
+        console.log('Calculated Metrics:', metrics);
 
-        // Generate report
+        // Generate report (but don't display)
         const template = `# Workspace Analysis Report
 
 ## Overview
@@ -310,8 +238,16 @@ Enterprise Plan ROI: [[enterprise_plan_roi]]%`;
         const report = generateReport(template, metrics);
         console.log('Generated Report:', report);
 
-        // Format and display results HTML
-        resultsContent.innerHTML = formatResults(graphData, insightsData);
+        // Only display graph container and workspace metrics
+        resultsContent.innerHTML = `
+            <div class="workspace-metrics-box" style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <h3 style="margin: 0 0 10px 0; color: #333;">Workspace Metrics</h3>
+                <div id="current-nodes-count" style="font-size: 16px; color: #666;">
+                    Nodes in view: <span id="nodes-count">0</span>
+                </div>
+            </div>
+            <div id="graph-container" style="width: 100%; height: 800px; border: 1px solid #ddd; border-radius: 8px;"></div>
+        `;
         
         // Initialize graph
         const container = document.getElementById('graph-container');
@@ -321,8 +257,37 @@ Enterprise Plan ROI: [[enterprise_plan_roi]]%`;
             return;
         }
 
-        // Initialize graph
-        initializeGraph(graphData, container);
+        // Initialize graph with callback for slider updates
+        initializeGraph(graphData, container, (visibleNodes) => {
+            // Update workspace metrics when nodes visibility changes
+            const nodesCountElement = document.getElementById('nodes-count');
+            if (nodesCountElement) {
+                nodesCountElement.textContent = visibleNodes.length;
+            }
+        });
+        
+        // Store the results for later use if needed
+        window._lastResults = {
+            graphData,
+            insightsData,
+            metrics,
+            report
+        };
+
+        // Log data to server
+        fetch('/api/log-data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                type: 'final-results',
+                data: {
+                    metrics,
+                    report
+                }
+            })
+        }).catch(err => console.error('Error logging results:', err));
         
         // Scroll results into view
         resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -334,6 +299,34 @@ Enterprise Plan ROI: [[enterprise_plan_roi]]%`;
         console.error('Error in displayResults:', error);
         showStatus('Error displaying results: ' + error.message, false);
     }
+}
+
+// Helper function to transform insights data
+function transformInsightsData(data) {
+    return {
+        num_total_pages: Number(data.num_total_pages || 0),
+        num_pages: Number(data.num_pages || 0),
+        num_collections: Number(data.num_collections || 0),
+        total_num_collection_views: Number(data.total_num_collection_views || 0),
+        num_public_pages: Number(data.num_public_pages || 0),
+        total_num_integrations: Number(data.total_num_integrations || 0),
+        total_num_members: Number(data.total_num_members || 0),
+        total_num_guests: Number(data.total_num_guests || 0),
+        total_num_teamspaces: Number(data.total_num_teamspaces || 0),
+        num_alive_pages: Number(data.num_alive_pages || 0),
+        num_private_pages: Number(data.num_private_pages || 0),
+        num_alive_blocks: Number(data.num_alive_blocks || 0),
+        num_blocks: Number(data.num_blocks || 0),
+        num_alive_collections: Number(data.num_alive_collections || 0),
+        total_arr: Number(data.total_arr || 0),
+        total_paid_seats: Number(data.total_paid_seats || 0),
+        current_month_blocks: Number(data.current_month_blocks || 0),
+        previous_month_blocks: Number(data.previous_month_blocks || 0),
+        current_month_members: Number(data.current_month_members || 0),
+        previous_month_members: Number(data.previous_month_members || 0),
+        collaborative_pages: Number(data.collaborative_pages || 0),
+        num_permission_groups: Number(data.num_permission_groups || 0)
+    };
 }
 
 function formatResults(graphData, insightsData) {
@@ -787,149 +780,139 @@ function drag(simulation) {
 }
 
 // Initialize the force-directed graph
-function initializeGraph(graphData, container) {
+function initializeGraph(graphData, container, onVisibilityChange) {
     try {
-        // Validate container
         if (!container) {
-            console.error('Graph container is null or undefined');
-            return;
-        }
-
-        // Validate graph data
-        if (!graphData || (!Array.isArray(graphData) && !graphData.data?.dataframe_2)) {
-            console.error('Invalid graph data:', graphData);
-            return;
+            throw new Error('Container element not found');
         }
 
         // Clear any existing graph
         container.innerHTML = '';
 
-        // Extract data from the response
-        const df2 = graphData.data?.dataframe_2 || graphData;
-
-        // Validate df2
-        if (!Array.isArray(df2) || df2.length === 0) {
-            console.error('Invalid or empty dataframe_2:', df2);
-            container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
-            return;
-        }
-
-        // Create nodes array with proper date handling
-        const nodes = df2.map(item => {
-            let createdTime = null;
-            
-            // Handle both string and number timestamps
-            if (item.CREATED_TIME) {
-                const timestamp = typeof item.CREATED_TIME === 'string' ? 
-                    Date.parse(item.CREATED_TIME) : 
-                    item.CREATED_TIME;
-                    
-                if (!isNaN(timestamp)) {
-                    const date = new Date(timestamp);
-                    const year = date.getFullYear();
-                    
-                    // Validate year is reasonable
-                    if (year >= 2000 && year <= 2100) {
-                        createdTime = date;
-                    } else {
-                        console.warn(`Invalid year ${year} for node ${item.id}`);
-                    }
-                }
-            }
-            
-            return {
-                id: item.ID || item.id,
-                title: item.TEXT || item.title || item.TYPE || 'Untitled',
-                url: item.URL || item.url,
-                type: item.TYPE || 'page',
-                createdTime: createdTime,
-                parent: item.PARENT_ID || item.parent
-            };
-        });
-
-        // Create links array
-        const links = [];
-        nodes.forEach(node => {
-            if (node.parent) {
-                const parentNode = nodes.find(n => n.id === node.parent);
-                if (parentNode) {
-                    links.push({
-                        source: parentNode,
-                        target: node
-                    });
-                }
-            }
-        });
-
-        // Initialize the visualization
-        const width = container.clientWidth || 800;
-        const height = container.clientHeight || 600;
-
-        // Create SVG with zoom support
+        // Create SVG container
+        const width = container.clientWidth;
+        const height = container.clientHeight;
         const svg = d3.select(container)
             .append('svg')
             .attr('width', width)
-            .attr('height', height)
-            .attr('viewBox', [0, 0, width, height]);
+            .attr('height', height);
 
         // Add zoom behavior
         const g = svg.append('g');
-        const zoom = d3.zoom()
+        svg.call(d3.zoom()
             .scaleExtent([0.1, 4])
-            .on('zoom', (event) => g.attr('transform', event.transform));
-        svg.call(zoom);
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            }));
 
-        // Create the force simulation
+        // Process nodes and links
+        const nodes = graphData.map(d => ({
+            id: d.ID,
+            type: d.TYPE,
+            text: d.TEXT || 'Untitled',
+            createdTime: new Date(Number(d.CREATED_TIME)),
+            parentId: d.PARENT_ID,
+            depth: d.DEPTH
+        }));
+
+        const links = graphData
+            .filter(d => d.PARENT_ID)
+            .map(d => ({
+                source: d.PARENT_ID,
+                target: d.ID
+            }));
+
+        // Create force simulation
         const simulation = d3.forceSimulation(nodes)
-            .force('link', d3.forceLink(links)
-                .id(d => d.id)
-                .distance(100))
-            .force('charge', d3.forceManyBody()
-                .strength(-500)
-                .distanceMax(500))
+            .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+            .force('charge', d3.forceManyBody().strength(-300))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30))
-            .force('x', d3.forceX(width / 2).strength(0.1))
-            .force('y', d3.forceY(height / 2).strength(0.1))
-            .alphaDecay(0.01)
-            .velocityDecay(0.2);
+            .force('collision', d3.forceCollide().radius(30));
 
-        // Add links
+        // Create links
         const link = g.append('g')
-            .attr('class', 'links')
             .selectAll('line')
             .data(links)
             .join('line')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 2);
+            .attr('stroke-width', 1);
 
-        // Add nodes
+        // Create nodes
         const node = g.append('g')
-            .attr('class', 'nodes')
-            .selectAll('circle')
+            .selectAll('g')
             .data(nodes)
-            .join('circle')
-            .attr('r', 8)
-            .attr('fill', d => colorScale(d.type))
-            .call(drag(simulation));
+            .join('g')
+            .call(d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended));
 
-        // Add labels
-        const labels = g.append('g')
-            .attr('class', 'labels')
-            .selectAll('text')
-            .data(nodes)
-            .join('text')
-            .attr('dx', 12)
-            .attr('dy', 4)
-            .text(d => d.title?.substring(0, 20))
-            .style('font-size', '10px')
-            .style('fill', '#666');
+        // Add circles to nodes
+        node.append('circle')
+            .attr('r', 5)
+            .attr('fill', d => getNodeColor(d.type));
 
-        // Initialize timeline
-        initializeTimeline(container, nodes, node, link, svg);
+        // Add labels to nodes
+        node.append('text')
+            .text(d => d.text)
+            .attr('x', 8)
+            .attr('y', 4)
+            .style('font-size', '10px');
 
-        // Update positions on each tick
+        // Add time slider
+        const timeRange = d3.extent(nodes, d => d.createdTime);
+        const sliderContainer = container.appendChild(document.createElement('div'));
+        sliderContainer.style.position = 'absolute';
+        sliderContainer.style.bottom = '20px';
+        sliderContainer.style.left = '50%';
+        sliderContainer.style.transform = 'translateX(-50%)';
+        sliderContainer.style.width = '80%';
+        sliderContainer.style.background = 'white';
+        sliderContainer.style.padding = '10px';
+        sliderContainer.style.borderRadius = '8px';
+        sliderContainer.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+
+        const slider = d3.sliderBottom()
+            .min(timeRange[0])
+            .max(timeRange[1])
+            .width(sliderContainer.clientWidth * 0.9)
+            .tickFormat(d3.timeFormat('%Y-%m-%d'))
+            .default(timeRange[1])
+            .on('onchange', val => {
+                const currentTime = new Date(val);
+                
+                // Update node visibility
+                node.style('display', d => {
+                    const isVisible = !d.createdTime || d.createdTime <= currentTime;
+                    return isVisible ? 'block' : 'none';
+                });
+
+                // Update link visibility
+                link.style('display', d => {
+                    const sourceNode = nodes.find(n => n.id === d.source.id);
+                    const targetNode = nodes.find(n => n.id === d.target.id);
+                    const isVisible = (!sourceNode.createdTime || sourceNode.createdTime <= currentTime) &&
+                                    (!targetNode.createdTime || targetNode.createdTime <= currentTime);
+                    return isVisible ? 'block' : 'none';
+                });
+
+                // Get visible nodes and update callback
+                const visibleNodes = nodes.filter(n => !n.createdTime || n.createdTime <= currentTime);
+                if (onVisibilityChange) {
+                    onVisibilityChange(visibleNodes);
+                }
+            });
+
+        d3.select(sliderContainer)
+            .append('svg')
+            .attr('width', sliderContainer.clientWidth)
+            .attr('height', 100)
+            .append('g')
+            .attr('transform', 'translate(30,30)')
+            .call(slider);
+
+        // Simulation tick function
         simulation.on('tick', () => {
             link
                 .attr('x1', d => d.source.x)
@@ -938,102 +921,48 @@ function initializeGraph(graphData, container) {
                 .attr('y2', d => d.target.y);
 
             node
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-
-            labels
-                .attr('x', d => d.x)
-                .attr('y', d => d.y);
+                .attr('transform', d => `translate(${d.x},${d.y})`);
         });
 
-        // Add tooltips
-        const tooltip = d3.select(container)
-            .append('div')
-            .attr('class', 'tooltip')
-            .style('opacity', 0)
-            .style('position', 'absolute')
-            .style('pointer-events', 'none')
-            .style('background-color', 'white')
-            .style('padding', '10px')
-            .style('border-radius', '5px')
-            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
-            .style('max-width', '300px')
-            .style('z-index', '1000');
+        // Drag functions
+        function dragstarted(event) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            event.subject.fx = event.subject.x;
+            event.subject.fy = event.subject.y;
+        }
 
-        node.on('mouseover', (event, d) => {
-            // Fix node position during hover
-            d.fx = d.x;
-            d.fy = d.y;
-            
-            // Show tooltip
-            tooltip.transition()
-                .duration(200)
-                .style('opacity', .9);
-                
-            tooltip.html(`
-                <div class="p-2">
-                    <strong class="block text-lg mb-1">${d.title}</strong>
-                    <span class="block text-sm text-gray-500">Type: ${d.type}</span>
-                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
-                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
-                </div>
-            `)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 10) + 'px');
+        function dragged(event) {
+            event.subject.fx = event.x;
+            event.subject.fy = event.y;
+        }
 
-            // Highlight connected nodes
-            const connectedNodes = new Set();
-            links.forEach(l => {
-                if (l.source.id === d.id) connectedNodes.add(l.target.id);
-                if (l.target.id === d.id) connectedNodes.add(l.source.id);
-            });
+        function dragended(event) {
+            if (!event.active) simulation.alphaTarget(0);
+            event.subject.fx = null;
+            event.subject.fy = null;
+        }
 
-            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.1);
-            link.style('opacity', l => 
-                l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
-            );
-        })
-        .on('mouseout', (event, d) => {
-            // Release fixed position
-            d.fx = null;
-            d.fy = null;
-            
-            // Hide tooltip
-            tooltip.transition()
-                .duration(500)
-                .style('opacity', 0);
-
-            // Reset node visibility
-            const currentTime = new Date(parseInt(document.getElementById('timelineSlider').value));
-            updateNodesVisibility(currentTime, node, link, nodes);
-        });
-
-        // Store data for resize handling
-        container._graphData = {
-            nodes,
-            links,
-            width,
-            height
-        };
-
-        // Initial zoom to fit
-        const bounds = g.node().getBBox();
-        const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
-        const translate = [
-            (width - scale * bounds.width) / 2 - scale * bounds.x,
-            (height - scale * bounds.height) / 2 - scale * bounds.y
-        ];
-        svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
-
-        // Start simulation with higher alpha
-        simulation.alpha(1).restart();
+        // Initial visibility update
+        const visibleNodes = nodes.filter(n => !n.createdTime || n.createdTime <= timeRange[1]);
+        if (onVisibilityChange) {
+            onVisibilityChange(visibleNodes);
+        }
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
-        if (container) {
-            container.innerHTML = '<div class="p-4 text-red-500">Error initializing graph visualization</div>';
-        }
+        throw error;
     }
+}
+
+function getNodeColor(type) {
+    const colors = {
+        'page': '#4CAF50',
+        'collection': '#2196F3',
+        'collection_view': '#9C27B0',
+        'template': '#FF9800',
+        'default': '#757575'
+    };
+    return colors[type] || colors.default;
 }
 
 function initializeTimeline(container, nodes, node, link, svg) {

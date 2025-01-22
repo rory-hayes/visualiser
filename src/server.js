@@ -497,17 +497,14 @@ app.post('/api/hex-results', async (req, res) => {
 
         // Extract and validate dataframe_2 (graph data)
         if (results.data && Array.isArray(results.data.dataframe_2)) {
+            // Only keep essential fields to reduce payload size
             transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
                 ID: item.ID || item.id || '',
                 TYPE: item.TYPE || item.type || '',
                 PARENT_ID: item.PARENT_ID || item.parent_id || '',
-                SPACE_ID: item.SPACE_ID || item.space_id || '',
-                ANCESTORS: item.ANCESTORS || item.ancestors || [],
                 DEPTH: Number(item.DEPTH || item.depth || 0),
                 PAGE_DEPTH: Number(item.PAGE_DEPTH || item.page_depth || 0),
-                PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',
-                TEXT: item.TEXT || item.text || '',
-                CREATED_TIME: item.CREATED_TIME || item.created_time || ''
+                TEXT: item.TEXT || item.text || ''
             }));
         }
 
@@ -538,19 +535,7 @@ app.post('/api/hex-results', async (req, res) => {
                 total_num_guests: Number(df3.total_num_guests || df3.TOTAL_NUM_GUESTS || 0),
                 total_num_teamspaces: Number(df3.total_num_teamspaces || df3.TOTAL_NUM_TEAMSPACES || 0),
                 current_month_members: Number(df3.current_month_members || df3.CURRENT_MONTH_MEMBERS || 0),
-                previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0),
-
-                // Integration metrics
-                total_num_integrations: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
-                total_num_bots: Number(df3.total_num_bots || df3.TOTAL_NUM_BOTS || 0),
-
-                // Business metrics
-                total_arr: Number(df3.total_arr || df3.TOTAL_ARR || 0),
-                total_paid_seats: Number(df3.total_paid_seats || df3.TOTAL_PAID_SEATS || 0),
-
-                // Additional metrics
-                collaborative_pages: Number(df3.collaborative_pages || df3.COLLABORATIVE_PAGES || 0),
-                num_permission_groups: Number(df3.num_permission_groups || df3.NUM_PERMISSION_GROUPS || 0)
+                previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0)
             };
         }
 

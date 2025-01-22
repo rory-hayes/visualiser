@@ -495,20 +495,34 @@ app.post('/api/hex-results', async (req, res) => {
             }
         };
 
-        // Extract and validate dataframe_2 (graph data)
+        // Extract and validate dataframe_2 (graph data) - keeping original uppercase format
         if (results.data && Array.isArray(results.data.dataframe_2)) {
-            transformedData.data.dataframe_2 = results.data.dataframe_2.map(item => ({
-                id: item.ID || item.id || '',
-                type: item.TYPE || item.type || '',
-                parent_id: item.PARENT_ID || item.parent_id || '',
-                space_id: item.SPACE_ID || item.space_id || '',
-                ancestors: item.ANCESTORS || item.ancestors || [],
-                depth: Number(item.DEPTH || item.depth || 0),
-                page_depth: Number(item.PAGE_DEPTH || item.page_depth || 0),
-                parent_page_id: item.PARENT_PAGE_ID || item.parent_page_id || '',
-                text: item.TEXT || item.text || '',
-                created_time: item.CREATED_TIME || item.created_time || ''
-            }));
+            // Process in chunks to avoid memory issues
+            const chunkSize = 1000;
+            const chunks = Math.ceil(results.data.dataframe_2.length / chunkSize);
+            
+            for (let i = 0; i < chunks; i++) {
+                const start = i * chunkSize;
+                const end = Math.min(start + chunkSize, results.data.dataframe_2.length);
+                const chunk = results.data.dataframe_2.slice(start, end).map(item => ({
+                    ID: item.ID || item.id || '',
+                    TYPE: item.TYPE || item.type || '',
+                    PARENT_ID: item.PARENT_ID || item.parent_id || '',
+                    SPACE_ID: item.SPACE_ID || item.space_id || '',
+                    ANCESTORS: item.ANCESTORS || item.ancestors || [],
+                    DEPTH: item.DEPTH || item.depth || 0,
+                    PAGE_DEPTH: item.PAGE_DEPTH || item.page_depth || 0,
+                    PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',
+                    TEXT: item.TEXT || item.text || '',
+                    CREATED_TIME: item.CREATED_TIME || item.created_time || ''
+                }));
+                transformedData.data.dataframe_2.push(...chunk);
+                
+                // Force garbage collection after each chunk
+                if (global.gc) {
+                    global.gc();
+                }
+            }
         }
 
         // Extract and validate dataframe_3 (metrics)
@@ -521,33 +535,27 @@ app.post('/api/hex-results', async (req, res) => {
                 num_alive_pages: Number(df3.num_alive_pages || df3.NUM_ALIVE_PAGES || 0),
                 num_public_pages: Number(df3.num_public_pages || df3.NUM_PUBLIC_PAGES || 0),
                 num_private_pages: Number(df3.num_private_pages || df3.NUM_PRIVATE_PAGES || 0),
-
                 // Block metrics
                 num_blocks: Number(df3.num_blocks || df3.NUM_BLOCKS || 0),
                 num_alive_blocks: Number(df3.num_alive_blocks || df3.NUM_ALIVE_BLOCKS || 0),
                 current_month_blocks: Number(df3.current_month_blocks || df3.CURRENT_MONTH_BLOCKS || 0),
                 previous_month_blocks: Number(df3.previous_month_blocks || df3.PREVIOUS_MONTH_BLOCKS || 0),
-
                 // Collection metrics
                 num_collections: Number(df3.num_collections || df3.NUM_COLLECTIONS || 0),
                 num_alive_collections: Number(df3.num_alive_collections || df3.NUM_ALIVE_COLLECTIONS || 0),
                 total_num_collection_views: Number(df3.total_num_collection_views || df3.TOTAL_NUM_COLLECTION_VIEWS || 0),
-
                 // User metrics
                 total_num_members: Number(df3.total_num_members || df3.TOTAL_NUM_MEMBERS || 0),
                 total_num_guests: Number(df3.total_num_guests || df3.TOTAL_NUM_GUESTS || 0),
                 total_num_teamspaces: Number(df3.total_num_teamspaces || df3.TOTAL_NUM_TEAMSPACES || 0),
                 current_month_members: Number(df3.current_month_members || df3.CURRENT_MONTH_MEMBERS || 0),
                 previous_month_members: Number(df3.previous_month_members || df3.PREVIOUS_MONTH_MEMBERS || 0),
-
                 // Integration metrics
                 total_num_integrations: Number(df3.total_num_integrations || df3.TOTAL_NUM_INTEGRATIONS || 0),
                 total_num_bots: Number(df3.total_num_bots || df3.TOTAL_NUM_BOTS || 0),
-
                 // Business metrics
                 total_arr: Number(df3.total_arr || df3.TOTAL_ARR || 0),
                 total_paid_seats: Number(df3.total_paid_seats || df3.TOTAL_PAID_SEATS || 0),
-
                 // Additional metrics
                 collaborative_pages: Number(df3.collaborative_pages || df3.COLLABORATIVE_PAGES || 0),
                 num_permission_groups: Number(df3.num_permission_groups || df3.NUM_PERMISSION_GROUPS || 0)
@@ -567,7 +575,53 @@ app.post('/api/hex-results', async (req, res) => {
             data: transformedData.data,
             metadata: results.metadata || {}
         };
-        saveResults(storedData);
+
+        // Clear the file before writing new data
+        try {
+            fs.truncateSync(STORAGE_FILE, 0);
+            console.log('Cleared existing file contents');
+        } catch (error) {
+            console.error('Error clearing file:', error);
+        }
+
+        // Write to file in chunks to avoid memory issues
+        const writeStream = fs.createWriteStream(STORAGE_FILE);
+        writeStream.write('{"timestamp":"' + storedData.timestamp.toISOString() + '","data":{"dataframe_2":[');
+        
+        // Write dataframe_2 in chunks
+        const chunkSize = 1000;
+        for (let i = 0; i < transformedData.data.dataframe_2.length; i += chunkSize) {
+            const end = Math.min(i + chunkSize, transformedData.data.dataframe_2.length);
+            const chunk = transformedData.data.dataframe_2.slice(i, end);
+            
+            for (let j = 0; j < chunk.length; j++) {
+                writeStream.write(
+                    (i + j === 0 ? '' : ',') + 
+                    JSON.stringify(chunk[j])
+                );
+            }
+            
+            // Force garbage collection after each chunk if available
+            if (global.gc) {
+                global.gc();
+            }
+        }
+        
+        // Write dataframe_3 and metadata
+        writeStream.write('],"dataframe_3":' + JSON.stringify(transformedData.data.dataframe_3) + '}');
+        writeStream.write(',"metadata":' + JSON.stringify(results.metadata || {}) + '}');
+        writeStream.end();
+
+        // Wait for file to be written
+        await new Promise((resolve, reject) => {
+            writeStream.on('finish', resolve);
+            writeStream.on('error', reject);
+        });
+        
+        console.log('Successfully saved results to file:', {
+            fileSize: fs.statSync(STORAGE_FILE).size,
+            path: STORAGE_FILE
+        });
         
         // Notify all connected clients
         if (connectedClients.size > 0) {

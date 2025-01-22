@@ -509,12 +509,35 @@ app.post('/api/hex-results', async (req, res) => {
                 TEXT: item.TEXT || item.text || '',
                 CREATED_TIME: item.CREATED_TIME || item.created_time || ''
             }));
+
+            // Calculate depth-related metrics
+            const depths = transformedData.data.dataframe_2.map(item => item.DEPTH);
+            const pageDepths = transformedData.data.dataframe_2.map(item => item.PAGE_DEPTH);
+            const maxDepth = Math.max(...depths);
+            const maxPageDepth = Math.max(...pageDepths);
+            const avgDepth = depths.reduce((a, b) => a + b, 0) / depths.length;
+            const avgPageDepth = pageDepths.reduce((a, b) => a + b, 0) / pageDepths.length;
+
+            // Add calculated metrics to dataframe_3
+            if (!transformedData.data.dataframe_3) {
+                transformedData.data.dataframe_3 = {};
+            }
+
+            transformedData.data.dataframe_3 = {
+                ...transformedData.data.dataframe_3,
+                max_depth: maxDepth,
+                max_page_depth: maxPageDepth,
+                avg_depth: avgDepth,
+                avg_page_depth: avgPageDepth,
+                nav_depth_score: maxDepth > 0 ? (1 - (avgDepth / maxDepth)) * 100 : 0
+            };
         }
 
         // Extract and validate dataframe_3 (metrics)
         if (results.data && results.data.dataframe_3) {
             const df3 = results.data.dataframe_3;
             transformedData.data.dataframe_3 = {
+                ...transformedData.data.dataframe_3,  // Keep the depth metrics we calculated
                 // Page metrics
                 num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || 0),
                 num_pages: Number(df3.num_pages || df3.NUM_PAGES || 0),

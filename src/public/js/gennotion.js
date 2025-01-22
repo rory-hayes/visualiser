@@ -243,12 +243,10 @@ function processMetricsInChunks(graphData, insightsData, onComplete) {
     processNextChunk();
 }
 
-// Modified displayResults function
+// Modified displayResults function with chunked processing
 function displayResults(data) {
     try {
         console.log('Starting displayResults');
-
-        // Show results section with loading state
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = `
             <div class="workspace-metrics-box">
@@ -257,26 +255,26 @@ function displayResults(data) {
                     Nodes in view: <span id="nodes-count">0</span>
                 </div>
             </div>
-            <div id="loading-indicator">Loading graph visualization...</div>
+            <div id="loading-indicator">Processing data...</div>
             <div id="graph-container"></div>
         `;
 
-        // Extract data with cleanup
+        // Extract data
         let graphData = null;
         let insightsData = null;
         
         if (data?.data) {
-            graphData = data.data.dataframe_2 || [];
-            insightsData = data.data.dataframe_3 || {};
+            graphData = data.data.dataframe_2;
+            insightsData = data.data.dataframe_3;
+            // Clear references
             delete data.data.dataframe_2;
             delete data.data.dataframe_3;
         } else if (data?.dataframe_2 || data?.dataframe_3) {
-            graphData = data.dataframe_2 || [];
-            insightsData = data.dataframe_3 || {};
+            graphData = data.dataframe_2;
+            insightsData = data.dataframe_3;
+            // Clear references
             delete data.dataframe_2;
             delete data.dataframe_3;
-        } else if (Array.isArray(data)) {
-            graphData = data;
         }
 
         // Clear original data reference
@@ -296,50 +294,94 @@ function displayResults(data) {
             return;
         }
 
-        // Process metrics with cleanup
-        processMetricsInChunks(graphData, insightsData, (metrics) => {
-            if (metrics) {
-                const report = generateReport(template, metrics);
-                
-                // Store minimal results
-                window._lastResults = { metrics, report };
+        // Process data in chunks
+        const chunkSize = 1000;
+        const totalChunks = Math.ceil(graphData.length / chunkSize);
+        let processedChunks = 0;
+        let processedNodes = [];
 
-                // Log to server
-                fetch('/api/log-data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'final-results',
-                        data: { metrics, report }
-                    })
-                }).catch(console.error);
-            }
-        });
+        function processNextChunk() {
+            const start = processedChunks * chunkSize;
+            const end = Math.min(start + chunkSize, graphData.length);
+            const chunk = graphData.slice(start, end);
 
-        // Initialize graph with cleanup
-        setTimeout(() => {
-            try {
-                container.style.display = 'block';
-                const cleanup = initializeGraph(graphData, container, (visibleNodes) => {
-                    const nodesCountElement = document.getElementById('nodes-count');
-                    if (nodesCountElement) {
-                        nodesCountElement.textContent = visibleNodes.length;
+            // Process chunk
+            chunk.forEach(node => {
+                if (node && node.ID) {
+                    processedNodes.push({
+                        id: node.ID,
+                        type: node.TYPE || 'unknown',
+                        text: node.TEXT || 'Untitled',
+                        createdTime: node.CREATED_TIME ? new Date(Number(node.CREATED_TIME)) : null,
+                        parentId: node.PARENT_ID,
+                        depth: Number(node.DEPTH) || 0
+                    });
+                }
+            });
+
+            // Update loading status
+            processedChunks++;
+            const progress = Math.round((processedChunks / totalChunks) * 100);
+            loadingIndicator.textContent = `Processing data: ${progress}%`;
+
+            // Clear chunk reference
+            chunk.length = 0;
+
+            if (processedChunks < totalChunks) {
+                // Process next chunk
+                setTimeout(processNextChunk, 0);
+            } else {
+                // All chunks processed, initialize graph
+                loadingIndicator.textContent = 'Initializing graph...';
+                setTimeout(() => {
+                    try {
+                        container.style.display = 'block';
+                        const cleanup = initializeGraph(processedNodes, container, (visibleNodes) => {
+                            const nodesCountElement = document.getElementById('nodes-count');
+                            if (nodesCountElement) {
+                                nodesCountElement.textContent = visibleNodes.length;
+                            }
+                        });
+
+                        // Store cleanup function
+                        container._cleanup = cleanup;
+                        
+                        loadingIndicator.style.display = 'none';
+
+                        // Process metrics
+                        if (insightsData) {
+                            const metrics = calculateMetrics(processedNodes, insightsData);
+                            const report = generateReport(template, metrics);
+                            
+                            // Store minimal results
+                            window._lastResults = { metrics, report };
+
+                            // Log to server
+                            fetch('/api/log-data', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    type: 'final-results',
+                                    data: { metrics, report }
+                                })
+                            }).catch(console.error);
+                        }
+
+                        // Clear references
+                        graphData = null;
+                        insightsData = null;
+                        processedNodes = null;
+
+                    } catch (error) {
+                        console.error('Error initializing graph:', error);
+                        loadingIndicator.innerHTML = 'Error loading graph visualization. Please try again.';
                     }
-                });
-
-                // Store cleanup function
-                container._cleanup = cleanup;
-                
-                loadingIndicator.style.display = 'none';
-
-                // Clear data references
-                graphData = null;
-                insightsData = null;
-            } catch (error) {
-                console.error('Error initializing graph:', error);
-                loadingIndicator.innerHTML = 'Error loading graph visualization. Please try again.';
+                }, 100);
             }
-        }, 100);
+        }
+
+        // Start processing chunks
+        processNextChunk();
 
     } catch (error) {
         console.error('Error in displayResults:', error);

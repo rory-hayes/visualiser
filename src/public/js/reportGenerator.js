@@ -719,29 +719,12 @@ function calculateROIMetrics(data, metrics) {
 
 function calculateEnterpriseROI(metrics, currentCost, newCost, implementationCost, includeAI = false) {
     try {
-        // Validate inputs
-        if (!metrics || !metrics.current_productivity_score || implementationCost <= 0) {
-            console.warn('Invalid inputs for ROI calculation:', {
-                hasMetrics: !!metrics,
-                productivityScore: metrics?.current_productivity_score,
-                implementationCost
-            });
+        if (!metrics || implementationCost <= 0) {
             return 0;
         }
-
-        const projectedBenefit = metrics.current_productivity_score * (includeAI ? 1.4 : 1.2);
-        const roi = ((projectedBenefit - currentCost) / implementationCost) * 100;
-
-        // Log calculation
-        console.log('Enterprise ROI Calculation:', {
-            currentCost,
-            newCost,
-            projectedBenefit,
-            implementationCost,
-            includeAI,
-            roi
-        });
-
+        const productivityScore = metrics.current_productivity_score || 0;
+        const projectedBenefit = productivityScore * (includeAI ? 1.4 : 1.2);
+        const roi = ((projectedBenefit - (currentCost || 0)) / implementationCost) * 100;
         return isFinite(roi) ? roi : 0;
     } catch (error) {
         console.error('Error in calculateEnterpriseROI:', error);
@@ -751,16 +734,12 @@ function calculateEnterpriseROI(metrics, currentCost, newCost, implementationCos
 
 function calculateIncrease(percentage, seats, newPlan, currentPlan) {
     try {
-        if (!seats || !isFinite(newPlan) || !isFinite(currentPlan)) {
-            console.warn('Invalid inputs for increase calculation:', {
-                percentage,
-                seats,
-                newPlan,
-                currentPlan
-            });
+        if (!seats || seats <= 0) {
             return 0;
         }
-
+        if (!isFinite(newPlan) || !isFinite(currentPlan)) {
+            return 0;
+        }
         const increase = seats * (1 + percentage) * (newPlan - currentPlan);
         return isFinite(increase) ? increase : 0;
     } catch (error) {
@@ -778,8 +757,12 @@ function toNumber(value) {
 
 function calculateVisibilityScore(metrics) {
     try {
-        return (metrics.num_public_pages / metrics.num_total_pages * 0.4) +
-               (metrics.num_permission_groups / metrics.total_num_members * 0.6) * 100;
+        if (!metrics.num_total_pages || !metrics.total_num_members) {
+            return 0;
+        }
+        const publicPageRatio = metrics.num_public_pages / metrics.num_total_pages || 0;
+        const permissionRatio = metrics.num_permission_groups / metrics.total_num_members || 0;
+        return (publicPageRatio * 0.4 + permissionRatio * 0.6) * 100;
     } catch (error) {
         console.error('Error in calculateVisibilityScore:', error);
         return 0;
@@ -807,8 +790,12 @@ function calculateProductivityScore(metrics) {
 
 function calculateSecurityScore(metrics) {
     try {
-        return (metrics.num_private_pages / metrics.num_total_pages * 0.4) +
-               (metrics.num_permission_groups / metrics.total_num_members * 0.6) * 100;
+        if (!metrics.num_total_pages || !metrics.total_num_members) {
+            return 0;
+        }
+        const privatePageRatio = metrics.num_private_pages / metrics.num_total_pages || 0;
+        const permissionRatio = metrics.num_permission_groups / metrics.total_num_members || 0;
+        return (privatePageRatio * 0.4 + permissionRatio * 0.6) * 100;
     } catch (error) {
         console.error('Error in calculateSecurityScore:', error);
         return 0;
@@ -983,11 +970,20 @@ function findDuplicateTitles(graph) {
 }
 
 function calculateGrowthRate(current, previous) {
-    if (!current || !previous || previous === 0) {
-        console.log('Invalid growth rate inputs:', { current, previous });
+    try {
+        if (!current || !previous) {
+            console.log('Invalid growth rate inputs:', { current, previous });
+            return 0;
+        }
+        if (previous === 0) {
+            return current > 0 ? 100 : 0;
+        }
+        const rate = ((current - previous) / previous) * 100;
+        return isFinite(rate) ? rate : 0;
+    } catch (error) {
+        console.error('Error in calculateGrowthRate:', error);
         return 0;
     }
-    return ((current - previous) / previous * 100);
 }
 
 function validateAndTransformData(data) {

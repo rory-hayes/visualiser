@@ -495,7 +495,7 @@ function createGraphVisualization(graphData) {
         });
 
         if (!Array.isArray(graphData) || graphData.length === 0) {
-            console.warn('No graph data to visualize:', graphData);
+            console.warn('No graph data to visualize');
             return;
         }
 
@@ -509,7 +509,7 @@ function createGraphVisualization(graphData) {
         container.innerHTML = '';
         console.log('Previous graph cleared');
 
-        // Initialize the graph
+        // Initialize the graph with the correct data structure
         console.log('Initializing graph with data length:', graphData.length);
         initializeGraph({ data: { dataframe_2: graphData } }, container);
         console.log('Graph initialization complete');
@@ -1380,7 +1380,7 @@ function showStatus(message, showSpinner = false) {
 }
 
 function updateProgress(currentChunk, totalChunks, recordsProcessed, totalRecords) {
-    const progressContainer = document.getElementById('progressContainer');
+    const progressContainer = document.getElementById('progress-container');
     if (!progressContainer) return;
 
     const percentage = (currentChunk / totalChunks) * 100;
@@ -1482,41 +1482,37 @@ function calculateMetrics(graphData, insightsData) {
             return {};
         }
 
+        console.log('Calculating metrics for data:', {
+            nodesCount: graphData.length,
+            sampleNode: graphData[0]
+        });
+
         // Initialize metrics object
         const metrics = {
-            // Structure metrics
             total_pages: 0,
             num_alive_pages: 0,
             collections_count: 0,
             max_depth: 0,
             avg_depth: 0,
             deep_pages_count: 0,
-
-            // Usage metrics (placeholder values until we have actual usage data)
             daily_active_users: 0,
             weekly_active_users: 0,
             monthly_active_users: 0,
             pages_per_user: 0,
             engagement_score: 0,
             collaboration_rate: 0,
-
-            // Growth metrics
             growth_rate: 0,
             monthly_member_growth_rate: 0,
             monthly_content_growth_rate: 0,
             pages_created_last_month: 0,
             expected_members_in_next_year: 0,
             blocks_created_last_year: 0,
-
-            // Performance metrics
             current_organization_score: 0,
             current_productivity_score: 0,
             current_collaboration_score: 0,
             ai_productivity_gain: 0,
             automation_potential: 0,
             projected_time_savings: 0,
-
-            // ROI metrics
             current_plan: 0,
             enterprise_plan_roi: 0,
             enterprise_plan_w_ai_roi: 0,
@@ -1534,12 +1530,14 @@ function calculateMetrics(graphData, insightsData) {
                 metrics.total_pages++;
                 
                 // Count active pages (created in the last 90 days)
-                const createdTime = node.CREATED_TIME ? new Date(node.CREATED_TIME) : null;
-                if (createdTime && isValidDate(createdTime)) {
-                    const ninetyDaysAgo = new Date();
-                    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-                    if (createdTime > ninetyDaysAgo) {
-                        metrics.num_alive_pages++;
+                if (node.CREATED_TIME) {
+                    const createdTime = new Date(parseInt(node.CREATED_TIME));
+                    if (isValidDate(createdTime)) {
+                        const ninetyDaysAgo = new Date();
+                        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+                        if (createdTime > ninetyDaysAgo) {
+                            metrics.num_alive_pages++;
+                        }
                     }
                 }
             }
@@ -1602,12 +1600,12 @@ function processResults(data) {
         console.log('Starting processResults with data:', {
             hasData: !!data,
             dataStructure: data ? Object.keys(data) : [],
-            dataframe2Length: data?.data?.dataframe_2?.length || 0,
-            hasDataframe3: !!data?.data?.dataframe_3
+            dataframe2Length: data?.data?.data?.dataframe_2?.length || 0,
+            hasDataframe3: !!data?.data?.data?.dataframe_3
         });
 
         // Validate data structure
-        if (!data?.data?.dataframe_2) {
+        if (!data?.data?.data?.dataframe_2) {
             console.error('Invalid data structure:', data);
             showStatus('Error: Invalid data structure received', false);
             return;
@@ -1618,8 +1616,6 @@ function processResults(data) {
         if (resultsSection) {
             resultsSection.classList.remove('hidden');
             console.log('Results section displayed');
-        } else {
-            console.error('Results section element not found');
         }
 
         // Clear previous results
@@ -1627,12 +1623,10 @@ function processResults(data) {
         if (resultsContent) {
             resultsContent.innerHTML = '';
             console.log('Previous results cleared');
-        } else {
-            console.error('Results content element not found');
         }
 
         // Format and display results
-        const formattedResults = formatResults(data.data.dataframe_2, data.data.dataframe_3);
+        const formattedResults = formatResults(data.data.data.dataframe_2, data.data.data.dataframe_3);
         if (resultsContent) {
             resultsContent.innerHTML = formattedResults;
             console.log('Results formatted and displayed');
@@ -1640,24 +1634,19 @@ function processResults(data) {
 
         // Calculate and update metrics
         console.log('Calculating metrics for data:', {
-            nodesCount: data.data.dataframe_2.length,
-            sampleNode: data.data.dataframe_2[0]
+            nodesCount: data.data.data.dataframe_2.length,
+            sampleNode: data.data.data.dataframe_2[0]
         });
         
-        const metrics = calculateMetrics(data.data.dataframe_2, data.data.dataframe_3);
+        const metrics = calculateMetrics(data.data.data.dataframe_2, data.data.data.dataframe_3);
         console.log('Calculated metrics:', metrics);
         
         updateMetricsDisplay(metrics);
         console.log('Metrics display updated');
 
         // Create graph visualization
-        const container = document.getElementById('graph-container');
-        if (container) {
-            console.log('Creating graph visualization');
-            createGraphVisualization(data.data.dataframe_2);
-        } else {
-            console.error('Graph container not found');
-        }
+        console.log('Creating graph visualization');
+        createGraphVisualization(data.data.data.dataframe_2);
 
         showStatus('Analysis complete', false);
     } catch (error) {

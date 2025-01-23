@@ -175,116 +175,122 @@ function listenForResults() {
 
 function displayResults(data) {
     try {
-        console.log('Starting displayResults with raw data:', data);
+        const metrics = calculateMetrics(data.data.dataframe_2, data.data.dataframe_3);
+        updateMetricsDisplay(metrics);
+        
+        // Create graph visualization
+        createGraphVisualization(data.data.dataframe_2);
+        
+        showStatus('Analysis complete');
+    } catch (error) {
+        console.error('Error in displayResults:', error);
+        showStatus('Error analyzing data');
+    }
+}
 
-        // Show results section
-        resultsSection.classList.remove('hidden');
-        
-        // Extract the dataframes with proper error handling
-        let graphData = null;
-        let insightsData = null;
-        
-        // Handle different data structures
-        if (data && typeof data === 'object') {
-            if (data.data) {
-                graphData = data.data.dataframe_2 || [];
-                insightsData = data.data.dataframe_3 || {};
-            } else if (data.dataframe_2 || data.dataframe_3) {
-                graphData = data.dataframe_2 || [];
-                insightsData = data.dataframe_3 || {};
-            } else if (Array.isArray(data)) {
-                graphData = data;
-            }
+function createGraphVisualization(graphData) {
+    try {
+        if (!Array.isArray(graphData) || graphData.length === 0) {
+            console.warn('No graph data to visualize');
+            return;
         }
 
-        // Process graph data in chunks to reduce memory usage
-        const CHUNK_SIZE = 1000;
-        let processedGraphData = [];
-        
-        for (let i = 0; i < graphData.length; i += CHUNK_SIZE) {
-            const chunk = graphData.slice(i, Math.min(i + CHUNK_SIZE, graphData.length));
-            processedGraphData.push(...chunk);
-            
-            // Clear the chunk reference
-            chunk.length = 0;
-            
-            // If we have processed enough data for initial display, break
-            if (processedGraphData.length >= 5000) {
-                console.log('Processed initial 5000 records for display');
-                break;
-            }
+        const container = document.getElementById('graph-container');
+        if (!container) {
+            console.error('Graph container not found');
+            return;
         }
 
-        // Transform insights data efficiently
-        const transformedInsights = insightsData ? {
-            num_total_pages: Number(insightsData.num_total_pages || 0),
-            num_pages: Number(insightsData.num_pages || 0),
-            num_alive_pages: Number(insightsData.num_alive_pages || 0),
-            num_public_pages: Number(insightsData.num_public_pages || 0),
-            num_private_pages: Number(insightsData.num_private_pages || 0),
-            num_blocks: Number(insightsData.num_blocks || 0),
-            num_alive_blocks: Number(insightsData.num_alive_blocks || 0),
-            current_month_blocks: Number(insightsData.current_month_blocks || 0),
-            previous_month_blocks: Number(insightsData.previous_month_blocks || 0),
-            current_month_members: Number(insightsData.current_month_members || 0),
-            previous_month_members: Number(insightsData.previous_month_members || 0),
-            total_arr: Number(insightsData.total_arr || 0),
-            total_paid_seats: Number(insightsData.total_paid_seats || 0),
-            collaborative_pages: Number(insightsData.collaborative_pages || 0),
-            num_permission_groups: Number(insightsData.num_permission_groups || 0)
-        } : {};
+        // Clear previous graph
+        container.innerHTML = '';
 
-        // Calculate metrics using chunked data
-        const metrics = calculateMetrics(processedGraphData, transformedInsights);
-        
-        // Clear original data references
-        graphData = null;
-        insightsData = null;
-        
-        // Log metrics for debugging
-        console.log('Calculated Metrics:', {
-            sqlMetrics: {
-                total_pages: metrics.total_pages,
-                page_count: metrics.page_count,
-                collections_count: metrics.collections_count,
-                collection_views: metrics.collection_views,
-                public_pages_count: metrics.public_pages_count,
-                connected_tool_count: metrics.connected_tool_count,
-                total_num_members: metrics.total_num_members,
-                total_num_guests: metrics.total_num_guests,
-                total_num_teamspaces: metrics.total_num_teamspaces,
-                num_alive_pages: metrics.num_alive_pages,
-                num_private_pages: metrics.num_private_pages,
-                num_alive_blocks: metrics.num_alive_blocks,
-                num_blocks: metrics.num_blocks,
-                num_alive_collections: metrics.num_alive_collections,
-                total_arr: metrics.total_arr,
-                total_paid_seats: metrics.total_paid_seats
-            },
-            graphMetrics: {
-                max_depth: metrics.max_depth,
-                avg_depth: metrics.avg_depth,
-                root_pages: metrics.root_pages,
-                orphaned_blocks: metrics.orphaned_blocks,
-                deep_pages_count: metrics.deep_pages_count,
-                template_count: metrics.template_count,
-                linked_database_count: metrics.linked_database_count,
-                duplicate_count: metrics.duplicate_count,
-                bottleneck_count: metrics.bottleneck_count,
-                unfindable_pages: metrics.unfindable_pages
+        // Initialize cytoscape
+        const cy = cytoscape({
+            container: container,
+            elements: transformGraphData(graphData),
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': '#666',
+                        'label': 'data(id)',
+                        'width': 20,
+                        'height': 20
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 1,
+                        'line-color': '#ccc',
+                        'curve-style': 'bezier'
+                    }
+                }
+            ],
+            layout: {
+                name: 'dagre',
+                rankDir: 'TB',
+                nodeSep: 50,
+                rankSep: 100,
+                animate: false
             }
         });
 
-        // Update UI with metrics
-        updateMetricsDisplay(metrics);
-        
-        // Clear processed data
-        processedGraphData.length = 0;
-        
+        // Add zoom controls
+        cy.on('tap', 'node', function(evt) {
+            const node = evt.target;
+            cy.fit(node, 50);
+        });
+
+        // Add double click to reset
+        container.addEventListener('dblclick', function() {
+            cy.fit();
+        });
+
     } catch (error) {
-        console.error('Error in displayResults:', error);
-        throw error;
+        console.error('Error creating graph visualization:', error);
     }
+}
+
+function transformGraphData(graphData) {
+    const elements = {
+        nodes: [],
+        edges: []
+    };
+
+    try {
+        // Process in chunks to prevent memory issues
+        const CHUNK_SIZE = 100;
+        
+        for (let i = 0; i < graphData.length; i += CHUNK_SIZE) {
+            const chunk = graphData.slice(i, i + CHUNK_SIZE);
+            
+            chunk.forEach(node => {
+                // Add node
+                elements.nodes.push({
+                    data: {
+                        id: node.ID,
+                        type: node.TYPE
+                    }
+                });
+
+                // Add edge if there's a parent
+                if (node.PARENT_ID) {
+                    elements.edges.push({
+                        data: {
+                            id: `${node.PARENT_ID}-${node.ID}`,
+                            source: node.PARENT_ID,
+                            target: node.ID
+                        }
+                    });
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error transforming graph data:', error);
+    }
+
+    return elements;
 }
 
 function formatResults(graphData, insightsData) {

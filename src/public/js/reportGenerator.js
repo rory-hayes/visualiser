@@ -1,134 +1,90 @@
 // reportGenerator.js
 
 export function calculateMetrics(dataframe_2, dataframe_3) {
-    const metrics = {};
-    
     try {
-        if (!dataframe_2 || !dataframe_3) {
-            throw new Error('Missing required dataframes');
+        // Validate input data early
+        if (!Array.isArray(dataframe_2) || !dataframe_3) {
+            console.error('Invalid input data');
+            return {};
         }
 
-        // Enhanced input data logging
-        console.log('========== DETAILED INPUT DATA ==========');
-        console.log('dataframe_2 (Graph Data):', {
-            length: dataframe_2.length,
-            sample: dataframe_2[0],
-            fields: dataframe_2[0] ? Object.keys(dataframe_2[0]) : [],
-            hasParentField: dataframe_2[0]?.parent !== undefined,
-            hasTypeField: dataframe_2[0]?.type !== undefined,
-            hasTitleField: dataframe_2[0]?.title !== undefined,
-            nodeTypes: [...new Set(dataframe_2.map(node => node.type))],
-            parentCount: dataframe_2.filter(node => node.parent).length,
-            rootCount: dataframe_2.filter(node => !node.parent).length
-        });
+        // Process data in chunks to prevent memory issues
+        const CHUNK_SIZE = 100;
+        const metrics = {};
+        
+        // Process graph data in chunks
+        for (let i = 0; i < dataframe_2.length; i += CHUNK_SIZE) {
+            const chunk = dataframe_2.slice(i, i + CHUNK_SIZE);
+            const chunkMetrics = processGraphChunk(chunk);
+            Object.assign(metrics, chunkMetrics);
+            
+            // Clear chunk from memory
+            chunk.length = 0;
+        }
 
-        console.log('dataframe_3 (SQL Data):', {
-            // Page metrics
-            pages: {
-                total: dataframe_3.num_total_pages,
-                alive: dataframe_3.num_alive_pages,
-                public: dataframe_3.num_public_pages,
-                private: dataframe_3.num_private_pages
-            },
-            // Block metrics
-            blocks: {
-                total: dataframe_3.num_blocks,
-                alive: dataframe_3.num_alive_blocks,
-                current: dataframe_3.current_month_blocks,
-                previous: dataframe_3.previous_month_blocks
-            },
-            // User metrics
-            users: {
-                members: dataframe_3.total_num_members,
-                guests: dataframe_3.total_num_guests,
-                teamspaces: dataframe_3.total_num_teamspaces,
-                currentMembers: dataframe_3.current_month_members,
-                previousMembers: dataframe_3.previous_month_members
-            },
-            // Collection metrics
-            collections: {
-                total: dataframe_3.num_collections,
-                alive: dataframe_3.num_alive_collections,
-                views: dataframe_3.total_num_collection_views
-            },
-            // Integration metrics
-            integrations: {
-                total: dataframe_3.total_num_integrations,
-                bots: dataframe_3.total_num_bots,
-                internalBots: dataframe_3.total_num_internal_bots,
-                publicBots: dataframe_3.total_num_public_bots,
-                linkPreviews: dataframe_3.total_num_link_preview_integrations,
-                publicIntegrations: dataframe_3.total_num_public_integrations
-            },
-            // Business metrics
-            business: {
-                arr: dataframe_3.total_arr,
-                paidSeats: dataframe_3.total_paid_seats
-            }
-        });
-        console.log('=======================================');
+        // Clear original array
+        dataframe_2.length = 0;
 
-        // Validate and transform data
-        const validatedData = validateAndTransformData(dataframe_3);
-        console.log('Validated Data Sample:', {
-            members: validatedData.total_num_members,
-            pages: validatedData.num_total_pages,
-            blocks: validatedData.num_blocks
-        });
-
-        // Use validated data for calculations
-        const sqlMetrics = calculateSQLMetrics(validatedData);
-        console.log('SQL Metrics:', sqlMetrics);
+        // Process SQL data
+        const sqlMetrics = calculateSQLMetrics(dataframe_3);
         Object.assign(metrics, sqlMetrics);
 
-        // Graph structure metrics with logging
-        const graphMetrics = calculateGraphMetrics(dataframe_2);
-        console.log('Graph Metrics:', graphMetrics);
-        Object.assign(metrics, graphMetrics);
+        // Calculate derived metrics
+        const derivedMetrics = calculateDerivedMetrics(metrics);
+        Object.assign(metrics, derivedMetrics);
 
-        // Growth metrics with logging
-        const growthMetrics = calculateGrowthMetrics(dataframe_3);
-        console.log('Growth Metrics:', growthMetrics);
-        Object.assign(metrics, growthMetrics);
-
-        // Usage metrics with logging
-        const usageMetrics = calculateUsageMetrics(dataframe_3);
-        console.log('Usage Metrics:', usageMetrics);
-        Object.assign(metrics, usageMetrics);
-
-        // Key insights with logging
-        const keyInsights = calculateKeyInsights(dataframe_3);
-        console.log('Key Insights:', keyInsights);
-        Object.assign(metrics, keyInsights);
-
-        // Combined and calculated metrics with logging
-        const combinedMetrics = calculateCombinedMetrics(metrics);
-        console.log('Combined Metrics:', combinedMetrics);
-        Object.assign(metrics, combinedMetrics);
-
-        // ROI calculations with logging
-        const roiMetrics = calculateROIMetrics(dataframe_3, metrics);
-        console.log('ROI Metrics:', roiMetrics);
-        Object.assign(metrics, roiMetrics);
-
-        // Mark unavailable metrics
-        markUnavailableMetrics(metrics);
-
-        // Log final metrics
-        console.log('Final Metrics:', metrics);
+        // Clear references
+        dataframe_3 = null;
 
         return metrics;
-
     } catch (error) {
         console.error('Error in calculateMetrics:', error);
-        console.error('Error details:', {
-            hasDataframe2: !!dataframe_2,
-            hasDataframe3: !!dataframe_3,
-            dataframe2Length: dataframe_2?.length,
-            dataframe3Fields: dataframe_3 ? Object.keys(dataframe_3) : []
-        });
-        throw error;
+        return {};
     }
+}
+
+function processGraphChunk(chunk) {
+    const metrics = {
+        max_depth: 0,
+        total_nodes: 0,
+        root_nodes: 0,
+        leaf_nodes: 0
+    };
+
+    try {
+        chunk.forEach(node => {
+            metrics.total_nodes++;
+            
+            // Calculate depth
+            const depth = node.DEPTH || 0;
+            metrics.max_depth = Math.max(metrics.max_depth, depth);
+            
+            // Count root and leaf nodes
+            if (!node.PARENT_ID) {
+                metrics.root_nodes++;
+            }
+            
+            if (node.TYPE === 'page' && !hasChildren(node, chunk)) {
+                metrics.leaf_nodes++;
+            }
+        });
+    } catch (error) {
+        console.error('Error processing graph chunk:', error);
+    }
+
+    return metrics;
+}
+
+function hasChildren(node, nodes) {
+    return nodes.some(n => n.PARENT_ID === node.ID);
+}
+
+function calculateDerivedMetrics(metrics) {
+    return {
+        avg_depth: metrics.total_nodes ? metrics.max_depth / metrics.total_nodes : 0,
+        branching_factor: metrics.root_nodes ? (metrics.total_nodes - metrics.root_nodes) / metrics.root_nodes : 0,
+        leaf_ratio: metrics.total_nodes ? metrics.leaf_nodes / metrics.total_nodes : 0
+    };
 }
 
 function calculateSQLMetrics(data) {

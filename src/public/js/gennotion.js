@@ -853,27 +853,24 @@ function transformDataForGraph(data) {
         const nodes = data.map(item => {
             let createdTime = null;
             if (item.CREATED_TIME) {
-                // Handle both string and number timestamps
                 const timestamp = typeof item.CREATED_TIME === 'string' ? 
                     parseInt(item.CREATED_TIME) : Number(item.CREATED_TIME);
                 
                 if (!isNaN(timestamp)) {
-                    createdTime = new Date(timestamp);
-                    // Validate date
-                    if (createdTime.getFullYear() < 2000 || createdTime.getFullYear() > 2100) {
-                        console.warn(`Invalid date for node ${item.ID}: ${createdTime}, timestamp: ${timestamp}`);
-                        createdTime = null;
+                    const date = new Date(timestamp);
+                    if (isValidDate(date)) {
+                        createdTime = date;
                     }
                 }
             }
 
             return {
                 id: item.ID,
-                name: item.TEXT || item.TYPE,
-                type: item.TYPE,
+                name: item.TEXT || item.TYPE || 'Untitled',
+                type: (item.TYPE || 'unknown').toLowerCase(),
                 createdTime,
-                depth: Number(item.DEPTH) || 0,
-                pageDepth: Number(item.PAGE_DEPTH) || 0,
+                depth: parseInt(item.DEPTH) || 0,
+                pageDepth: parseInt(item.PAGE_DEPTH) || 0,
                 parentId: item.PARENT_ID,
                 originalData: item
             };
@@ -881,21 +878,19 @@ function transformDataForGraph(data) {
 
         // Log date range information
         const dates = nodes.map(n => n.createdTime).filter(Boolean);
-        const startDate = new Date(Math.min(...dates));
-        const endDate = new Date(Math.max(...dates));
-        
-        console.log('Date range in data:', {
-            start: startDate.toLocaleDateString(),
-            end: endDate.toLocaleDateString(),
-            totalNodes: nodes.length,
-            nodesWithDates: dates.length,
-            nodesWithoutDates: nodes.length - dates.length
-        });
-
-        // Log nodes without dates for debugging
-        const nodesWithoutDates = nodes.filter(n => !n.createdTime);
-        if (nodesWithoutDates.length > 0) {
-            console.warn('Nodes without valid dates:', nodesWithoutDates);
+        if (dates.length > 0) {
+            const startDate = new Date(Math.min(...dates));
+            const endDate = new Date(Math.max(...dates));
+            
+            console.log('Date range in data:', {
+                start: startDate.toLocaleDateString(),
+                end: endDate.toLocaleDateString(),
+                totalNodes: nodes.length,
+                nodesWithDates: dates.length,
+                nodesWithoutDates: nodes.length - dates.length
+            });
+        } else {
+            console.warn('No valid dates found in nodes');
         }
 
         return { nodes, links: createLinks(nodes) };
@@ -1532,24 +1527,30 @@ function calculateMetrics(graphData, insightsData) {
 
         // Calculate structure metrics
         graphData.forEach(node => {
+            const nodeType = (node.TYPE || '').toLowerCase();
+            
             // Count total pages
-            if (node.TYPE.includes('page')) {
+            if (nodeType.includes('page')) {
                 metrics.total_pages++;
                 
                 // Count active pages (created in the last 90 days)
-                const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
-                if (node.CREATED_TIME && node.CREATED_TIME > ninetyDaysAgo) {
-                    metrics.num_alive_pages++;
+                const createdTime = node.CREATED_TIME ? new Date(node.CREATED_TIME) : null;
+                if (createdTime && isValidDate(createdTime)) {
+                    const ninetyDaysAgo = new Date();
+                    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+                    if (createdTime > ninetyDaysAgo) {
+                        metrics.num_alive_pages++;
+                    }
                 }
             }
 
             // Count collections
-            if (node.TYPE.includes('collection')) {
+            if (nodeType.includes('collection')) {
                 metrics.collections_count++;
             }
 
             // Track depth metrics
-            const depth = node.DEPTH || 0;
+            const depth = parseInt(node.DEPTH) || 0;
             metrics.max_depth = Math.max(metrics.max_depth, depth);
             
             if (depth > 3) {
@@ -1558,7 +1559,7 @@ function calculateMetrics(graphData, insightsData) {
         });
 
         // Calculate average depth
-        const totalDepth = graphData.reduce((sum, node) => sum + (node.DEPTH || 0), 0);
+        const totalDepth = graphData.reduce((sum, node) => sum + (parseInt(node.DEPTH) || 0), 0);
         metrics.avg_depth = totalDepth / graphData.length;
 
         // Process insights data if available
@@ -1587,6 +1588,12 @@ function calculateMetrics(graphData, insightsData) {
         console.error('Error calculating metrics:', error);
         return {};
     }
+}
+
+// Helper function to validate dates
+function isValidDate(date) {
+    return date instanceof Date && !isNaN(date) && 
+           date.getFullYear() >= 2000 && date.getFullYear() <= 2100;
 }
 
 // Add the missing processResults function

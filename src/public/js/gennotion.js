@@ -118,15 +118,18 @@ function listenForResults() {
     const eventSource = new EventSource('/api/hex-results/stream');
     let retryCount = 0;
     const MAX_RETRIES = 3;
-    const TIMEOUT = 60000; // 60 seconds timeout
+    const TIMEOUT = 120000; // Increase timeout to 120 seconds
+    let hasReceivedData = false;
     
     showStatus('Waiting for results...', true);
 
     // Set timeout
     const timeoutId = setTimeout(() => {
-        console.log('Results timeout reached');
-        eventSource.close();
-        showStatus('Timeout waiting for results. Please try again.', false);
+        if (!hasReceivedData) {
+            console.log('Results timeout reached');
+            eventSource.close();
+            showStatus('Timeout waiting for results. Please try again.', false);
+        }
     }, TIMEOUT);
 
     eventSource.onopen = () => {
@@ -144,17 +147,31 @@ function listenForResults() {
                 return;
             }
 
-            if (data.success && data.data && data.data.data) {
+            if (data.success && data.data) {
+                hasReceivedData = true;
                 console.log('Received valid data:', {
-                    dataframe2Length: data.data.data.dataframe_2?.length,
-                    hasDataframe3: !!data.data.data.dataframe_3
+                    timestamp: data.data.timestamp,
+                    hasDataframe2: !!data.data.data?.dataframe_2,
+                    dataframe2Length: data.data.data?.dataframe_2?.length,
+                    hasDataframe3: !!data.data.data?.dataframe_3
                 });
                 
-                clearTimeout(timeoutId);
-                eventSource.close();
-                showStatus('Rendering results...');
-                displayResults(data.data);
-                resultsSection.classList.remove('hidden');
+                // Process data in chunks to prevent timeout
+                setTimeout(() => {
+                    clearTimeout(timeoutId);
+                    eventSource.close();
+                    showStatus('Processing workspace data...');
+                    
+                    // Process the data
+                    try {
+                        displayResults(data.data);
+                        resultsSection.classList.remove('hidden');
+                        showStatus('Analysis complete');
+                    } catch (error) {
+                        console.error('Error processing results:', error);
+                        showStatus('Error processing results. Please try again.');
+                    }
+                }, 0);
             } else {
                 console.warn('Received invalid data structure:', data);
                 showStatus('Processing workspace data...', true);

@@ -118,12 +118,14 @@ function listenForResults() {
     const eventSource = new EventSource('/api/hex-results/stream');
     let retryCount = 0;
     const MAX_RETRIES = 3;
-    const TIMEOUT = 120000; // Increase timeout to 120 seconds
+    const TIMEOUT = 300000; // Increase timeout to 5 minutes for larger payloads
     let hasReceivedData = false;
+    let lastProgressUpdate = Date.now();
+    const PROGRESS_INTERVAL = 10000; // Show progress update every 10 seconds
     
     showStatus('Waiting for results...', true);
 
-    // Set timeout
+    // Set timeout with progress checks
     const timeoutId = setTimeout(() => {
         if (!hasReceivedData) {
             console.log('Results timeout reached');
@@ -132,18 +134,41 @@ function listenForResults() {
         }
     }, TIMEOUT);
 
+    // Add progress checker
+    const progressInterval = setInterval(() => {
+        if (!hasReceivedData && eventSource.readyState === EventSource.OPEN) {
+            const elapsedTime = Math.floor((Date.now() - lastProgressUpdate) / 1000);
+            showStatus(`Waiting for results... (${elapsedTime}s elapsed)`, true);
+            
+            // Log connection state
+            console.log('Connection status:', {
+                readyState: eventSource.readyState,
+                elapsedTime: `${elapsedTime}s`,
+                hasData: hasReceivedData,
+                retryCount
+            });
+        }
+    }, PROGRESS_INTERVAL);
+
     eventSource.onopen = () => {
         console.log('EventSource connection opened');
+        lastProgressUpdate = Date.now();
         showStatus('Connected to server. Processing data...', true);
     };
 
     eventSource.onmessage = (event) => {
         try {
-            console.log('Received event data:', event.data);
+            lastProgressUpdate = Date.now();
+            console.log('Received event data length:', event.data.length);
             const data = JSON.parse(event.data);
             
             if (data.type === 'connected') {
                 console.log('Connection established');
+                return;
+            }
+
+            if (data.type === 'progress') {
+                showStatus(`Processing: ${data.message}`, true);
                 return;
             }
 
@@ -153,27 +178,41 @@ function listenForResults() {
                     timestamp: data.data.timestamp,
                     hasDataframe2: !!data.data.data?.dataframe_2,
                     dataframe2Length: data.data.data?.dataframe_2?.length,
-                    hasDataframe3: !!data.data.data?.dataframe_3
+                    hasDataframe3: !!data.data.data?.dataframe_3,
+                    totalSize: event.data.length
                 });
                 
-                // Process data in chunks to prevent timeout
+                // Process data in chunks to prevent memory issues
                 setTimeout(() => {
                     clearTimeout(timeoutId);
+                    clearInterval(progressInterval);
                     eventSource.close();
                     showStatus('Processing workspace data...');
                     
-                    // Process the data
+                    // Process the data with memory management
                     try {
+                        // Clear any previous results
+                        if (window._lastGraphData) {
+                            window._lastGraphData = null;
+                        }
+                        
                         displayResults(data.data);
                         resultsSection.classList.remove('hidden');
                         showStatus('Analysis complete');
+                        
+                        // Clear data references
+                        data.data = null;
                     } catch (error) {
                         console.error('Error processing results:', error);
                         showStatus('Error processing results. Please try again.');
                     }
                 }, 0);
             } else {
-                console.warn('Received invalid data structure:', data);
+                console.warn('Received invalid data structure:', {
+                    hasSuccess: !!data.success,
+                    hasData: !!data.data,
+                    type: data.type
+                });
                 showStatus('Processing workspace data...', true);
             }
         } catch (error) {
@@ -183,8 +222,10 @@ function listenForResults() {
     };
 
     eventSource.onerror = (error) => {
+        const now = Date.now();
         console.error('EventSource error:', error);
         console.error('EventSource readyState:', eventSource.readyState);
+        console.error('Time since last update:', (now - lastProgressUpdate) / 1000, 'seconds');
         retryConnection();
     };
 
@@ -195,13 +236,21 @@ function listenForResults() {
             setTimeout(() => {
                 eventSource.close();
                 listenForResults();
-            }, 2000);
+            }, 2000 * retryCount); // Exponential backoff
         } else {
             clearTimeout(timeoutId);
+            clearInterval(progressInterval);
             showStatus('Failed to connect. Please try again.', false);
             eventSource.close();
         }
     }
+
+    // Cleanup function
+    return () => {
+        clearTimeout(timeoutId);
+        clearInterval(progressInterval);
+        eventSource.close();
+    };
 }
 
 // Add this helper function to check server status

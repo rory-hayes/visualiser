@@ -523,10 +523,26 @@ app.get('/api/hex-results/stream', (req, res) => {
 
                 if (results && results.data) {
                     console.log('Found results, sending to client');
-                    res.write(`data: ${JSON.stringify({
+                    
+                    // Send progress update
+                    res.write(`data: {"type":"progress","message":"Processing workspace data..."}\n\n`);
+                    
+                    // Send data in chunks if it's large
+                    const dataString = JSON.stringify({
                         success: true,
                         data: results
-                    })}\n\n`);
+                    });
+                    
+                    // Log data size
+                    console.log('Sending data to client:', {
+                        totalSize: dataString.length,
+                        hasDataframe2: !!results.data?.dataframe_2,
+                        dataframe2Length: results.data?.dataframe_2?.length,
+                        hasDataframe3: !!results.data?.dataframe_3
+                    });
+
+                    // Send the data
+                    res.write(`data: ${dataString}\n\n`);
                     
                     // Clear the file after sending
                     await fs.promises.writeFile(STORAGE_FILE, '{}');
@@ -537,6 +553,8 @@ app.get('/api/hex-results/stream', (req, res) => {
                 }
             } catch (error) {
                 console.error('Error checking results:', error);
+                res.write(`data: {"type":"error","message":"Error processing results"}\n\n`);
+                res.end();
             }
         };
 

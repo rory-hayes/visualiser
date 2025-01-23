@@ -1600,12 +1600,22 @@ function processResults(data) {
         console.log('Starting processResults with data:', {
             hasData: !!data,
             dataStructure: data ? Object.keys(data) : [],
-            dataframe2Length: data?.data?.data?.dataframe_2?.length || 0,
-            hasDataframe3: !!data?.data?.data?.dataframe_3
+            dataframe2Length: data?.data?.dataframe_2?.length || 0,
+            hasDataframe3: !!data?.data?.dataframe_3
         });
 
-        // Validate data structure
-        if (!data?.data?.data?.dataframe_2) {
+        // Validate data structure and handle both direct and nested formats
+        let graphData, insightsData;
+        
+        if (data?.data?.data?.dataframe_2) {
+            // Nested format from streaming
+            graphData = data.data.data.dataframe_2;
+            insightsData = data.data.data.dataframe_3;
+        } else if (data?.data?.dataframe_2) {
+            // Direct format
+            graphData = data.data.dataframe_2;
+            insightsData = data.data.dataframe_3;
+        } else {
             console.error('Invalid data structure:', data);
             showStatus('Error: Invalid data structure received', false);
             return;
@@ -1626,7 +1636,12 @@ function processResults(data) {
         }
 
         // Format and display results
-        const formattedResults = formatResults(data.data.data.dataframe_2, data.data.data.dataframe_3);
+        console.log('Formatting results with:', {
+            graphDataLength: graphData?.length || 0,
+            hasInsightsData: !!insightsData
+        });
+        
+        const formattedResults = formatResults(graphData, insightsData);
         if (resultsContent) {
             resultsContent.innerHTML = formattedResults;
             console.log('Results formatted and displayed');
@@ -1634,11 +1649,11 @@ function processResults(data) {
 
         // Calculate and update metrics
         console.log('Calculating metrics for data:', {
-            nodesCount: data.data.data.dataframe_2.length,
-            sampleNode: data.data.data.dataframe_2[0]
+            nodesCount: graphData?.length || 0,
+            sampleNode: graphData?.[0]
         });
         
-        const metrics = calculateMetrics(data.data.data.dataframe_2, data.data.data.dataframe_3);
+        const metrics = calculateMetrics(graphData, insightsData);
         console.log('Calculated metrics:', metrics);
         
         updateMetricsDisplay(metrics);
@@ -1646,7 +1661,7 @@ function processResults(data) {
 
         // Create graph visualization
         console.log('Creating graph visualization');
-        createGraphVisualization(data.data.data.dataframe_2);
+        createGraphVisualization(graphData);
 
         showStatus('Analysis complete', false);
     } catch (error) {

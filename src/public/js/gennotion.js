@@ -123,8 +123,9 @@ function listenForResults() {
     };
     let lastProcessedChunk = 0;
     let totalExpectedRecords = 0;
+    let connectionTimeout = null;
     
-    function showProgress(current, total) {
+    function showProgress(current, total, chunk, totalChunks) {
         // First ensure status section is visible
         const statusSection = document.getElementById('statusSection');
         if (statusSection) {
@@ -151,17 +152,35 @@ function listenForResults() {
         // Ensure we have valid numbers before formatting
         const currentCount = typeof current === 'number' ? current : 0;
         const totalCount = typeof total === 'number' ? total : 0;
+        const currentChunk = typeof chunk === 'number' ? chunk : 0;
+        const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : 0;
 
         if (progressElement) {
             const percentage = totalCount > 0 ? Math.round((currentCount / totalCount) * 100) : 0;
+            const chunkPercentage = totalChunksCount > 0 ? Math.round((currentChunk / totalChunksCount) * 100) : 0;
+            
             progressElement.innerHTML = `
-                <div class="progress-bar bg-gray-200 rounded-full h-2.5 mb-2">
-                    <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
-                         style="width: ${percentage}%"></div>
-                </div>
-                <div class="flex justify-between text-sm text-gray-600">
-                    <span>Processing: ${currentCount.toLocaleString()} / ${totalCount.toLocaleString()}</span>
-                    <span>${percentage}%</span>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>Records: ${currentCount.toLocaleString()} / ${totalCount.toLocaleString()}</span>
+                            <span>${percentage}%</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-2.5 mb-2">
+                            <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
+                                 style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm text-gray-600 mb-1">
+                            <span>Chunks: ${currentChunk} / ${totalChunksCount}</span>
+                            <span>${chunkPercentage}%</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-2.5">
+                            <div class="bg-green-600 h-2.5 rounded-full transition-all duration-300" 
+                                 style="width: ${chunkPercentage}%"></div>
+                        </div>
+                    </div>
                 </div>
             `;
         }
@@ -171,6 +190,15 @@ function listenForResults() {
         showStatus('Connecting to event stream...');
         
         const eventSource = new EventSource('/api/hex-results/stream');
+        
+        // Set connection timeout
+        connectionTimeout = setTimeout(() => {
+            if (eventSource.readyState !== EventSource.CLOSED) {
+                console.log('Connection timeout - closing EventSource');
+                eventSource.close();
+                showStatus('Connection timeout. Please try again.', false);
+            }
+        }, 300000); // 5 minutes timeout
         
         eventSource.onopen = () => {
             console.log('EventSource connection opened');
@@ -185,7 +213,7 @@ function listenForResults() {
                 if (data.type === 'progress') {
                     totalExpectedRecords = data.totalRecords;
                     showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
-                    showProgress(data.recordsProcessed, data.totalRecords);
+                    showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
                     return;
                 }
 
@@ -211,10 +239,16 @@ function listenForResults() {
                         totalRecords: data.totalRecords
                     });
 
-                    showProgress(accumulatedData.dataframe_2.length, data.totalRecords);
+                    showProgress(
+                        accumulatedData.dataframe_2.length, 
+                        data.totalRecords,
+                        currentChunk,
+                        data.totalChunks
+                    );
 
                     // If this is the last chunk, process all data
                     if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
+                        clearTimeout(connectionTimeout);
                         displayResults({
                             data: {
                                 dataframe_2: accumulatedData.dataframe_2,
@@ -240,6 +274,7 @@ function listenForResults() {
             console.log('EventSource readyState:', eventSource.readyState);
             
             if (eventSource.readyState === EventSource.CLOSED) {
+                clearTimeout(connectionTimeout);
                 if (retryCount < MAX_RETRIES) {
                     retryCount++;
                     showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
@@ -312,12 +347,12 @@ function displayResults(response) {
 function createGraphVisualization(graphData) {
     try {
         // Validate and extract the data
-        if (!graphData || !graphData.dataframe_2) {
+        if (!graphData || !graphData.data?.dataframe_2) {
             console.error('Invalid graph data structure:', graphData);
             return;
         }
 
-        const data = graphData.dataframe_2;
+        const data = graphData.data?.dataframe_2 || graphData;
         if (!Array.isArray(data) || data.length === 0) {
             console.warn('No graph data to visualize');
             return;

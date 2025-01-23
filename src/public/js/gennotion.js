@@ -1094,4 +1094,75 @@ function showStatus(message, showSpinner = false) {
     } else {
         statusSpinner.classList.add('hidden');
     }
+}
+
+function updateMetricsDisplay(metrics) {
+    try {
+        // Update structure metrics
+        updateMetricValue('total-pages', metrics.total_pages);
+        updateMetricValue('active-pages', metrics.num_alive_pages);
+        updateMetricValue('collections', metrics.collections_count);
+        updateMetricValue('max-depth', metrics.max_depth);
+        updateMetricValue('avg-depth', metrics.avg_depth);
+        updateMetricValue('deep-pages', metrics.deep_pages_count);
+
+        // Update usage metrics
+        updateMetricValue('daily-active-users', metrics.daily_active_users);
+        updateMetricValue('weekly-active-users', metrics.weekly_active_users);
+        updateMetricValue('monthly-active-users', metrics.monthly_active_users);
+        updateMetricValue('pages-per-user', metrics.pages_per_user);
+        updateMetricValue('engagement-score', metrics.engagement_score);
+        updateMetricValue('collaboration-rate', metrics.collaboration_rate);
+
+        // Update growth metrics
+        updateMetricValue('growth-rate', metrics.growth_rate);
+        updateMetricValue('member-growth-rate', metrics.monthly_member_growth_rate);
+        updateMetricValue('content-growth-rate', metrics.monthly_content_growth_rate);
+        updateMetricValue('pages-created-month', metrics.pages_created_last_month);
+        updateMetricValue('expected-members-year', metrics.expected_members_in_next_year);
+        updateMetricValue('blocks-created-year', metrics.blocks_created_last_year);
+
+        // Update performance metrics
+        updateMetricValue('organization-score', metrics.current_organization_score);
+        updateMetricValue('productivity-score', metrics.current_productivity_score);
+        updateMetricValue('collaboration-score', metrics.current_collaboration_score);
+        updateMetricValue('ai-productivity-gain', metrics.ai_productivity_gain);
+        updateMetricValue('automation-potential', metrics.automation_potential);
+        updateMetricValue('time-savings', metrics.projected_time_savings);
+
+        // Update ROI metrics
+        updateMetricValue('current-plan-cost', metrics.current_plan);
+        updateMetricValue('enterprise-roi', metrics.enterprise_plan_roi);
+        updateMetricValue('enterprise-ai-roi', metrics.enterprise_plan_w_ai_roi);
+        updateMetricValue('growth-10-savings', metrics['10_percent_increase']);
+        updateMetricValue('growth-20-savings', metrics['20_percent_increase']);
+        updateMetricValue('growth-50-savings', metrics['50_percent_increase']);
+
+        console.log('Metrics display updated successfully');
+    } catch (error) {
+        console.error('Error updating metrics display:', error);
+    }
+}
+
+function updateMetricValue(elementId, value) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        // Format the value based on type
+        let formattedValue = formatValue(value);
+        element.textContent = formattedValue;
+        
+        // Add color coding based on value type
+        if (typeof value === 'number') {
+            if (value > 0) {
+                element.classList.add('text-green-600');
+                element.classList.remove('text-red-600', 'text-gray-600');
+            } else if (value < 0) {
+                element.classList.add('text-red-600');
+                element.classList.remove('text-green-600', 'text-gray-600');
+            } else {
+                element.classList.add('text-gray-600');
+                element.classList.remove('text-green-600', 'text-red-600');
+            }
+        }
+    }
 } 

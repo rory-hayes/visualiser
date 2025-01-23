@@ -339,72 +339,38 @@ function calculateGraphMetrics(graph) {
 
 function calculateGrowthMetrics(data) {
     try {
-        const metrics = {
-            growth_rate: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks),
-            blocks_created_last_month: (data.current_month_blocks - data.previous_month_blocks) || 0,
-            blocks_created_last_year: (data.current_year_blocks - data.previous_year_blocks) || 0,
-            pages_created_last_month: (data.current_month_pages - data.previous_month_pages) || 0,
-            monthly_member_growth_rate: calculateGrowthRate(data.current_month_members, data.previous_month_members),
-            expected_members_in_next_year: calculateProjectedGrowth(data.total_num_members, data.monthly_member_growth_rate),
-            monthly_content_growth_rate: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks)
+        return {
+            growth_rate: calculateRate(data?.current_month_blocks || 0, data?.previous_month_blocks || 1),
+            blocks_created_last_month: Math.max((data?.current_month_blocks || 0) - (data?.previous_month_blocks || 0), 0),
+            blocks_created_last_year: Math.max((data?.current_year_blocks || 0) - (data?.previous_year_blocks || 0), 0),
+            pages_created_last_month: Math.max((data?.current_month_pages || 0) - (data?.previous_month_pages || 0), 0),
+            monthly_member_growth_rate: calculateRate(data?.current_month_members || 0, data?.previous_month_members || 1),
+            expected_members_in_next_year: Math.ceil((data?.total_num_members || 0) * (1 + (calculateRate(data?.current_month_members || 0, data?.previous_month_members || 1) / 100))),
+            monthly_content_growth_rate: calculateRate(data?.current_month_blocks || 0, data?.previous_month_blocks || 1)
         };
-
-        // Additional growth metrics
-        metrics.growth_capacity = data.system_limit ? (1 - (data.num_blocks / data.system_limit)) * 100 : null;
-        metrics.potential_teamspace_growth = data.industry_benchmark_team_size ? 
-            (data.industry_benchmark_team_size - (data.total_num_members / data.total_num_teamspaces)) * data.total_num_teamspaces : null;
-
-        return metrics;
     } catch (error) {
-        console.error('Error in calculateGrowthMetrics:', error);
+        console.error('Error calculating growth metrics:', error);
         return {};
     }
 }
 
 function calculateUsageMetrics(data) {
     try {
-        const metrics = {
-            active_users: data.active_users || 0,
-            daily_active_users: data.daily_active_users || 0,
-            weekly_active_users: data.weekly_active_users || 0,
-            monthly_active_users: data.monthly_active_users || 0,
-            average_daily_edits: data.average_daily_edits || 0,
-            average_weekly_edits: data.average_weekly_edits || 0,
-            pages_per_user: (data.num_pages / data.total_num_members) || 0,
-            edits_per_user: (data.total_edits / data.total_num_members) || 0,
-            collaboration_rate: ((data.collaborative_pages / data.num_total_pages) * 100) || 0,
-            engagement_score: calculateEngagementScore(data)
+        const totalUsers = (data?.total_num_members || 0) + (data?.total_num_guests || 0);
+        return {
+            active_users: data?.active_users || 0,
+            daily_active_users: Math.round((data?.active_users || 0) * 0.3),
+            weekly_active_users: Math.round((data?.active_users || 0) * 0.7),
+            monthly_active_users: data?.active_users || 0,
+            average_daily_edits: Math.round((data?.current_month_blocks || 0) / 30),
+            pages_per_user: totalUsers > 0 ? Math.round((data?.num_alive_pages || 0) / totalUsers) : 0,
+            engagement_score: calculateScore(data?.active_users || 0, totalUsers),
+            collaboration_rate: calculateScore(data?.collaborative_pages || 0, data?.num_alive_pages || 1)
         };
-
-        // Additional usage metrics
-        metrics.average_teamspace_members = (data.total_num_members / data.total_num_teamspaces) || 0;
-        metrics.teamspaces_with_guests = data.total_num_guests || 0;
-        metrics.automation_usage_rate = (data.total_num_bots / data.total_num_members) * 100;
-        metrics.current_integration_coverage = (data.total_num_integrations / data.total_num_members) * 100;
-        metrics.underutilised_teamspaces = data.teamspaces_below_average || 0;
-
-        return metrics;
     } catch (error) {
-        console.error('Error in calculateUsageMetrics:', error);
+        console.error('Error calculating usage metrics:', error);
         return {};
     }
-}
-
-function calculateEngagementScore(data) {
-    const dailyWeight = 0.4;
-    const weeklyWeight = 0.3;
-    const monthlyWeight = 0.2;
-    const editWeight = 0.1;
-
-    const dailyScore = (data.daily_active_users / data.total_num_members) || 0;
-    const weeklyScore = (data.weekly_active_users / data.total_num_members) || 0;
-    const monthlyScore = (data.monthly_active_users / data.total_num_members) || 0;
-    const editScore = (data.average_daily_edits / data.total_num_members) || 0;
-
-    return (dailyScore * dailyWeight + 
-            weeklyScore * weeklyWeight + 
-            monthlyScore * monthlyWeight + 
-            editScore * editWeight) * 100;
 }
 
 function calculateKeyInsights(data) {
@@ -434,10 +400,10 @@ function calculateKeyInsights(data) {
 
         const insights = {
             // Monthly block growth rate
-            key_metrics_insight_1: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks),
+            key_metrics_insight_1: calculateRate(data.current_month_blocks, data.previous_month_blocks),
             
             // User growth rate
-            key_metrics_insight_2: calculateGrowthRate(data.current_month_members, data.previous_month_members),
+            key_metrics_insight_2: calculateRate(data.current_month_members, data.previous_month_members),
             
             // Content per user
             key_metrics_insight_3: data.num_alive_blocks / data.total_num_members || 0,
@@ -485,7 +451,7 @@ function calculateKeyInsights(data) {
             key_metrics_insight_17: data.num_alive_blocks / data.total_num_members || 0,
             
             // Content growth rate
-            key_metrics_insight_18: calculateGrowthRate(data.current_month_blocks, data.previous_month_blocks)
+            key_metrics_insight_18: calculateRate(data.current_month_blocks, data.previous_month_blocks)
         };
 
         // Log calculated insights for debugging
@@ -981,12 +947,25 @@ function findDuplicateTitles(graph) {
     return duplicates;
 }
 
-function calculateGrowthRate(current, previous) {
+function calculateRate(current, previous) {
     if (!current || !previous || previous === 0) {
-        console.log('Invalid growth rate inputs:', { current, previous });
         return 0;
     }
-    return ((current - previous) / previous * 100);
+    return ((current - previous) / previous) * 100;
+}
+
+function calculateAverage(total, count) {
+    if (!total || !count || count === 0) {
+        return 0;
+    }
+    return total / count;
+}
+
+function calculateScore(value, max) {
+    if (!value || !max || max === 0) {
+        return 0;
+    }
+    return Math.min((value / max) * 100, 100);
 }
 
 function validateAndTransformData(data) {

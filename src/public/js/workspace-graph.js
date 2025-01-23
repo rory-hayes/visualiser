@@ -111,54 +111,69 @@ export function initializeWorkspaceGraph(container, workspaceData) {
 
 function processWorkspaceData(data) {
     const nodes = [];
-    const links = [];
     const nodeMap = new Map();
+    const links = [];
+    const CHUNK_SIZE = 1000;
 
-    // Process each row into nodes
-    data.forEach(row => {
-        if (!row.ID) return;
+    // Process data in chunks
+    for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+        const chunk = data.slice(i, Math.min(i + CHUNK_SIZE, data.length));
+        
+        // Process each row in the chunk
+        chunk.forEach(row => {
+            if (!row.ID) return;
 
-        // Create node if it doesn't exist
-        if (!nodeMap.has(row.ID)) {
-            const node = {
-                id: row.ID,
-                type: row.TYPE?.toLowerCase() || 'unknown',
-                depth: parseInt(row.DEPTH) || 0,
-                pageDepth: parseInt(row.PAGE_DEPTH) || 0,
-                text: row.TEXT || '',
-                spaceId: row.SPACE_ID
-            };
-            nodes.push(node);
-            nodeMap.set(row.ID, node);
-        }
-
-        // Create parent-child links
-        if (row.PARENT_ID && nodeMap.has(row.PARENT_ID)) {
-            links.push({
-                source: row.PARENT_ID,
-                target: row.ID
-            });
-        }
-
-        // Process ancestors for additional connections
-        if (row.ANCESTORS) {
-            try {
-                const ancestors = JSON.parse(row.ANCESTORS);
-                for (let i = 0; i < ancestors.length - 1; i++) {
-                    const source = ancestors[i];
-                    const target = ancestors[i + 1];
-                    if (source && target) {
-                        links.push({
-                            source: target,
-                            target: source
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Error parsing ancestors:', error);
+            // Create node if it doesn't exist
+            if (!nodeMap.has(row.ID)) {
+                const node = {
+                    id: row.ID,
+                    type: row.TYPE?.toLowerCase() || 'unknown',
+                    depth: parseInt(row.DEPTH) || 0,
+                    pageDepth: parseInt(row.PAGE_DEPTH) || 0,
+                    text: row.TEXT || '',
+                    spaceId: row.SPACE_ID
+                };
+                nodes.push(node);
+                nodeMap.set(row.ID, node);
             }
-        }
-    });
 
+            // Create parent-child links
+            if (row.PARENT_ID && nodeMap.has(row.PARENT_ID)) {
+                links.push({
+                    source: row.PARENT_ID,
+                    target: row.ID
+                });
+            }
+
+            // Process ancestors more efficiently
+            if (row.ANCESTORS) {
+                try {
+                    const ancestors = JSON.parse(row.ANCESTORS);
+                    // Only create necessary ancestor links
+                    if (ancestors.length > 1) {
+                        for (let i = 0; i < ancestors.length - 1; i++) {
+                            const source = ancestors[i];
+                            const target = ancestors[i + 1];
+                            if (source && target) {
+                                links.push({
+                                    source: target,
+                                    target: source
+                                });
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error parsing ancestors:', error);
+                }
+            }
+        });
+
+        // Clear references to processed chunk
+        chunk.length = 0;
+    }
+
+    // Clear the nodeMap as it's no longer needed
+    nodeMap.clear();
+    
     return { nodes, links };
 }

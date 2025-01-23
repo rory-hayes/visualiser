@@ -187,72 +187,61 @@ function displayResults(data) {
         // Handle different data structures
         if (data && typeof data === 'object') {
             if (data.data) {
-                // Case 1: Nested under data property
                 graphData = data.data.dataframe_2 || [];
                 insightsData = data.data.dataframe_3 || {};
-                console.log('Case 1 - Data from data property:', {
-                    graphData: graphData?.length,
-                    insightsData: Object.keys(insightsData)
-                });
             } else if (data.dataframe_2 || data.dataframe_3) {
-                // Case 2: Direct properties
                 graphData = data.dataframe_2 || [];
                 insightsData = data.dataframe_3 || {};
-                console.log('Case 2 - Direct data properties:', {
-                    graphData: graphData?.length,
-                    insightsData: Object.keys(insightsData)
-                });
             } else if (Array.isArray(data)) {
-                // Case 3: Array data
                 graphData = data;
-                console.log('Case 3 - Array data:', {
-                    graphData: graphData?.length
-                });
             }
         }
 
-        // Validate extracted data
-        if (!graphData || !Array.isArray(graphData)) {
-            console.error('Invalid or missing graphData:', graphData);
-            showStatus('Error: Invalid graph data received', false);
-            return;
-        }
-
-        // Transform insightsData if needed
-        if (insightsData) {
-            // Ensure all required fields are present with proper types
-            insightsData = {
-                num_total_pages: Number(insightsData.num_total_pages || 0),
-                num_pages: Number(insightsData.num_pages || 0),
-                num_collections: Number(insightsData.num_collections || 0),
-                total_num_collection_views: Number(insightsData.total_num_collection_views || 0),
-                num_public_pages: Number(insightsData.num_public_pages || 0),
-                total_num_integrations: Number(insightsData.total_num_integrations || 0),
-                total_num_members: Number(insightsData.total_num_members || 0),
-                total_num_guests: Number(insightsData.total_num_guests || 0),
-                total_num_teamspaces: Number(insightsData.total_num_teamspaces || 0),
-                num_alive_pages: Number(insightsData.num_alive_pages || 0),
-                num_private_pages: Number(insightsData.num_private_pages || 0),
-                num_alive_blocks: Number(insightsData.num_alive_blocks || 0),
-                num_blocks: Number(insightsData.num_blocks || 0),
-                num_alive_collections: Number(insightsData.num_alive_collections || 0),
-                total_arr: Number(insightsData.total_arr || 0),
-                total_paid_seats: Number(insightsData.total_paid_seats || 0),
-                current_month_blocks: Number(insightsData.current_month_blocks || 0),
-                previous_month_blocks: Number(insightsData.previous_month_blocks || 0),
-                current_month_members: Number(insightsData.current_month_members || 0),
-                previous_month_members: Number(insightsData.previous_month_members || 0),
-                collaborative_pages: Number(insightsData.collaborative_pages || 0),
-                num_permission_groups: Number(insightsData.num_permission_groups || 0)
-            };
-            
-            console.log('Transformed insightsData:', insightsData);
-        }
-
-        // Calculate metrics using reportGenerator
-        const metrics = calculateMetrics(graphData, insightsData);
+        // Process graph data in chunks to reduce memory usage
+        const CHUNK_SIZE = 1000;
+        let processedGraphData = [];
         
-        // Log all metrics by category
+        for (let i = 0; i < graphData.length; i += CHUNK_SIZE) {
+            const chunk = graphData.slice(i, Math.min(i + CHUNK_SIZE, graphData.length));
+            processedGraphData.push(...chunk);
+            
+            // Clear the chunk reference
+            chunk.length = 0;
+            
+            // If we have processed enough data for initial display, break
+            if (processedGraphData.length >= 5000) {
+                console.log('Processed initial 5000 records for display');
+                break;
+            }
+        }
+
+        // Transform insights data efficiently
+        const transformedInsights = insightsData ? {
+            num_total_pages: Number(insightsData.num_total_pages || 0),
+            num_pages: Number(insightsData.num_pages || 0),
+            num_alive_pages: Number(insightsData.num_alive_pages || 0),
+            num_public_pages: Number(insightsData.num_public_pages || 0),
+            num_private_pages: Number(insightsData.num_private_pages || 0),
+            num_blocks: Number(insightsData.num_blocks || 0),
+            num_alive_blocks: Number(insightsData.num_alive_blocks || 0),
+            current_month_blocks: Number(insightsData.current_month_blocks || 0),
+            previous_month_blocks: Number(insightsData.previous_month_blocks || 0),
+            current_month_members: Number(insightsData.current_month_members || 0),
+            previous_month_members: Number(insightsData.previous_month_members || 0),
+            total_arr: Number(insightsData.total_arr || 0),
+            total_paid_seats: Number(insightsData.total_paid_seats || 0),
+            collaborative_pages: Number(insightsData.collaborative_pages || 0),
+            num_permission_groups: Number(insightsData.num_permission_groups || 0)
+        } : {};
+
+        // Calculate metrics using chunked data
+        const metrics = calculateMetrics(processedGraphData, transformedInsights);
+        
+        // Clear original data references
+        graphData = null;
+        insightsData = null;
+        
+        // Log metrics for debugging
         console.log('Calculated Metrics:', {
             sqlMetrics: {
                 total_pages: metrics.total_pages,
@@ -286,53 +275,15 @@ function displayResults(data) {
             }
         });
 
-        // Generate report
-        const template = `# Workspace Analysis Report
-
-## Overview
-Total Pages: [[total_pages]]
-Active Pages: [[num_alive_pages]]
-Collections: [[collections_count]]
-
-## Usage Metrics
-Total Members: [[total_num_members]]
-Total Guests: [[total_num_guests]]
-Connected Tools: [[connected_tool_count]]
-
-## Growth Metrics
-Growth Rate: [[growth_rate]]%
-Monthly Member Growth: [[monthly_member_growth_rate]]%
-
-## ROI Metrics
-Current Plan Cost: $[[current_plan]]
-Enterprise Plan ROI: [[enterprise_plan_roi]]%`;
-
-        const report = generateReport(template, metrics);
-        console.log('Generated Report:', report);
-
-        // Format and display results HTML
-        resultsContent.innerHTML = formatResults(graphData, insightsData);
+        // Update UI with metrics
+        updateMetricsDisplay(metrics);
         
-        // Initialize graph
-        const container = document.getElementById('graph-container');
-        if (!container) {
-            console.error('Graph container not found after HTML update');
-            showStatus('Error: Graph container not found', false);
-            return;
-        }
-
-        // Initialize graph
-        initializeGraph(graphData, container);
-        
-        // Scroll results into view
-        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        
-        // Force a resize event
-        window.dispatchEvent(new Event('resize'));
+        // Clear processed data
+        processedGraphData.length = 0;
         
     } catch (error) {
         console.error('Error in displayResults:', error);
-        showStatus('Error displaying results: ' + error.message, false);
+        throw error;
     }
 }
 

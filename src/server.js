@@ -404,78 +404,71 @@ app.get('/gennotion', (req, res) => {
     res.sendFile(path.join(process.cwd(), 'public', 'gennotion.html'));
 });
 
-// Add Hex API integration
-const HEX_API_TOKEN = '5b97b8d1945b14acc5c2faed5e314310438e038640df2ff475d357993d0217826b3db99144ebf236d189778cda42898e';
-const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
-
+// Generate Report Endpoint
 app.post('/api/generate-report', async (req, res) => {
     try {
-        const { _input_text } = req.body;
+        const { workspaceId, projectId } = req.body;
         
-        console.log('Received generate-report request:', {
-            workspaceId: _input_text,
-            projectId: HEX_PROJECT_ID
-        });
-        
-        if (!_input_text) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Workspace ID is required' 
-            });
+        console.log('Received generate-report request:', req.body);
+
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'Workspace ID is required' });
         }
 
-        const hexUrl = `https://app.hex.tech/api/v1/project/${HEX_PROJECT_ID}/run`;
-        console.log('Calling Hex API:', {
-            url: hexUrl,
-            projectId: HEX_PROJECT_ID,
-            inputText: _input_text
-        });
+        if (!projectId) {
+            return res.status(400).json({ error: 'Project ID is required' });
+        }
 
-        // Call Hex API to run the project with properly formatted parameters
-        const hexResponse = await axios.post(
-            hexUrl,
-            {
-                inputParams: {
-                    _input_text: _input_text
-                },
-                updatePublishedResults: false,
-                useCachedSqlResults: true
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${HEX_API_TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+        // Call Hex API
+        const hexResponse = await callHexAPI(workspaceId, projectId);
+        console.log('Hex API response:', hexResponse);
 
-        console.log('Hex API response:', {
-            status: hexResponse.status,
+        res.json({ 
+            success: true, 
             data: hexResponse.data,
-            runId: hexResponse.data?.run_id
-        });
-
-        res.json({
-            success: true,
-            runId: hexResponse.data.run_id,
-            status: hexResponse.data.status
+            runId: hexResponse.runId 
         });
 
     } catch (error) {
-        console.error('Error in generate-report endpoint:', {
-            error: error.message,
-            response: error.response?.data,
-            status: error.response?.status,
-            details: error.response?.data?.details
-        });
-        
-        const errorMessage = error.response?.data?.message || error.message || 'Internal server error';
-        res.status(error.response?.status || 500).json({ 
-            success: false, 
-            error: errorMessage
+        console.error('Error in generate-report:', error);
+        res.status(500).json({ 
+            error: error.message || 'Failed to generate report',
+            details: error.response?.data
         });
     }
 });
+
+async function callHexAPI(workspaceId, projectId) {
+    try {
+        const url = `https://app.hex.tech/api/v1/project/${projectId}/run`;
+        console.log('Calling Hex API:', {
+            url,
+            projectId,
+            inputText: workspaceId
+        });
+
+        const response = await axios.post(url, {
+            input_parameters: {
+                _input_text: workspaceId
+            }
+        }, {
+            headers: {
+                'Authorization': `Bearer ${process.env.HEX_API_KEY}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        return {
+            status: response.status,
+            data: response.data,
+            runId: response.data?.runId
+        };
+
+    } catch (error) {
+        console.error('Error calling Hex API:', error);
+        throw new Error(error.response?.data?.error || 'Failed to call Hex API');
+    }
+}
 
 // Add this endpoint to receive Hex results
 app.post('/api/hex-results', async (req, res) => {

@@ -42,6 +42,10 @@ async function handleGenerateReport() {
 
 async function processWorkspace(workspaceId) {
     try {
+        if (!workspaceId) {
+            throw new Error('Workspace ID is required');
+        }
+
         showStatus('Checking server status...', true);
         
         const isServerHealthy = await checkServerStatus();
@@ -53,15 +57,19 @@ async function processWorkspace(workspaceId) {
         // Trigger Hex report
         showStatus(`Triggering report for workspace ${workspaceId}...`, true);
         
+        const requestBody = {
+            workspaceId: workspaceId.trim(),
+            projectId: HEX_PROJECT_ID
+        };
+
+        console.log('Sending request with body:', requestBody);
+        
         const response = await fetch('/api/generate-report', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                workspaceId,
-                projectId: HEX_PROJECT_ID
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {

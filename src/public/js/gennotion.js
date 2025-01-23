@@ -311,7 +311,14 @@ function displayResults(response) {
 
 function createGraphVisualization(graphData) {
     try {
-        if (!Array.isArray(graphData) || graphData.length === 0) {
+        // Validate and extract the data
+        if (!graphData || !graphData.dataframe_2) {
+            console.error('Invalid graph data structure:', graphData);
+            return;
+        }
+
+        const data = graphData.dataframe_2;
+        if (!Array.isArray(data) || data.length === 0) {
             console.warn('No graph data to visualize');
             return;
         }
@@ -325,14 +332,18 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Transform data for D3
-        const { nodes, links } = transformDataForGraph(graphData);
-        
-        // Store data for resize handling
-        window._lastGraphData = { graphData };
-        
-        // Initialize the graph
-        initializeGraph({ data: { dataframe_2: graphData } }, container);
+        // Initialize the graph with the correct data structure
+        initializeGraph({ 
+            data: {
+                dataframe_2: data,
+                dataframe_3: graphData.dataframe_3
+            }
+        }, container);
+
+        console.log('Graph visualization initialized with:', {
+            nodes: data.length,
+            hasInsights: !!graphData.dataframe_3
+        });
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
@@ -656,7 +667,7 @@ function debounce(func, wait) {
     };
 }
 
-// Transform data for force-directed graph
+// Update transformDataForGraph to handle the new data structure
 function transformDataForGraph(data) {
     try {
         if (!Array.isArray(data) || data.length === 0) {
@@ -667,75 +678,50 @@ function transformDataForGraph(data) {
         // Create nodes array with date validation
         const nodes = data.map(item => {
             let createdTime = null;
-            if (item.CREATED_TIME) {
-                // Handle both string and number timestamps
-                const timestamp = typeof item.CREATED_TIME === 'string' ? 
-                    parseInt(item.CREATED_TIME) : Number(item.CREATED_TIME);
-                
-                if (!isNaN(timestamp)) {
-                    createdTime = new Date(timestamp);
-                    // Validate date
-                    if (createdTime.getFullYear() < 2000 || createdTime.getFullYear() > 2100) {
-                        console.warn(`Invalid date for node ${item.ID}: ${createdTime}, timestamp: ${timestamp}`);
-                        createdTime = null;
-                    }
+            if (item.created_time || item.CREATED_TIME) {
+                const timestamp = item.created_time || item.CREATED_TIME;
+                createdTime = new Date(typeof timestamp === 'string' ? parseInt(timestamp) : timestamp);
+                if (isNaN(createdTime.getTime())) {
+                    console.warn(`Invalid date for node ${item.id || item.ID}`);
+                    createdTime = null;
                 }
             }
 
             return {
-                id: item.ID,
-                name: item.TEXT || item.TYPE,
-                type: item.TYPE,
+                id: item.id || item.ID,
+                title: item.text || item.TEXT || item.title || item.type || item.TYPE || 'Untitled',
+                type: item.type || item.TYPE || 'page',
                 createdTime,
-                depth: Number(item.DEPTH) || 0,
-                pageDepth: Number(item.PAGE_DEPTH) || 0,
-                parentId: item.PARENT_ID,
-                originalData: item
+                depth: Number(item.depth || item.DEPTH) || 0,
+                parent: item.parent_id || item.PARENT_ID
             };
         });
 
-        // Log date range information
-        const dates = nodes.map(n => n.createdTime).filter(Boolean);
-        const startDate = new Date(Math.min(...dates));
-        const endDate = new Date(Math.max(...dates));
-        
-        console.log('Date range in data:', {
-            start: startDate.toLocaleDateString(),
-            end: endDate.toLocaleDateString(),
-            totalNodes: nodes.length,
-            nodesWithDates: dates.length,
-            nodesWithoutDates: nodes.length - dates.length
+        // Create links array
+        const links = [];
+        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+        nodes.forEach(node => {
+            if (node.parent && nodeMap.has(node.parent)) {
+                links.push({
+                    source: nodeMap.get(node.parent),
+                    target: node,
+                    value: 1
+                });
+            }
         });
 
-        // Log nodes without dates for debugging
-        const nodesWithoutDates = nodes.filter(n => !n.createdTime);
-        if (nodesWithoutDates.length > 0) {
-            console.warn('Nodes without valid dates:', nodesWithoutDates);
-        }
+        console.log('Transformed graph data:', {
+            nodes: nodes.length,
+            links: links.length,
+            sampleNode: nodes[0]
+        });
 
-        return { nodes, links: createLinks(nodes) };
+        return { nodes, links };
     } catch (error) {
         console.error('Error transforming data:', error);
         return { nodes: [], links: [] };
     }
-}
-
-// Helper function to create links
-function createLinks(nodes) {
-    const links = [];
-    const nodeMap = new Map(nodes.map(n => [n.id, n]));
-
-    nodes.forEach(node => {
-        if (node.parentId && nodeMap.has(node.parentId)) {
-            links.push({
-                source: nodeMap.get(node.parentId),
-                target: node,
-                value: 1
-            });
-        }
-    });
-
-    return links;
 }
 
 // Timeline slider functionality

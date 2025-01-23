@@ -146,14 +146,18 @@ function listenForResults() {
         }
 
         if (progressElement) {
-            const percentage = Math.round((current / total) * 100);
+            // Ensure current and total are numbers and have default values
+            const safeTotal = typeof total === 'number' ? total : 0;
+            const safeCurrent = typeof current === 'number' ? Math.min(current, safeTotal) : 0;
+            const percentage = safeTotal > 0 ? Math.round((safeCurrent / safeTotal) * 100) : 0;
+
             progressElement.innerHTML = `
                 <div class="progress-bar bg-gray-200 rounded-full h-2.5 mb-2">
                     <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
                          style="width: ${percentage}%"></div>
                 </div>
                 <div class="flex justify-between text-sm text-gray-600">
-                    <span>Processing: ${current.toLocaleString()} / ${total.toLocaleString()}</span>
+                    <span>Processing: ${safeCurrent.toLocaleString()} / ${safeTotal.toLocaleString()}</span>
                     <span>${percentage}%</span>
                 </div>
             `;
@@ -1384,5 +1388,53 @@ function calculateMetrics(graphData, insightsData) {
     } catch (error) {
         console.error('Error calculating metrics:', error);
         return {};
+    }
+}
+
+// Add the missing processResults function
+function processResults(data) {
+    try {
+        console.log('Processing results:', {
+            hasData: !!data,
+            recordCount: data?.data?.dataframe_2?.length || 0,
+            hasDataframe3: !!data?.data?.dataframe_3
+        });
+
+        // Show results section
+        const resultsSection = document.getElementById('resultsSection');
+        if (resultsSection) {
+            resultsSection.classList.remove('hidden');
+        }
+
+        // Clear previous results
+        const resultsContent = document.getElementById('resultsContent');
+        if (resultsContent) {
+            resultsContent.innerHTML = '';
+        }
+
+        // Format and display results
+        if (data?.data?.dataframe_2) {
+            const formattedResults = formatResults(data.data.dataframe_2, data.data.dataframe_3);
+            if (resultsContent) {
+                resultsContent.innerHTML = formattedResults;
+            }
+
+            // Calculate and update metrics
+            const metrics = calculateMetrics(data.data.dataframe_2, data.data.dataframe_3);
+            updateMetricsDisplay(metrics);
+
+            // Create graph visualization
+            const container = document.getElementById('graph-container');
+            if (container) {
+                createGraphVisualization(data.data.dataframe_2);
+            }
+
+            showStatus('Analysis complete', false);
+        } else {
+            showStatus('No data available for analysis', false);
+        }
+    } catch (error) {
+        console.error('Error processing results:', error);
+        showStatus(`Error processing results: ${error.message}`, false);
     }
 } 

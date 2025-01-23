@@ -1199,4 +1199,113 @@ function updateMetricValue(elementId, value) {
             }
         }
     }
+}
+
+function calculateMetrics(graphData, insightsData) {
+    try {
+        if (!Array.isArray(graphData)) {
+            console.warn('Invalid graph data format');
+            return {};
+        }
+
+        // Initialize metrics object
+        const metrics = {
+            // Structure metrics
+            total_pages: 0,
+            num_alive_pages: 0,
+            collections_count: 0,
+            max_depth: 0,
+            avg_depth: 0,
+            deep_pages_count: 0,
+
+            // Usage metrics (placeholder values until we have actual usage data)
+            daily_active_users: 0,
+            weekly_active_users: 0,
+            monthly_active_users: 0,
+            pages_per_user: 0,
+            engagement_score: 0,
+            collaboration_rate: 0,
+
+            // Growth metrics
+            growth_rate: 0,
+            monthly_member_growth_rate: 0,
+            monthly_content_growth_rate: 0,
+            pages_created_last_month: 0,
+            expected_members_in_next_year: 0,
+            blocks_created_last_year: 0,
+
+            // Performance metrics
+            current_organization_score: 0,
+            current_productivity_score: 0,
+            current_collaboration_score: 0,
+            ai_productivity_gain: 0,
+            automation_potential: 0,
+            projected_time_savings: 0,
+
+            // ROI metrics
+            current_plan: 0,
+            enterprise_plan_roi: 0,
+            enterprise_plan_w_ai_roi: 0,
+            '10_percent_increase': 0,
+            '20_percent_increase': 0,
+            '50_percent_increase': 0
+        };
+
+        // Calculate structure metrics
+        graphData.forEach(node => {
+            // Count total pages
+            if (node.TYPE.includes('page')) {
+                metrics.total_pages++;
+                
+                // Count active pages (created in the last 90 days)
+                const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+                if (node.CREATED_TIME && node.CREATED_TIME > ninetyDaysAgo) {
+                    metrics.num_alive_pages++;
+                }
+            }
+
+            // Count collections
+            if (node.TYPE.includes('collection')) {
+                metrics.collections_count++;
+            }
+
+            // Track depth metrics
+            const depth = node.DEPTH || 0;
+            metrics.max_depth = Math.max(metrics.max_depth, depth);
+            
+            if (depth > 3) {
+                metrics.deep_pages_count++;
+            }
+        });
+
+        // Calculate average depth
+        const totalDepth = graphData.reduce((sum, node) => sum + (node.DEPTH || 0), 0);
+        metrics.avg_depth = totalDepth / graphData.length;
+
+        // Process insights data if available
+        if (insightsData) {
+            Object.assign(metrics, {
+                daily_active_users: insightsData.daily_active_users || 0,
+                weekly_active_users: insightsData.weekly_active_users || 0,
+                monthly_active_users: insightsData.monthly_active_users || 0,
+                pages_per_user: insightsData.pages_per_user || 0,
+                engagement_score: insightsData.engagement_score || 0,
+                collaboration_rate: insightsData.collaboration_rate || 0
+            });
+        }
+
+        // Round numerical values to 2 decimal places
+        Object.keys(metrics).forEach(key => {
+            if (typeof metrics[key] === 'number') {
+                metrics[key] = Math.round(metrics[key] * 100) / 100;
+            }
+        });
+
+        console.log('Calculated metrics:', metrics);
+        return metrics;
+
+    } catch (error) {
+        console.error('Error calculating metrics:', error);
+        return {};
+    }
 } 

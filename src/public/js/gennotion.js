@@ -407,42 +407,49 @@ function transformDataForGraph(data) {
 
         console.log('Processing data for graph:', {
             totalRecords: data.length,
-            sampleRecord: data[0]
+            sampleRecord: data[0],
+            maxDepth: Math.max(...data.map(item => parseInt(item.DEPTH) || 0))
         });
 
         const nodes = [];
-        const links = [];
+        const links = new Set(); // Use Set to avoid duplicate links
         const nodeMap = new Map();
+        const depthMap = new Map(); // Track nodes by depth
 
-        // First pass: Create nodes
+        // First pass: Create all nodes and organize by depth
         data.forEach(item => {
             if (!item.ID) {
                 console.warn('Item missing ID:', item);
                 return;
             }
 
+            const depth = parseInt(item.DEPTH) || 0;
+            if (!depthMap.has(depth)) {
+                depthMap.set(depth, new Set());
+            }
+            depthMap.get(depth).add(item.ID);
+
             // Create node if it doesn't exist
             if (!nodeMap.has(item.ID)) {
                 const node = {
                     id: item.ID,
-                    // Use TITLE for collections/databases, TEXT for pages, or ID as fallback
                     title: item.TITLE || item.TEXT || item.NAME || `${item.TYPE} ${item.ID.substring(0, 8)}`,
-                    type: item.TYPE || 'page',
+                    type: item.TYPE?.toLowerCase() || 'page',
                     url: item.URL,
                     createdTime: item.CREATED_TIME ? new Date(item.CREATED_TIME) : null,
                     lastEditedTime: item.LAST_EDITED_TIME ? new Date(item.LAST_EDITED_TIME) : null,
-                    depth: parseInt(item.DEPTH) || 0,
+                    depth: depth,
                     hasChildren: item.HAS_CHILDREN === 'true' || item.HAS_CHILDREN === true,
                     isCollection: item.TYPE?.toLowerCase().includes('collection'),
                     isDatabase: item.TYPE?.toLowerCase().includes('database'),
-                    ancestors: [],
-                    parentId: item.PARENT_ID
+                    parentId: item.PARENT_ID,
+                    spaceId: item.SPACE_ID,
+                    ancestors: []
                 };
 
                 // Parse ANCESTORS field
                 try {
                     if (item.ANCESTORS) {
-                        // Remove newlines and extra whitespace
                         const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
                         node.ancestors = JSON.parse(cleanedAncestors);
                     }
@@ -456,55 +463,94 @@ function transformDataForGraph(data) {
             }
         });
 
-        // Second pass: Create links based on parent-child relationships
+        // Second pass: Create all hierarchical relationships
         nodes.forEach(node => {
-            // Create parent-child link
+            // 1. Direct parent-child relationships (stronger connection)
             if (node.parentId && nodeMap.has(node.parentId)) {
-                links.push({
+                links.add(JSON.stringify({
                     source: node.parentId,
                     target: node.id,
-                    value: 1,
-                    type: 'parent-child'
+                    type: 'parent-child',
+                    value: 3 // Stronger connection for direct parent-child
+                }));
+            }
+
+            // 2. Ancestor relationships (showing full hierarchy)
+            if (Array.isArray(node.ancestors)) {
+                node.ancestors.forEach(ancestorId => {
+                    if (nodeMap.has(ancestorId) && ancestorId !== node.parentId) {
+                        links.add(JSON.stringify({
+                            source: ancestorId,
+                            target: node.id,
+                            type: 'ancestor',
+                            value: 1 // Weaker connection for ancestor relationships
+                        }));
+                    }
                 });
             }
 
-            // Create collection/database view links
-            if (node.type?.toLowerCase().includes('view')) {
+            // 3. Collection/Database relationships
+            if (node.type?.includes('view')) {
                 const parentNode = nodeMap.get(node.parentId);
                 if (parentNode && (parentNode.isCollection || parentNode.isDatabase)) {
-                    links.push({
+                    links.add(JSON.stringify({
                         source: node.parentId,
                         target: node.id,
-                        value: 1,
-                        type: 'collection-view'
-                    });
+                        type: 'collection-view',
+                        value: 2 // Medium strength for collection-view relationships
+                    }));
                 }
+            }
+
+            // 4. Connect nodes at adjacent depths
+            const currentDepth = node.depth;
+            const nodesAtNextDepth = depthMap.get(currentDepth + 1);
+            if (nodesAtNextDepth) {
+                nodesAtNextDepth.forEach(childId => {
+                    const childNode = nodeMap.get(childId);
+                    if (childNode && childNode.ancestors.includes(node.id)) {
+                        links.add(JSON.stringify({
+                            source: node.id,
+                            target: childId,
+                            type: 'depth-connection',
+                            value: 2
+                        }));
+                    }
+                });
             }
         });
 
-        // Convert link references from IDs to actual node objects
-        const processedLinks = links.map(link => {
-            const source = typeof link.source === 'string' ? nodeMap.get(link.source) : link.source;
-            const target = typeof link.target === 'string' ? nodeMap.get(link.target) : link.target;
+        // Convert links back to array and resolve node references
+        const processedLinks = Array.from(links).map(linkStr => {
+            const link = JSON.parse(linkStr);
+            const source = nodeMap.get(link.source);
+            const target = nodeMap.get(link.target);
             
             if (source && target) {
-                return { 
-                    source, 
-                    target, 
-                    value: link.value,
-                    type: link.type
+                return {
+                    source,
+                    target,
+                    type: link.type,
+                    value: link.value
                 };
             }
             return null;
         }).filter(Boolean);
 
+        // Log detailed statistics
+        const depthStats = {};
+        depthMap.forEach((nodes, depth) => {
+            depthStats[depth] = nodes.size;
+        });
+
         console.log('Graph data transformed:', {
             originalRecords: data.length,
             nodes: nodes.length,
             links: processedLinks.length,
+            nodesByDepth: depthStats,
             nodeTypes: [...new Set(nodes.map(n => n.type))],
-            sampleNode: nodes[0],
-            sampleLink: processedLinks[0]
+            linkTypes: [...new Set(processedLinks.map(l => l.type))],
+            maxDepth: Math.max(...nodes.map(n => n.depth))
         });
 
         return { nodes, links: processedLinks };
@@ -651,36 +697,36 @@ function formatResults(graphData, insightsData) {
                 </div>
             </div>
 
-            <!-- ROI Metrics -->
-            <div class="mb-8 p-4 bg-yellow-50 rounded-lg">
-                <h3 class="font-semibold text-lg text-yellow-900 mb-3">ROI Metrics</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Current Plan Cost</div>
-                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics.current_plan)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Enterprise Plan ROI</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_roi)}%</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Enterprise AI ROI</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_w_ai_roi)}%</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">10% Growth Savings</div>
-                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['10_percent_increase'])}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">20% Growth Savings</div>
-                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['20_percent_increase'])}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">50% Growth Savings</div>
-                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['50_percent_increase'])}</div>
-                    </div>
-                </div>
-            </div>
+            // <!-- ROI Metrics -->
+            // <div class="mb-8 p-4 bg-yellow-50 rounded-lg">
+            //     <h3 class="font-semibold text-lg text-yellow-900 mb-3">ROI Metrics</h3>
+            //     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            //         <div class="bg-white p-3 rounded shadow-sm">
+            //             <div class="text-sm text-gray-500">Current Plan Cost</div>
+            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics.current_plan)}</div>
+            //         </div>
+            //         <div class="bg-white p-3 rounded shadow-sm">
+            //             <div class="text-sm text-gray-500">Enterprise Plan ROI</div>
+            //             <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_roi)}%</div>
+            //         </div>
+            //         <div class="bg-white p-3 rounded shadow-sm">
+            //             <div class="text-sm text-gray-500">Enterprise AI ROI</div>
+            //             <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_w_ai_roi)}%</div>
+            //         </div>
+            //         <div class="bg-white p-3 rounded shadow-sm">
+            //             <div class="text-sm text-gray-500">10% Growth Savings</div>
+            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['10_percent_increase'])}</div>
+            //         </div>
+            //         <div class="bg-white p-3 rounded shadow-sm">
+            //             <div class="text-sm text-gray-500">20% Growth Savings</div>
+            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['20_percent_increase'])}</div>
+            //         </div>
+            //         <div class="bg-white p-3 rounded shadow-sm">
+            //             <div class="text-sm text-gray-500">50% Growth Savings</div>
+            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['50_percent_increase'])}</div>
+            //         </div>
+            //     </div>
+            // </div>
 
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>

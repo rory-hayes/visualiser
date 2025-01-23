@@ -122,34 +122,54 @@ function listenForResults() {
     let totalExpectedRecords = 0;
     
     function showProgress(current, total) {
-        const progressElement = document.getElementById('progress-container') || createProgressElement();
-        const percentage = Math.round((current / total) * 100);
-        progressElement.innerHTML = `
-            <div class="progress-bar">
-                <div class="progress" style="width: ${percentage}%"></div>
-            </div>
-            <div class="progress-text">
-                Processing: ${current.toLocaleString()} / ${total.toLocaleString()} records (${percentage}%)
-            </div>
-        `;
-    }
+        // First ensure status section is visible
+        const statusSection = document.getElementById('statusSection');
+        if (statusSection) {
+            statusSection.classList.remove('hidden');
+        }
 
-    function createProgressElement() {
-        const container = document.createElement('div');
-        container.id = 'progress-container';
-        container.style.cssText = 'margin: 20px 0; padding: 10px; border: 1px solid #ccc; border-radius: 4px;';
-        document.getElementById('status').appendChild(container);
-        return container;
+        // Get or create progress container
+        let progressElement = document.getElementById('progress-container');
+        if (!progressElement) {
+            progressElement = document.createElement('div');
+            progressElement.id = 'progress-container';
+            progressElement.className = 'mt-4 bg-white rounded-lg shadow p-4';
+            
+            // Try to append to status section first
+            const statusElement = document.getElementById('status');
+            if (statusElement) {
+                statusElement.appendChild(progressElement);
+            } else {
+                // Fallback to status section if status element doesn't exist
+                statusSection?.appendChild(progressElement);
+            }
+        }
+
+        if (progressElement) {
+            const percentage = Math.round((current / total) * 100);
+            progressElement.innerHTML = `
+                <div class="progress-bar bg-gray-200 rounded-full h-2.5 mb-2">
+                    <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
+                         style="width: ${percentage}%"></div>
+                </div>
+                <div class="flex justify-between text-sm text-gray-600">
+                    <span>Processing: ${current.toLocaleString()} / ${total.toLocaleString()}</span>
+                    <span>${percentage}%</span>
+                </div>
+            `;
+        }
     }
 
     function connectEventSource() {
+        // Show initial status
         showStatus('Connecting to event stream...');
+        
         const eventSource = new EventSource('/api/hex-results/stream');
         
         eventSource.onopen = () => {
             console.log('EventSource connection opened');
             retryCount = 0; // Reset retry count on successful connection
-            showStatus('Connection established');
+            showStatus('Connection established', true);
         };
 
         eventSource.onmessage = (event) => {
@@ -158,7 +178,7 @@ function listenForResults() {
                 
                 if (data.type === 'progress') {
                     totalExpectedRecords = data.totalRecords;
-                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`);
+                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
                     showProgress(data.recordsProcessed, data.totalRecords);
                     return;
                 }
@@ -198,7 +218,7 @@ function listenForResults() {
                 }
             } catch (error) {
                 console.error('Error processing message:', error);
-                showStatus('Error processing data: ' + error.message);
+                showStatus(`Error processing data: ${error.message}`, false);
             }
         };
 
@@ -209,13 +229,13 @@ function listenForResults() {
             if (eventSource.readyState === EventSource.CLOSED) {
                 if (retryCount < MAX_RETRIES) {
                     retryCount++;
-                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`);
+                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
                     setTimeout(() => {
                         eventSource.close();
                         connectEventSource();
                     }, 2000 * retryCount); // Exponential backoff
                 } else {
-                    showStatus('Failed to maintain connection after multiple attempts. Please try again.');
+                    showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
                 }
             }
         };
@@ -1142,26 +1162,23 @@ function initializeTimeline(container, nodes, node, link, svg) {
 }
 
 function showStatus(message, showSpinner = false) {
-    statusSection.classList.remove('hidden');
-    statusText.textContent = message;
+    const statusSection = document.getElementById('statusSection');
+    const statusText = document.getElementById('statusText');
+    const statusSpinner = document.getElementById('statusSpinner');
     
-    // Create or update progress container
-    let progressContainer = document.getElementById('progressContainer');
-    if (!progressContainer) {
-        progressContainer = document.createElement('div');
-        progressContainer.id = 'progressContainer';
-        progressContainer.className = 'mt-4 bg-white rounded-lg shadow p-4';
-        statusSection.appendChild(progressContainer);
-    }
-
-    if (showSpinner) {
-        statusSpinner.classList.remove('hidden');
-        // Show progress container
-        progressContainer.classList.remove('hidden');
+    if (statusSection && statusText) {
+        statusSection.classList.remove('hidden');
+        statusText.textContent = message;
+        
+        if (statusSpinner) {
+            if (showSpinner) {
+                statusSpinner.classList.remove('hidden');
+            } else {
+                statusSpinner.classList.add('hidden');
+            }
+        }
     } else {
-        statusSpinner.classList.add('hidden');
-        // Hide progress container when complete
-        progressContainer.classList.add('hidden');
+        console.warn('Status elements not found in DOM');
     }
 }
 

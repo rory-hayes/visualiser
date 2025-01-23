@@ -72,28 +72,25 @@ async function processWorkspace(workspaceId) {
             body: JSON.stringify(requestBody)
         });
 
+        const data = await response.json();
+
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to trigger report');
+            let errorMessage = data.error || 'Failed to trigger report';
+            if (data.details) {
+                errorMessage += `: ${data.details}`;
+            }
+            throw new Error(errorMessage);
         }
 
-        const data = await response.json();
-        
-        // Send data to server for logging
-        await fetch('/api/log-data', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                type: 'generate-report',
-                data: data
-            })
-        });
-        
-        if (!data.success) {
-            throw new Error(data.error || 'Failed to trigger report');
+        if (!data.success || !data.runId) {
+            throw new Error('Invalid response from server');
         }
+
+        // Log successful response
+        console.log('Report generation triggered:', {
+            success: data.success,
+            runId: data.runId
+        });
 
         showStatus(`Report triggered for workspace ${workspaceId}. Waiting for results...`, true);
         
@@ -102,7 +99,18 @@ async function processWorkspace(workspaceId) {
 
     } catch (error) {
         console.error('Error processing workspace:', error);
-        showStatus(`Error processing workspace ${workspaceId}: ${error.message}`, false);
+        let errorMessage = error.message;
+        
+        // Add more context for specific errors
+        if (errorMessage.includes('Hex API Error')) {
+            errorMessage += '. Please check your Hex API configuration.';
+        } else if (errorMessage.includes('Invalid Hex API key')) {
+            errorMessage = 'API key is invalid or expired. Please update your configuration.';
+        } else if (errorMessage.includes('Hex project not found')) {
+            errorMessage = 'Hex project configuration is incorrect. Please verify the project ID.';
+        }
+        
+        showStatus(`Error processing workspace ${workspaceId}: ${errorMessage}`, false);
     }
 }
 

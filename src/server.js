@@ -444,13 +444,15 @@ async function callHexAPI(workspaceId, projectId) {
         console.log('Calling Hex API:', {
             url,
             projectId,
-            inputText: workspaceId
+            workspaceId
         });
 
         const response = await axios.post(url, {
             input_parameters: {
-                _input_text: workspaceId
-            }
+                workspace_id: workspaceId
+            },
+            update_published_results: false,
+            use_cached_sql_results: true
         }, {
             headers: {
                 'Authorization': `Bearer ${process.env.HEX_API_KEY}`,
@@ -458,15 +460,38 @@ async function callHexAPI(workspaceId, projectId) {
             }
         });
 
+        if (!response.data || !response.data.runId) {
+            throw new Error('Invalid response from Hex API');
+        }
+
+        console.log('Hex API response:', {
+            status: response.status,
+            runId: response.data.runId,
+            data: response.data
+        });
+
         return {
             status: response.status,
             data: response.data,
-            runId: response.data?.runId
+            runId: response.data.runId
         };
 
     } catch (error) {
-        console.error('Error calling Hex API:', error);
-        throw new Error(error.response?.data?.error || 'Failed to call Hex API');
+        console.error('Error calling Hex API:', {
+            error: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+        });
+        
+        if (error.response?.data?.error) {
+            throw new Error(`Hex API Error: ${error.response.data.error}`);
+        } else if (error.response?.status === 401) {
+            throw new Error('Invalid Hex API key');
+        } else if (error.response?.status === 404) {
+            throw new Error('Hex project not found');
+        } else {
+            throw new Error(error.message || 'Failed to call Hex API');
+        }
     }
 }
 

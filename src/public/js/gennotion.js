@@ -425,7 +425,8 @@ function transformDataForGraph(data) {
             if (!nodeMap.has(item.ID)) {
                 const node = {
                     id: item.ID,
-                    title: item.TEXT || item.TITLE || 'Untitled',
+                    // Use TITLE for collections/databases, TEXT for pages, or ID as fallback
+                    title: item.TITLE || item.TEXT || item.NAME || `${item.TYPE} ${item.ID.substring(0, 8)}`,
                     type: item.TYPE || 'page',
                     url: item.URL,
                     createdTime: item.CREATED_TIME ? new Date(item.CREATED_TIME) : null,
@@ -434,7 +435,8 @@ function transformDataForGraph(data) {
                     hasChildren: item.HAS_CHILDREN === 'true' || item.HAS_CHILDREN === true,
                     isCollection: item.TYPE?.toLowerCase().includes('collection'),
                     isDatabase: item.TYPE?.toLowerCase().includes('database'),
-                    ancestors: []
+                    ancestors: [],
+                    parentId: item.PARENT_ID
                 };
 
                 // Parse ANCESTORS field
@@ -454,35 +456,29 @@ function transformDataForGraph(data) {
             }
         });
 
-        // Second pass: Create links based on ancestors and parent-child relationships
+        // Second pass: Create links based on parent-child relationships
         nodes.forEach(node => {
-            if (node.ancestors && node.ancestors.length > 0) {
-                // Create links to immediate parent
-                const immediateParent = node.ancestors[node.ancestors.length - 1];
-                if (immediateParent && nodeMap.has(immediateParent)) {
-                    links.push({
-                        source: immediateParent,
-                        target: node.id,
-                        value: 1,
-                        type: 'parent-child'
-                    });
-                }
+            // Create parent-child link
+            if (node.parentId && nodeMap.has(node.parentId)) {
+                links.push({
+                    source: node.parentId,
+                    target: node.id,
+                    value: 1,
+                    type: 'parent-child'
+                });
             }
 
-            // If it's a collection/database, add links to its views
-            if (node.isCollection || node.isDatabase) {
-                nodes.forEach(potentialChild => {
-                    if (potentialChild.ancestors && 
-                        potentialChild.ancestors.includes(node.id) && 
-                        potentialChild.type?.toLowerCase().includes('view')) {
-                        links.push({
-                            source: node.id,
-                            target: potentialChild.id,
-                            value: 1,
-                            type: 'collection-view'
-                        });
-                    }
-                });
+            // Create collection/database view links
+            if (node.type?.toLowerCase().includes('view')) {
+                const parentNode = nodeMap.get(node.parentId);
+                if (parentNode && (parentNode.isCollection || parentNode.isDatabase)) {
+                    links.push({
+                        source: node.parentId,
+                        target: node.id,
+                        value: 1,
+                        type: 'collection-view'
+                    });
+                }
             }
         });
 

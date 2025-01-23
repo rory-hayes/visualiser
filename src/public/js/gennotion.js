@@ -118,8 +118,16 @@ function listenForResults() {
     const eventSource = new EventSource('/api/hex-results/stream');
     let retryCount = 0;
     const MAX_RETRIES = 3;
+    const TIMEOUT = 60000; // 60 seconds timeout
     
     showStatus('Waiting for results...', true);
+
+    // Set timeout
+    const timeoutId = setTimeout(() => {
+        console.log('Results timeout reached');
+        eventSource.close();
+        showStatus('Timeout waiting for results. Please try again.', false);
+    }, TIMEOUT);
 
     eventSource.onopen = () => {
         console.log('EventSource connection opened');
@@ -128,14 +136,27 @@ function listenForResults() {
 
     eventSource.onmessage = (event) => {
         try {
+            console.log('Received event data:', event.data);
             const data = JSON.parse(event.data);
-            if (data && data.data) {
+            
+            if (data.type === 'connected') {
+                console.log('Connection established');
+                return;
+            }
+
+            if (data.success && data.data && data.data.data) {
+                console.log('Received valid data:', {
+                    dataframe2Length: data.data.data.dataframe_2?.length,
+                    hasDataframe3: !!data.data.data.dataframe_3
+                });
+                
+                clearTimeout(timeoutId);
                 eventSource.close();
                 showStatus('Rendering results...');
-                displayResults(data);
+                displayResults(data.data);
                 resultsSection.classList.remove('hidden');
             } else {
-                console.warn('Received empty or invalid data:', data);
+                console.warn('Received invalid data structure:', data);
                 showStatus('Processing workspace data...', true);
             }
         } catch (error) {
@@ -159,6 +180,7 @@ function listenForResults() {
                 listenForResults();
             }, 2000);
         } else {
+            clearTimeout(timeoutId);
             showStatus('Failed to connect. Please try again.', false);
             eventSource.close();
         }

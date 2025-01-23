@@ -502,7 +502,61 @@ async function callHexAPI(workspaceId, projectId) {
     }
 }
 
-// Add this endpoint to receive Hex results
+// Add endpoint for streaming Hex results
+app.get('/api/hex-results/stream', (req, res) => {
+    try {
+        // Set SSE headers
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+        });
+
+        // Send initial connection message
+        res.write('data: {"type":"connected"}\n\n');
+
+        // Function to check for results
+        const checkResults = async () => {
+            try {
+                const fileContent = await fs.promises.readFile(STORAGE_FILE, 'utf8');
+                const results = JSON.parse(fileContent);
+
+                if (results && results.data) {
+                    console.log('Found results, sending to client');
+                    res.write(`data: ${JSON.stringify({
+                        success: true,
+                        data: results
+                    })}\n\n`);
+                    
+                    // Clear the file after sending
+                    await fs.promises.writeFile(STORAGE_FILE, '{}');
+                    
+                    // End the connection
+                    res.end();
+                    return;
+                }
+            } catch (error) {
+                console.error('Error checking results:', error);
+            }
+        };
+
+        // Check for results every 2 seconds
+        const interval = setInterval(async () => {
+            await checkResults();
+        }, 2000);
+
+        // Clean up on client disconnect
+        req.on('close', () => {
+            clearInterval(interval);
+        });
+
+    } catch (error) {
+        console.error('Error in hex-results stream:', error);
+        res.status(500).end();
+    }
+});
+
+// Add endpoint to receive Hex results
 app.post('/api/hex-results', async (req, res) => {
     try {
         const results = req.body;
@@ -512,148 +566,17 @@ app.post('/api/hex-results', async (req, res) => {
             dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
         });
 
-        // Initialize transformed data structure
-        let transformedData = {
-            data: {
-                dataframe_2: [],
-                dataframe_3: {}
-            }
-        };
+        // Save results to file
+        await fs.promises.writeFile(STORAGE_FILE, JSON.stringify({
+            timestamp: new Date().toISOString(),
+            data: results.data
+        }));
 
-        // Process dataframe_2 in chunks with immediate garbage collection
-        if (results.data && Array.isArray(results.data.dataframe_2)) {
-            const chunkSize = 500;
-            const writeStream = fs.createWriteStream(STORAGE_FILE);
-            
-            // Write header
-            writeStream.write('{"timestamp":"' + new Date().toISOString() + '","data":{"dataframe_2":[');
-            
-            // Process chunks
-            for (let i = 0; i < results.data.dataframe_2.length; i += chunkSize) {
-                const chunk = results.data.dataframe_2.slice(i, Math.min(i + chunkSize, results.data.dataframe_2.length));
-                
-                // Transform chunk
-                const transformedChunk = chunk.map(item => ({
-                    ID: item.ID || item.id || '',
-                    TYPE: item.TYPE || item.type || '',
-                    PARENT_ID: item.PARENT_ID || item.parent_id || '',
-                    SPACE_ID: item.SPACE_ID || item.space_id || '',
-                    ANCESTORS: item.ANCESTORS || item.ancestors || [],
-                    DEPTH: item.DEPTH || item.depth || 0,
-                    PAGE_DEPTH: item.PAGE_DEPTH || item.page_depth || 0,
-                    PARENT_PAGE_ID: item.PARENT_PAGE_ID || item.parent_page_id || '',
-                    TEXT: item.TEXT || item.text || '',
-                    CREATED_TIME: item.CREATED_TIME || item.created_time || ''
-                }));
-
-                // Write chunk to file
-                for (let j = 0; j < transformedChunk.length; j++) {
-                    writeStream.write(
-                        (i + j === 0 ? '' : ',') + 
-                        JSON.stringify(transformedChunk[j])
-                    );
-                }
-
-                // Clear chunk from memory
-                chunk.length = 0;
-                transformedChunk.length = 0;
-
-                // Force garbage collection if available
-                if (global.gc) {
-                    global.gc();
-                }
-            }
-
-            // Process dataframe_3 (metrics)
-            if (results.data.dataframe_3) {
-                const df3 = results.data.dataframe_3;
-                transformedData.data.dataframe_3 = {
-                    num_total_pages: Number(df3.num_total_pages || df3.NUM_TOTAL_PAGES || 0),
-                    num_pages: Number(df3.num_pages || df3.NUM_PAGES || 0),
-                    num_alive_pages: Number(df3.num_alive_pages || df3.NUM_ALIVE_PAGES || 0),
-                    num_public_pages: Number(df3.num_public_pages || df3.NUM_PUBLIC_PAGES || 0),
-                    num_private_pages: Number(df3.num_private_pages || df3.NUM_PRIVATE_PAGES || 0),
-                    num_blocks: Number(df3.num_blocks || df3.NUM_BLOCKS || 0),
-                    num_alive_blocks: Number(df3.num_alive_blocks || df3.NUM_ALIVE_BLOCKS || 0),
-                    current_month_blocks: Number(df3.current_month_blocks || df3.CURRENT_MONTH_BLOCKS || 0),
-                    previous_month_blocks: Number(df3.previous_month_blocks || df3.PREVIOUS_MONTH_BLOCKS || 0),
-                    total_num_members: Number(df3.total_num_members || df3.TOTAL_NUM_MEMBERS || 0),
-                    total_num_guests: Number(df3.total_num_guests || df3.TOTAL_NUM_GUESTS || 0),
-                    total_num_teamspaces: Number(df3.total_num_teamspaces || df3.TOTAL_NUM_TEAMSPACES || 0),
-                    total_arr: Number(df3.total_arr || df3.TOTAL_ARR || 0),
-                    total_paid_seats: Number(df3.total_paid_seats || df3.TOTAL_PAID_SEATS || 0)
-                };
-            }
-
-            // Finish writing file
-            writeStream.write('],"dataframe_3":' + JSON.stringify(transformedData.data.dataframe_3) + '}}');
-            writeStream.end();
-
-            // Wait for write to complete
-            await new Promise((resolve, reject) => {
-                writeStream.on('finish', resolve);
-                writeStream.on('error', reject);
-            });
-
-            // Clear references
-            results.data = null;
-            transformedData = null;
-
-            // Force garbage collection
-            if (global.gc) {
-                global.gc();
-            }
-
-            res.json({ success: true, message: 'Data processed and stored successfully' });
-        } else {
-            res.status(400).json({ success: false, message: 'Invalid data format' });
-        }
+        res.json({ success: true });
     } catch (error) {
-        console.error('Error processing hex results:', error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        console.error('Error saving hex results:', error);
+        res.status(500).json({ error: error.message });
     }
-});
-
-// Store connected SSE clients
-const connectedClients = new Set();
-
-// Add SSE endpoint for streaming results
-app.get('/api/hex-results/stream', (req, res) => {
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-    });
-
-    res.write('data: {"type":"connected"}\n\n');
-    connectedClients.add(res);
-
-    const results = loadResults();
-    if (results && results.data) {
-        console.log('Sending stored results via SSE:', {
-            hasDataframe2: results.data.dataframe_2?.length > 0,
-            dataframe2Length: results.data.dataframe_2?.length,
-            hasDataframe3: Object.keys(results.data.dataframe_3 || {}).length > 0,
-            dataframe3Keys: Object.keys(results.data.dataframe_3 || {})
-        });
-
-        const eventData = JSON.stringify({
-            success: true,
-            data: {
-                data: {
-                    dataframe_2: results.data.dataframe_2 || [],
-                    dataframe_3: results.data.dataframe_3 || {}
-                }
-            }
-        });
-        res.write(`data: ${eventData}\n\n`);
-    } else {
-        console.log('No stored results available');
-    }
-
-    req.on('close', () => {
-        connectedClients.delete(res);
-    });
 });
 
 // Add an endpoint to fetch results

@@ -449,11 +449,11 @@ async function callHexAPI(workspaceId, projectId) {
         });
 
         const response = await axios.post(url, {
-            input_parameters: {
-                workspace_id: workspaceId
+            inputParams: {
+                _input_text: workspaceId
             },
-            update_published_results: false,
-            use_cached_sql_results: true
+            updatePublishedResults: false,
+            useCachedSqlResults: true
         }, {
             headers: {
                 'Authorization': `Bearer ${HEX_API_TOKEN}`,
@@ -490,6 +490,12 @@ async function callHexAPI(workspaceId, projectId) {
             throw new Error('Invalid Hex API key');
         } else if (error.response?.status === 404) {
             throw new Error('Hex project not found');
+        } else if (error.response?.status === 400) {
+            const details = error.response?.data?.details;
+            if (details) {
+                console.error('Validation details:', details);
+            }
+            throw new Error('Invalid request format');
         } else {
             throw new Error(error.message || 'Failed to call Hex API');
         }

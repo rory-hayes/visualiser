@@ -266,48 +266,14 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Initialize cytoscape
-        const cy = cytoscape({
-            container: container,
-            elements: transformGraphData(graphData),
-            style: [
-                {
-                    selector: 'node',
-                    style: {
-                        'background-color': '#666',
-                        'label': 'data(id)',
-                        'width': 20,
-                        'height': 20
-                    }
-                },
-                {
-                    selector: 'edge',
-                    style: {
-                        'width': 1,
-                        'line-color': '#ccc',
-                        'curve-style': 'bezier'
-                    }
-                }
-            ],
-            layout: {
-                name: 'dagre',
-                rankDir: 'TB',
-                nodeSep: 50,
-                rankSep: 100,
-                animate: false
-            }
-        });
-
-        // Add zoom controls
-        cy.on('tap', 'node', function(evt) {
-            const node = evt.target;
-            cy.fit(node, 50);
-        });
-
-        // Add double click to reset
-        container.addEventListener('dblclick', function() {
-            cy.fit();
-        });
+        // Transform data for D3
+        const { nodes, links } = transformDataForGraph(graphData);
+        
+        // Store data for resize handling
+        window._lastGraphData = { graphData };
+        
+        // Initialize the graph
+        initializeGraph({ data: { dataframe_2: graphData } }, container);
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);

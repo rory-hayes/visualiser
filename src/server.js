@@ -67,14 +67,55 @@ try {
 // Helper functions for storage
 function saveResults(results) {
     try {
-        const stringified = JSON.stringify(results);
-        fs.writeFileSync(STORAGE_FILE, stringified);
+        // Validate results before saving
+        if (!results || typeof results !== 'object') {
+            throw new Error('Invalid results format');
+        }
+
+        // Ensure the data is properly structured
+        const safeResults = {
+            timestamp: new Date().toISOString(),
+            data: {
+                dataframe_2: Array.isArray(results.data?.dataframe_2) ? results.data.dataframe_2 : [],
+                dataframe_3: results.data?.dataframe_3 || null
+            }
+        };
+
+        // Validate JSON stringification before writing
+        const stringified = JSON.stringify(safeResults, (key, value) => {
+            // Handle circular references and invalid values
+            if (typeof value === 'bigint') return value.toString();
+            if (value instanceof Error) return value.message;
+            if (value === undefined) return null;
+            return value;
+        });
+
+        // Write to temporary file first
+        const tempFile = `${STORAGE_FILE}.tmp`;
+        fs.writeFileSync(tempFile, stringified, 'utf8');
+        
+        // Verify the file can be read back
+        const verification = fs.readFileSync(tempFile, 'utf8');
+        JSON.parse(verification); // Validate JSON is parseable
+        
+        // If verification passes, move to actual file
+        fs.renameSync(tempFile, STORAGE_FILE);
+
         console.log('Successfully saved results to file:', {
             fileSize: stringified.length,
-            path: STORAGE_FILE
+            path: STORAGE_FILE,
+            recordCount: safeResults.data.dataframe_2.length
         });
     } catch (error) {
         console.error('Error saving results to file:', error);
+        // Clean up temp file if it exists
+        try {
+            if (fs.existsSync(`${STORAGE_FILE}.tmp`)) {
+                fs.unlinkSync(`${STORAGE_FILE}.tmp`);
+            }
+        } catch (cleanupError) {
+            console.error('Error cleaning up temp file:', cleanupError);
+        }
         throw error;
     }
 }
@@ -85,12 +126,50 @@ function loadResults() {
             console.log('Storage file does not exist:', STORAGE_FILE);
             return {};
         }
-        const data = fs.readFileSync(STORAGE_FILE, 'utf8');
+
+        // Read file in chunks to validate JSON
+        const fileContent = fs.readFileSync(STORAGE_FILE, 'utf8');
+        
+        // Attempt to parse with error recovery
+        let parsedData;
+        try {
+            parsedData = JSON.parse(fileContent);
+        } catch (parseError) {
+            console.error('JSON parse error:', parseError);
+            
+            // Attempt to clean the JSON string
+            const cleanedContent = fileContent
+                .replace(/[\u0000-\u0019]+/g, '') // Remove control characters
+                .replace(/\n/g, '\\n') // Escape newlines
+                .replace(/\r/g, '\\r') // Escape carriage returns
+                .replace(/\t/g, '\\t') // Escape tabs
+                .replace(/\\/g, '\\\\') // Escape backslashes
+                .replace(/"/g, '\\"'); // Escape quotes
+            
+            try {
+                parsedData = JSON.parse(`{"timestamp":"${new Date().toISOString()}","data":${cleanedContent}}`);
+            } catch (secondError) {
+                console.error('Failed to recover JSON:', secondError);
+                // Reset the file if we can't parse it
+                fs.writeFileSync(STORAGE_FILE, '{}', 'utf8');
+                return {};
+            }
+        }
+
+        // Validate structure
+        if (!parsedData || typeof parsedData !== 'object') {
+            console.error('Invalid data structure in file');
+            return {};
+        }
+
         console.log('Successfully loaded results from file:', {
-            fileSize: data.length,
-            path: STORAGE_FILE
+            fileSize: fileContent.length,
+            path: STORAGE_FILE,
+            hasData: !!parsedData.data,
+            recordCount: parsedData.data?.dataframe_2?.length || 0
         });
-        return JSON.parse(data);
+
+        return parsedData;
     } catch (error) {
         console.error('Error loading results:', error);
         return {};
@@ -518,63 +597,76 @@ app.get('/api/hex-results/stream', (req, res) => {
         // Function to check for results
         const checkResults = async () => {
             try {
-                const fileContent = await fs.promises.readFile(STORAGE_FILE, 'utf8');
-                const results = JSON.parse(fileContent);
+                // Load and validate results
+                const results = loadResults();
+                
+                if (!results?.data?.dataframe_2) {
+                    return; // No data yet, continue polling
+                }
 
-                if (results && results.data) {
-                    console.log('Found results, processing data...');
+                console.log('Found results, processing data...', {
+                    totalRecords: results.data.dataframe_2.length,
+                    hasDataframe3: !!results.data.dataframe_3
+                });
+                
+                // Get total records count
+                const totalRecords = results.data.dataframe_2.length;
+                const CHUNK_SIZE = 500; // Reduced chunk size for better memory management
+                const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
+                
+                // Send initial progress update
+                res.write(`data: {"type":"progress","message":"Starting data processing...","totalRecords":${totalRecords},"totalChunks":${totalChunks}}\n\n`);
+                
+                // Process data in chunks
+                for (let i = 0; i < totalRecords; i += CHUNK_SIZE) {
+                    const chunk = results.data.dataframe_2.slice(i, Math.min(i + CHUNK_SIZE, totalRecords));
+                    const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
                     
-                    // Get total records count
-                    const totalRecords = results.data.dataframe_2?.length || 0;
+                    // Send progress update
+                    res.write(`data: {"type":"progress","message":"Processing records ${i + 1} to ${Math.min(i + CHUNK_SIZE, totalRecords)}","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
                     
-                    // Send initial progress update with total records
-                    res.write(`data: {"type":"progress","message":"Processing workspace data...","totalRecords":${totalRecords}}\n\n`);
+                    // Prepare chunk data
+                    const chunkData = {
+                        success: true,
+                        data: {
+                            timestamp: results.timestamp,
+                            data: {
+                                dataframe_2: chunk,
+                                dataframe_3: results.data.dataframe_3
+                            }
+                        },
+                        totalChunks,
+                        currentChunk: chunkNum,
+                        totalRecords,
+                        recordsProcessed: i + chunk.length
+                    };
                     
-                    // Process dataframe_2 in chunks
-                    if (results.data.dataframe_2) {
-                        const CHUNK_SIZE = 1000; // Process 1000 records at a time
-                        const totalChunks = Math.ceil(results.data.dataframe_2.length / CHUNK_SIZE);
-                        
-                        for (let i = 0; i < results.data.dataframe_2.length; i += CHUNK_SIZE) {
-                            const chunk = results.data.dataframe_2.slice(i, i + CHUNK_SIZE);
-                            const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
-                            
-                            // Send progress update
-                            res.write(`data: {"type":"progress","message":"Processing chunk ${chunkNum}/${totalChunks}...","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
-                            
-                            // Send chunk
-                            const chunkData = {
-                                success: true,
-                                data: {
-                                    timestamp: results.timestamp,
-                                    data: {
-                                        dataframe_2: chunk,
-                                        dataframe_3: results.data.dataframe_3
-                                    }
-                                },
-                                totalChunks,
-                                currentChunk: chunkNum,
-                                totalRecords,
-                                recordsProcessed: i + chunk.length
-                            };
-                            
-                            res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
-                            
-                            // Add a small delay to prevent overwhelming the client
-                            await new Promise(resolve => setTimeout(resolve, 100));
-                        }
+                    // Send chunk with error handling
+                    try {
+                        const chunkString = JSON.stringify(chunkData);
+                        res.write(`data: ${chunkString}\n\n`);
+                    } catch (stringifyError) {
+                        console.error('Error stringifying chunk:', stringifyError);
+                        res.write(`data: {"type":"error","message":"Error processing chunk ${chunkNum}"}\n\n`);
                     }
                     
-                    // Send completion message
-                    res.write(`data: {"type":"complete","message":"Processing complete","totalRecords":${totalRecords}}\n\n`);
+                    // Add delay between chunks
+                    await new Promise(resolve => setTimeout(resolve, 100));
                     
-                    // Clear the file after sending
-                    await fs.promises.writeFile(STORAGE_FILE, '{}');
-                    
-                    // End the connection
-                    res.end();
-                    return;
+                    // Clear chunk data to help garbage collection
+                    chunk.length = 0;
                 }
+                
+                // Send completion message
+                res.write(`data: {"type":"complete","message":"Processing complete","totalRecords":${totalRecords}}\n\n`);
+                
+                // Clear the file
+                await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
+                
+                // End the connection
+                res.end();
+                return;
+                
             } catch (error) {
                 console.error('Error checking results:', error);
                 res.write(`data: {"type":"error","message":"Error processing results: ${error.message}"}\n\n`);
@@ -591,7 +683,7 @@ app.get('/api/hex-results/stream', (req, res) => {
         req.on('close', () => {
             clearInterval(interval);
             // Clear the file if client disconnects
-            fs.promises.writeFile(STORAGE_FILE, '{}').catch(console.error);
+            fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8').catch(console.error);
         });
 
     } catch (error) {

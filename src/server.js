@@ -522,27 +522,51 @@ app.get('/api/hex-results/stream', (req, res) => {
                 const results = JSON.parse(fileContent);
 
                 if (results && results.data) {
-                    console.log('Found results, sending to client');
+                    console.log('Found results, processing data...');
                     
-                    // Send progress update
-                    res.write(`data: {"type":"progress","message":"Processing workspace data..."}\n\n`);
+                    // Get total records count
+                    const totalRecords = results.data.dataframe_2?.length || 0;
                     
-                    // Send data in chunks if it's large
-                    const dataString = JSON.stringify({
-                        success: true,
-                        data: results
-                    });
+                    // Send initial progress update with total records
+                    res.write(`data: {"type":"progress","message":"Processing workspace data...","totalRecords":${totalRecords}}\n\n`);
                     
-                    // Log data size
-                    console.log('Sending data to client:', {
-                        totalSize: dataString.length,
-                        hasDataframe2: !!results.data?.dataframe_2,
-                        dataframe2Length: results.data?.dataframe_2?.length,
-                        hasDataframe3: !!results.data?.dataframe_3
-                    });
-
-                    // Send the data
-                    res.write(`data: ${dataString}\n\n`);
+                    // Process dataframe_2 in chunks
+                    if (results.data.dataframe_2) {
+                        const CHUNK_SIZE = 1000; // Process 1000 records at a time
+                        const totalChunks = Math.ceil(results.data.dataframe_2.length / CHUNK_SIZE);
+                        
+                        for (let i = 0; i < results.data.dataframe_2.length; i += CHUNK_SIZE) {
+                            const chunk = results.data.dataframe_2.slice(i, i + CHUNK_SIZE);
+                            const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
+                            
+                            // Send progress update
+                            res.write(`data: {"type":"progress","message":"Processing chunk ${chunkNum}/${totalChunks}...","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
+                            
+                            // Send chunk
+                            const chunkData = {
+                                success: true,
+                                data: {
+                                    timestamp: results.timestamp,
+                                    data: {
+                                        dataframe_2: chunk,
+                                        dataframe_3: results.data.dataframe_3
+                                    }
+                                },
+                                totalChunks,
+                                currentChunk: chunkNum,
+                                totalRecords,
+                                recordsProcessed: i + chunk.length
+                            };
+                            
+                            res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
+                            
+                            // Add a small delay to prevent overwhelming the client
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        }
+                    }
+                    
+                    // Send completion message
+                    res.write(`data: {"type":"complete","message":"Processing complete","totalRecords":${totalRecords}}\n\n`);
                     
                     // Clear the file after sending
                     await fs.promises.writeFile(STORAGE_FILE, '{}');
@@ -553,7 +577,7 @@ app.get('/api/hex-results/stream', (req, res) => {
                 }
             } catch (error) {
                 console.error('Error checking results:', error);
-                res.write(`data: {"type":"error","message":"Error processing results"}\n\n`);
+                res.write(`data: {"type":"error","message":"Error processing results: ${error.message}"}\n\n`);
                 res.end();
             }
         };
@@ -566,6 +590,8 @@ app.get('/api/hex-results/stream', (req, res) => {
         // Clean up on client disconnect
         req.on('close', () => {
             clearInterval(interval);
+            // Clear the file if client disconnects
+            fs.promises.writeFile(STORAGE_FILE, '{}').catch(console.error);
         });
 
     } catch (error) {

@@ -118,14 +118,18 @@ function listenForResults() {
     const eventSource = new EventSource('/api/hex-results/stream');
     let retryCount = 0;
     const MAX_RETRIES = 3;
-    const TIMEOUT = 300000; // Increase timeout to 5 minutes for larger payloads
+    const TIMEOUT = 300000; // 5 minutes timeout
     let hasReceivedData = false;
     let lastProgressUpdate = Date.now();
-    const PROGRESS_INTERVAL = 10000; // Show progress update every 10 seconds
+    let accumulatedData = {
+        dataframe_2: [],
+        dataframe_3: null
+    };
+    let totalRecords = 0;
     
     showStatus('Waiting for results...', true);
 
-    // Set timeout with progress checks
+    // Set timeout
     const timeoutId = setTimeout(() => {
         if (!hasReceivedData) {
             console.log('Results timeout reached');
@@ -133,22 +137,6 @@ function listenForResults() {
             showStatus('Timeout waiting for results. Please try again.', false);
         }
     }, TIMEOUT);
-
-    // Add progress checker
-    const progressInterval = setInterval(() => {
-        if (!hasReceivedData && eventSource.readyState === EventSource.OPEN) {
-            const elapsedTime = Math.floor((Date.now() - lastProgressUpdate) / 1000);
-            showStatus(`Waiting for results... (${elapsedTime}s elapsed)`, true);
-            
-            // Log connection state
-            console.log('Connection status:', {
-                readyState: eventSource.readyState,
-                elapsedTime: `${elapsedTime}s`,
-                hasData: hasReceivedData,
-                retryCount
-            });
-        }
-    }, PROGRESS_INTERVAL);
 
     eventSource.onopen = () => {
         console.log('EventSource connection opened');
@@ -159,7 +147,6 @@ function listenForResults() {
     eventSource.onmessage = (event) => {
         try {
             lastProgressUpdate = Date.now();
-            console.log('Received event data length:', event.data.length);
             const data = JSON.parse(event.data);
             
             if (data.type === 'connected') {
@@ -168,52 +155,53 @@ function listenForResults() {
             }
 
             if (data.type === 'progress') {
-                showStatus(`Processing: ${data.message}`, true);
+                showStatus(data.message, true);
+                if (data.totalRecords) {
+                    totalRecords = data.totalRecords;
+                }
+                return;
+            }
+
+            if (data.type === 'complete') {
+                console.log('Processing complete, displaying results...');
+                displayResults({
+                    data: {
+                        dataframe_2: accumulatedData.dataframe_2,
+                        dataframe_3: accumulatedData.dataframe_3
+                    }
+                });
+                eventSource.close();
                 return;
             }
 
             if (data.success && data.data) {
                 hasReceivedData = true;
-                console.log('Received valid data:', {
-                    timestamp: data.data.timestamp,
-                    hasDataframe2: !!data.data.data?.dataframe_2,
-                    dataframe2Length: data.data.data?.dataframe_2?.length,
-                    hasDataframe3: !!data.data.data?.dataframe_3,
-                    totalSize: event.data.length
+                
+                // Accumulate chunk data
+                if (data.data.data.dataframe_2) {
+                    accumulatedData.dataframe_2.push(...data.data.data.dataframe_2);
+                }
+                if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
+                    accumulatedData.dataframe_3 = data.data.data.dataframe_3;
+                }
+                
+                // Update progress
+                updateProgress(
+                    data.currentChunk,
+                    data.totalChunks,
+                    accumulatedData.dataframe_2.length,
+                    totalRecords || data.totalRecords || 0
+                );
+                
+                // Log progress
+                console.log('Received chunk:', {
+                    currentChunk: data.currentChunk,
+                    totalChunks: data.totalChunks,
+                    accumulatedRecords: accumulatedData.dataframe_2.length,
+                    totalRecords: totalRecords
                 });
                 
-                // Process data in chunks to prevent memory issues
-                setTimeout(() => {
-                    clearTimeout(timeoutId);
-                    clearInterval(progressInterval);
-                    eventSource.close();
-                    showStatus('Processing workspace data...');
-                    
-                    // Process the data with memory management
-                    try {
-                        // Clear any previous results
-                        if (window._lastGraphData) {
-                            window._lastGraphData = null;
-                        }
-                        
-                        displayResults(data.data);
-                        resultsSection.classList.remove('hidden');
-                        showStatus('Analysis complete');
-                        
-                        // Clear data references
-                        data.data = null;
-                    } catch (error) {
-                        console.error('Error processing results:', error);
-                        showStatus('Error processing results. Please try again.');
-                    }
-                }, 0);
-            } else {
-                console.warn('Received invalid data structure:', {
-                    hasSuccess: !!data.success,
-                    hasData: !!data.data,
-                    type: data.type
-                });
-                showStatus('Processing workspace data...', true);
+                showStatus(`Receiving data: ${data.currentChunk}/${data.totalChunks} chunks`, true);
             }
         } catch (error) {
             console.error('Error processing event data:', error);
@@ -222,10 +210,8 @@ function listenForResults() {
     };
 
     eventSource.onerror = (error) => {
-        const now = Date.now();
         console.error('EventSource error:', error);
         console.error('EventSource readyState:', eventSource.readyState);
-        console.error('Time since last update:', (now - lastProgressUpdate) / 1000, 'seconds');
         retryConnection();
     };
 
@@ -239,17 +225,17 @@ function listenForResults() {
             }, 2000 * retryCount); // Exponential backoff
         } else {
             clearTimeout(timeoutId);
-            clearInterval(progressInterval);
             showStatus('Failed to connect. Please try again.', false);
             eventSource.close();
         }
     }
 
-    // Cleanup function
+    // Clean up function
     return () => {
         clearTimeout(timeoutId);
-        clearInterval(progressInterval);
         eventSource.close();
+        // Clear accumulated data
+        accumulatedData = null;
     };
 }
 
@@ -1172,11 +1158,49 @@ function showStatus(message, showSpinner = false) {
     statusSection.classList.remove('hidden');
     statusText.textContent = message;
     
+    // Create or update progress container
+    let progressContainer = document.getElementById('progressContainer');
+    if (!progressContainer) {
+        progressContainer = document.createElement('div');
+        progressContainer.id = 'progressContainer';
+        progressContainer.className = 'mt-4 bg-white rounded-lg shadow p-4';
+        statusSection.appendChild(progressContainer);
+    }
+
     if (showSpinner) {
         statusSpinner.classList.remove('hidden');
+        // Show progress container
+        progressContainer.classList.remove('hidden');
     } else {
         statusSpinner.classList.add('hidden');
+        // Hide progress container when complete
+        progressContainer.classList.add('hidden');
     }
+}
+
+function updateProgress(currentChunk, totalChunks, recordsProcessed, totalRecords) {
+    const progressContainer = document.getElementById('progressContainer');
+    if (!progressContainer) return;
+
+    const percentage = (currentChunk / totalChunks) * 100;
+    
+    progressContainer.innerHTML = `
+        <div class="mb-2">
+            <div class="flex justify-between text-sm text-gray-600 mb-1">
+                <span>Processing chunks: ${currentChunk}/${totalChunks}</span>
+                <span>${Math.round(percentage)}%</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
+                     style="width: ${percentage}%"></div>
+            </div>
+        </div>
+        <div class="text-sm text-gray-600">
+            <div>Records processed: ${recordsProcessed.toLocaleString()}</div>
+            <div>Total records: ${totalRecords.toLocaleString()}</div>
+            <div>Remaining: ${(totalRecords - recordsProcessed).toLocaleString()}</div>
+        </div>
+    `;
 }
 
 function updateMetricsDisplay(metrics) {

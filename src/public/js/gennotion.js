@@ -117,142 +117,13 @@ async function processWorkspace(workspaceId) {
 function listenForResults() {
     let retryCount = 0;
     const MAX_RETRIES = 5;
-    let connectionAttempts = 0;
-    const MAX_CONNECTION_ATTEMPTS = 3;
-    let currentEventSource = null;
-
-    // Use a more memory-efficient data structure with incremental graph building
-    const dataManager = {
-        totalRecords: 0,
-        processedRecords: 0,
-        dataframe3: null,
-        graphNodes: new Map(), // Use Map for efficient node lookup
-        graphLinks: new Set(), // Use Set to avoid duplicate links
-        
-        addRecords(newRecords) {
-            try {
-                // Process records in smaller batches and update graph immediately
-                const BATCH_SIZE = 100;
-                for (let i = 0; i < newRecords.length; i += BATCH_SIZE) {
-                    const batch = newRecords.slice(i, i + BATCH_SIZE);
-                    this.processRecordBatch(batch);
-                    
-                    // Clear references to help garbage collection
-                    batch.length = 0;
-                }
-                
-                // Update graph visualization after each chunk
-                this.updateGraphVisualization();
-                
-            } catch (error) {
-                console.error('Error processing records:', error);
-            }
-        },
-
-        processRecordBatch(records) {
-            records.forEach(record => {
-                // Add or update node
-                this.graphNodes.set(record.ID, {
-                    id: record.ID,
-                    title: record.TEXT || record.TYPE,
-                    type: record.TYPE,
-                    createdTime: record.CREATED_TIME ? new Date(record.CREATED_TIME) : null,
-                    parent: record.PARENT_ID
-                });
-
-                // Add link if there's a parent
-                if (record.PARENT_ID) {
-                    this.graphLinks.add(`${record.PARENT_ID}-${record.ID}`);
-                }
-            });
-
-            this.processedRecords += records.length;
-        },
-
-        updateGraphVisualization() {
-            const container = document.getElementById('graph-container');
-            if (!container) return;
-
-            // Convert Map and Set to arrays for D3
-            const nodes = Array.from(this.graphNodes.values());
-            const links = Array.from(this.graphLinks).map(linkId => {
-                const [sourceId, targetId] = linkId.split('-');
-                return {
-                    source: this.graphNodes.get(sourceId),
-                    target: this.graphNodes.get(targetId)
-                };
-            });
-
-            // Update or initialize the graph
-            if (!container._simulation) {
-                // First time - initialize the graph
-                initializeGraph({ nodes, links }, container);
-            } else {
-                // Update existing graph
-                updateGraph({ nodes, links }, container);
-            }
-        },
-
-        clear() {
-            this.graphNodes.clear();
-            this.graphLinks.clear();
-            this.dataframe3 = null;
-            this.processedRecords = 0;
-            
-            // Clear graph visualization
-            const container = document.getElementById('graph-container');
-            if (container) {
-                container.innerHTML = '';
-                container._simulation = null;
-            }
-        }
+    let accumulatedData = {
+        dataframe_2: [],
+        dataframe_3: null
     };
-
-    // Add this function to update existing graph
-    function updateGraph(graphData, container) {
-        const simulation = container._simulation;
-        if (!simulation) return;
-
-        // Update nodes and links
-        const svg = d3.select(container).select('svg');
-        const g = svg.select('g');
-
-        // Update nodes
-        const node = g.select('.nodes')
-            .selectAll('circle')
-            .data(graphData.nodes, d => d.id);
-
-        // Enter new nodes
-        node.enter()
-            .append('circle')
-            .attr('r', 8)
-            .attr('fill', d => colorScale(d.type))
-            .call(drag(simulation));
-
-        // Remove old nodes
-        node.exit().remove();
-
-        // Update links
-        const link = g.select('.links')
-            .selectAll('line')
-            .data(graphData.links, d => `${d.source.id}-${d.target.id}`);
-
-        // Enter new links
-        link.enter()
-            .append('line')
-            .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 2);
-
-        // Remove old links
-        link.exit().remove();
-
-        // Update simulation
-        simulation.nodes(graphData.nodes);
-        simulation.force('link').links(graphData.links);
-        simulation.alpha(0.3).restart();
-    }
-
+    let lastProcessedChunk = 0;
+    let totalExpectedRecords = 0;
+    
     function showProgress(current, total) {
         // First ensure status section is visible
         const statusSection = document.getElementById('statusSection');
@@ -277,19 +148,19 @@ function listenForResults() {
             }
         }
 
-        if (progressElement) {
-            // Ensure current and total are numbers and have default values
-            const safeTotal = typeof total === 'number' ? total : 0;
-            const safeCurrent = typeof current === 'number' ? Math.min(current, safeTotal) : 0;
-            const percentage = safeTotal > 0 ? Math.round((safeCurrent / safeTotal) * 100) : 0;
+        // Ensure we have valid numbers before formatting
+        const currentCount = typeof current === 'number' ? current : 0;
+        const totalCount = typeof total === 'number' ? total : 0;
 
+        if (progressElement) {
+            const percentage = totalCount > 0 ? Math.round((currentCount / totalCount) * 100) : 0;
             progressElement.innerHTML = `
                 <div class="progress-bar bg-gray-200 rounded-full h-2.5 mb-2">
                     <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
                          style="width: ${percentage}%"></div>
                 </div>
                 <div class="flex justify-between text-sm text-gray-600">
-                    <span>Processing: ${safeCurrent.toLocaleString()} / ${safeTotal.toLocaleString()}</span>
+                    <span>Processing: ${currentCount.toLocaleString()} / ${totalCount.toLocaleString()}</span>
                     <span>${percentage}%</span>
                 </div>
             `;
@@ -297,165 +168,117 @@ function listenForResults() {
     }
 
     function connectEventSource() {
-        if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-            showStatus('Failed to establish connection after multiple attempts. Please try again later.', false);
-            return null;
-        }
-
-        connectionAttempts++;
-        showStatus(`Connecting to event stream (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})...`, true);
+        showStatus('Connecting to event stream...');
         
-        if (currentEventSource) {
-            currentEventSource.close();
-        }
+        const eventSource = new EventSource('/api/hex-results/stream');
+        
+        eventSource.onopen = () => {
+            console.log('EventSource connection opened');
+            retryCount = 0;
+            showStatus('Connection established', true);
+        };
 
-        try {
-            currentEventSource = new EventSource('/api/hex-results/stream');
-            
-            currentEventSource.onopen = () => {
-                console.log('EventSource connection opened');
-                connectionAttempts = 0;
-                retryCount = 0;
-                dataManager.clear();
-                showStatus('Connection established', true);
-            };
-
-            currentEventSource.onmessage = (event) => {
-                try {
-                    console.log('Raw event data received:', event.data);
-                    const data = JSON.parse(event.data);
-                    console.log('Parsed event data:', data);
-                    
-                    // Handle progress updates
-                    if (data.type === 'progress') {
-                        dataManager.totalRecords = data.totalRecords;
-                        showStatus(`Processing page ${data.currentPage} of ${data.totalPages}`, true);
-                        showProgress(data.recordsProcessed, data.totalRecords);
-                        return;
-                    }
-
-                    // Handle data chunks
-                    if (data.data?.data) {
-                        const { dataframe_2, dataframe_3 } = data.data.data;
-                        
-                        console.log('Processing data chunk:', {
-                            dataframe2Length: dataframe_2?.length || 0,
-                            hasDataframe3: !!dataframe_3,
-                            isLastPage: data.isLastPage
-                        });
-
-                        // Process dataframe_2 if it exists and has data
-                        if (Array.isArray(dataframe_2) && dataframe_2.length > 0) {
-                            dataManager.addRecords(dataframe_2);
-                        }
-                        
-                        // Store dataframe3 if it's available
-                        if (dataframe_3) {
-                            dataManager.dataframe3 = dataframe_3;
-                        }
-
-                        console.log('Data manager state after processing:', {
-                            processedRecords: dataManager.processedRecords,
-                            nodesCount: dataManager.graphNodes.size,
-                            linksCount: dataManager.graphLinks.size
-                        });
-
-                        // Process final results when all data is received
-                        if (data.isLastPage || (data.currentPage === data.totalPages)) {
-                            console.log('Processing final results');
-                            
-                            // Only process if we have collected some data
-                            if (dataManager.graphNodes.size > 0) {
-                                const finalData = {
-                                    data: {
-                                        dataframe_2: Array.from(dataManager.graphNodes.values()),
-                                        dataframe_3: dataManager.dataframe3
-                                    }
-                                };
-
-                                console.log('Final data to be processed:', {
-                                    nodesCount: finalData.data.dataframe_2.length,
-                                    hasDataframe3: !!finalData.data.dataframe_3
-                                });
-
-                                processResults(finalData);
-                            } else {
-                                console.warn('No data collected to process');
-                                showStatus('No data available for visualization', false);
-                            }
-                            
-                            currentEventSource.close();
-                            dataManager.clear();
-                        }
-                    } else {
-                        console.warn('Received message without expected data structure:', data);
-                    }
-                } catch (error) {
-                    console.error('Error processing message:', error);
-                    console.error('Error details:', {
-                        error: error.message,
-                        stack: error.stack,
-                        eventData: event.data
-                    });
-                    showStatus(`Error processing data: ${error.message}`, false);
-                }
-            };
-
-            currentEventSource.onerror = async (error) => {
-                console.error('EventSource error:', error);
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
                 
-                const isHealthy = await checkServerHealth();
-                if (!isHealthy) {
-                    showStatus('Server is not responding. Please try again later.', false);
-                    currentEventSource.close();
+                if (data.type === 'progress') {
+                    totalExpectedRecords = data.totalRecords;
+                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
+                    showProgress(data.recordsProcessed, data.totalRecords);
                     return;
                 }
 
-                if (currentEventSource.readyState === EventSource.CLOSED) {
-                    if (retryCount < MAX_RETRIES) {
-                        retryCount++;
-                        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-                        showStatus(`Connection lost. Retrying in ${delay/1000} seconds... (${retryCount}/${MAX_RETRIES})`, true);
-                        
-                        setTimeout(() => {
-                            currentEventSource.close();
-                            connectEventSource();
-                        }, delay);
-                    } else {
-                        showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
-                        currentEventSource.close();
-                        dataManager.clear();
+                if (!data.data?.data?.dataframe_2) {
+                    return;
+                }
+
+                const newRecords = data.data.data.dataframe_2;
+                const currentChunk = data.currentChunk;
+
+                // Only process new chunks
+                if (currentChunk > lastProcessedChunk) {
+                    accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
+                    if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
+                        accumulatedData.dataframe_3 = data.data.data.dataframe_3;
+                    }
+                    lastProcessedChunk = currentChunk;
+                    
+                    console.log('Received chunk:', {
+                        currentChunk,
+                        totalChunks: data.totalChunks,
+                        accumulatedRecords: accumulatedData.dataframe_2.length,
+                        totalRecords: data.totalRecords
+                    });
+
+                    showProgress(accumulatedData.dataframe_2.length, data.totalRecords);
+
+                    // If this is the last chunk, process all data
+                    if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
+                        displayResults({
+                            data: {
+                                dataframe_2: accumulatedData.dataframe_2,
+                                dataframe_3: accumulatedData.dataframe_3
+                            },
+                            metadata: {
+                                status: 'success',
+                                timestamp: new Date().toISOString()
+                            },
+                            success: true
+                        });
+                        eventSource.close();
                     }
                 }
-            };
-
-            return currentEventSource;
-        } catch (error) {
-            console.error('Error creating EventSource:', error);
-            showStatus('Failed to establish connection. Please try again.', false);
-            return null;
-        }
-    }
-
-    // Add this helper function to check server status
-    async function checkServerStatus() {
-        try {
-            const response = await fetch('/api/health');
-            if (!response.ok) {
-                throw new Error('Server health check failed');
+            } catch (error) {
+                console.error('Error processing message:', error);
+                showStatus(`Error processing data: ${error.message}`, false);
             }
-            return true;
-        } catch (error) {
-            console.error('Server health check error:', error);
-            return false;
-        }
+        };
+
+        eventSource.onerror = (error) => {
+            console.error('EventSource error:', error);
+            console.log('EventSource readyState:', eventSource.readyState);
+            
+            if (eventSource.readyState === EventSource.CLOSED) {
+                if (retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
+                    setTimeout(() => {
+                        eventSource.close();
+                        connectEventSource();
+                    }, 2000 * retryCount);
+                } else {
+                    showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
+                }
+            }
+        };
+
+        return eventSource;
     }
 
     return connectEventSource();
 }
 
-function displayResults(data) {
+// Add this helper function to check server status
+async function checkServerStatus() {
     try {
+        const response = await fetch('/api/health');
+        if (!response.ok) {
+            throw new Error('Server health check failed');
+        }
+        return true;
+    } catch (error) {
+        console.error('Server health check error:', error);
+        return false;
+    }
+}
+
+function displayResults(response) {
+    try {
+        if (!response.success || !response.data) {
+            throw new Error('Invalid response format');
+        }
+
         // Show results section
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = ''; // Clear previous results
@@ -463,11 +286,11 @@ function displayResults(data) {
         // Add metrics container
         const metricsContainer = document.createElement('div');
         metricsContainer.className = 'bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6';
-        metricsContainer.innerHTML = formatResults(data.data.dataframe_2, data.data.dataframe_3);
+        metricsContainer.innerHTML = formatResults(response.data.dataframe_2, response.data.dataframe_3);
         resultsContent.appendChild(metricsContainer);
         
         // Calculate metrics
-        const metrics = calculateMetrics(data.data.dataframe_2, data.data.dataframe_3);
+        const metrics = calculateMetrics(response.data.dataframe_2, response.data.dataframe_3);
         updateMetricsDisplay(metrics);
         
         // Create or ensure graph container exists
@@ -476,8 +299,8 @@ function displayResults(data) {
         container.className = 'w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden';
         resultsContent.appendChild(container);
         
-        // Create graph visualization
-        createGraphVisualization(data.data.dataframe_2);
+        // Create graph visualization with the new data structure
+        createGraphVisualization(response.data);
         
         showStatus('Analysis complete');
     } catch (error) {
@@ -488,12 +311,6 @@ function displayResults(data) {
 
 function createGraphVisualization(graphData) {
     try {
-        console.log('Starting graph visualization with data:', {
-            hasData: !!graphData,
-            length: graphData?.length || 0,
-            sampleNode: graphData?.[0]
-        });
-
         if (!Array.isArray(graphData) || graphData.length === 0) {
             console.warn('No graph data to visualize');
             return;
@@ -507,20 +324,18 @@ function createGraphVisualization(graphData) {
 
         // Clear previous graph
         container.innerHTML = '';
-        console.log('Previous graph cleared');
 
-        // Initialize the graph with the correct data structure
-        console.log('Initializing graph with data length:', graphData.length);
+        // Transform data for D3
+        const { nodes, links } = transformDataForGraph(graphData);
+        
+        // Store data for resize handling
+        window._lastGraphData = { graphData };
+        
+        // Initialize the graph
         initializeGraph({ data: { dataframe_2: graphData } }, container);
-        console.log('Graph initialization complete');
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
-        console.error('Error details:', {
-            error: error.message,
-            stack: error.stack,
-            dataLength: graphData?.length
-        });
     }
 }
 
@@ -853,24 +668,27 @@ function transformDataForGraph(data) {
         const nodes = data.map(item => {
             let createdTime = null;
             if (item.CREATED_TIME) {
+                // Handle both string and number timestamps
                 const timestamp = typeof item.CREATED_TIME === 'string' ? 
                     parseInt(item.CREATED_TIME) : Number(item.CREATED_TIME);
                 
                 if (!isNaN(timestamp)) {
-                    const date = new Date(timestamp);
-                    if (isValidDate(date)) {
-                        createdTime = date;
+                    createdTime = new Date(timestamp);
+                    // Validate date
+                    if (createdTime.getFullYear() < 2000 || createdTime.getFullYear() > 2100) {
+                        console.warn(`Invalid date for node ${item.ID}: ${createdTime}, timestamp: ${timestamp}`);
+                        createdTime = null;
                     }
                 }
             }
 
             return {
                 id: item.ID,
-                name: item.TEXT || item.TYPE || 'Untitled',
-                type: (item.TYPE || 'unknown').toLowerCase(),
+                name: item.TEXT || item.TYPE,
+                type: item.TYPE,
                 createdTime,
-                depth: parseInt(item.DEPTH) || 0,
-                pageDepth: parseInt(item.PAGE_DEPTH) || 0,
+                depth: Number(item.DEPTH) || 0,
+                pageDepth: Number(item.PAGE_DEPTH) || 0,
                 parentId: item.PARENT_ID,
                 originalData: item
             };
@@ -878,19 +696,21 @@ function transformDataForGraph(data) {
 
         // Log date range information
         const dates = nodes.map(n => n.createdTime).filter(Boolean);
-        if (dates.length > 0) {
-            const startDate = new Date(Math.min(...dates));
-            const endDate = new Date(Math.max(...dates));
-            
-            console.log('Date range in data:', {
-                start: startDate.toLocaleDateString(),
-                end: endDate.toLocaleDateString(),
-                totalNodes: nodes.length,
-                nodesWithDates: dates.length,
-                nodesWithoutDates: nodes.length - dates.length
-            });
-        } else {
-            console.warn('No valid dates found in nodes');
+        const startDate = new Date(Math.min(...dates));
+        const endDate = new Date(Math.max(...dates));
+        
+        console.log('Date range in data:', {
+            start: startDate.toLocaleDateString(),
+            end: endDate.toLocaleDateString(),
+            totalNodes: nodes.length,
+            nodesWithDates: dates.length,
+            nodesWithoutDates: nodes.length - dates.length
+        });
+
+        // Log nodes without dates for debugging
+        const nodesWithoutDates = nodes.filter(n => !n.createdTime);
+        if (nodesWithoutDates.length > 0) {
+            console.warn('Nodes without valid dates:', nodesWithoutDates);
         }
 
         return { nodes, links: createLinks(nodes) };
@@ -1380,7 +1200,7 @@ function showStatus(message, showSpinner = false) {
 }
 
 function updateProgress(currentChunk, totalChunks, recordsProcessed, totalRecords) {
-    const progressContainer = document.getElementById('progress-container');
+    const progressContainer = document.getElementById('progressContainer');
     if (!progressContainer) return;
 
     const percentage = (currentChunk / totalChunks) * 100;
@@ -1482,37 +1302,41 @@ function calculateMetrics(graphData, insightsData) {
             return {};
         }
 
-        console.log('Calculating metrics for data:', {
-            nodesCount: graphData.length,
-            sampleNode: graphData[0]
-        });
-
         // Initialize metrics object
         const metrics = {
+            // Structure metrics
             total_pages: 0,
             num_alive_pages: 0,
             collections_count: 0,
             max_depth: 0,
             avg_depth: 0,
             deep_pages_count: 0,
+
+            // Usage metrics (placeholder values until we have actual usage data)
             daily_active_users: 0,
             weekly_active_users: 0,
             monthly_active_users: 0,
             pages_per_user: 0,
             engagement_score: 0,
             collaboration_rate: 0,
+
+            // Growth metrics
             growth_rate: 0,
             monthly_member_growth_rate: 0,
             monthly_content_growth_rate: 0,
             pages_created_last_month: 0,
             expected_members_in_next_year: 0,
             blocks_created_last_year: 0,
+
+            // Performance metrics
             current_organization_score: 0,
             current_productivity_score: 0,
             current_collaboration_score: 0,
             ai_productivity_gain: 0,
             automation_potential: 0,
             projected_time_savings: 0,
+
+            // ROI metrics
             current_plan: 0,
             enterprise_plan_roi: 0,
             enterprise_plan_w_ai_roi: 0,
@@ -1523,32 +1347,24 @@ function calculateMetrics(graphData, insightsData) {
 
         // Calculate structure metrics
         graphData.forEach(node => {
-            const nodeType = (node.TYPE || '').toLowerCase();
-            
             // Count total pages
-            if (nodeType.includes('page')) {
+            if (node.TYPE.includes('page')) {
                 metrics.total_pages++;
                 
                 // Count active pages (created in the last 90 days)
-                if (node.CREATED_TIME) {
-                    const createdTime = new Date(parseInt(node.CREATED_TIME));
-                    if (isValidDate(createdTime)) {
-                        const ninetyDaysAgo = new Date();
-                        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-                        if (createdTime > ninetyDaysAgo) {
-                            metrics.num_alive_pages++;
-                        }
-                    }
+                const ninetyDaysAgo = Date.now() - (90 * 24 * 60 * 60 * 1000);
+                if (node.CREATED_TIME && node.CREATED_TIME > ninetyDaysAgo) {
+                    metrics.num_alive_pages++;
                 }
             }
 
             // Count collections
-            if (nodeType.includes('collection')) {
+            if (node.TYPE.includes('collection')) {
                 metrics.collections_count++;
             }
 
             // Track depth metrics
-            const depth = parseInt(node.DEPTH) || 0;
+            const depth = node.DEPTH || 0;
             metrics.max_depth = Math.max(metrics.max_depth, depth);
             
             if (depth > 3) {
@@ -1557,7 +1373,7 @@ function calculateMetrics(graphData, insightsData) {
         });
 
         // Calculate average depth
-        const totalDepth = graphData.reduce((sum, node) => sum + (parseInt(node.DEPTH) || 0), 0);
+        const totalDepth = graphData.reduce((sum, node) => sum + (node.DEPTH || 0), 0);
         metrics.avg_depth = totalDepth / graphData.length;
 
         // Process insights data if available
@@ -1585,108 +1401,5 @@ function calculateMetrics(graphData, insightsData) {
     } catch (error) {
         console.error('Error calculating metrics:', error);
         return {};
-    }
-}
-
-// Helper function to validate dates
-function isValidDate(date) {
-    return date instanceof Date && !isNaN(date) && 
-           date.getFullYear() >= 2000 && date.getFullYear() <= 2100;
-}
-
-// Add the missing processResults function
-function processResults(data) {
-    try {
-        console.log('Starting processResults with data:', {
-            hasData: !!data,
-            dataStructure: data ? Object.keys(data) : [],
-            dataframe2Length: data?.data?.dataframe_2?.length || 0,
-            hasDataframe3: !!data?.data?.dataframe_3
-        });
-
-        // Validate data structure and handle both direct and nested formats
-        let graphData, insightsData;
-        
-        if (data?.data?.data?.dataframe_2) {
-            // Nested format from streaming
-            graphData = data.data.data.dataframe_2;
-            insightsData = data.data.data.dataframe_3;
-        } else if (data?.data?.dataframe_2) {
-            // Direct format
-            graphData = data.data.dataframe_2;
-            insightsData = data.data.dataframe_3;
-        } else {
-            console.error('Invalid data structure:', data);
-            showStatus('Error: Invalid data structure received', false);
-            return;
-        }
-
-        // Show results section
-        const resultsSection = document.getElementById('resultsSection');
-        if (resultsSection) {
-            resultsSection.classList.remove('hidden');
-            console.log('Results section displayed');
-        }
-
-        // Clear previous results
-        const resultsContent = document.getElementById('resultsContent');
-        if (resultsContent) {
-            resultsContent.innerHTML = '';
-            console.log('Previous results cleared');
-        }
-
-        // Format and display results
-        console.log('Formatting results with:', {
-            graphDataLength: graphData?.length || 0,
-            hasInsightsData: !!insightsData
-        });
-        
-        const formattedResults = formatResults(graphData, insightsData);
-        if (resultsContent) {
-            resultsContent.innerHTML = formattedResults;
-            console.log('Results formatted and displayed');
-        }
-
-        // Calculate and update metrics
-        console.log('Calculating metrics for data:', {
-            nodesCount: graphData?.length || 0,
-            sampleNode: graphData?.[0]
-        });
-        
-        const metrics = calculateMetrics(graphData, insightsData);
-        console.log('Calculated metrics:', metrics);
-        
-        updateMetricsDisplay(metrics);
-        console.log('Metrics display updated');
-
-        // Create graph visualization
-        console.log('Creating graph visualization');
-        createGraphVisualization(graphData);
-
-        showStatus('Analysis complete', false);
-    } catch (error) {
-        console.error('Error in processResults:', error);
-        console.error('Error details:', {
-            error: error.message,
-            stack: error.stack,
-            inputData: data
-        });
-        showStatus(`Error processing results: ${error.message}`, false);
-    }
-}
-
-// Add the missing checkServerStatus function
-async function checkServerStatus() {
-    try {
-        const response = await fetch('/api/health');
-        if (!response.ok) {
-            console.error('Server health check failed:', response.status);
-            return false;
-        }
-        const data = await response.json();
-        return data.status === 'healthy';
-    } catch (error) {
-        console.error('Server health check error:', error);
-        return false;
     }
 } 

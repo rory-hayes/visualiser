@@ -611,162 +611,157 @@ async function callHexAPI(workspaceId, projectId) {
     }
 }
 
-// Add endpoint to receive Hex results
-app.post('/api/hex-results', async (req, res) => {
-    try {
-        const results = req.body;
-        console.log('Received Hex results:', {
-            hasData: !!results.data,
-            dataframe2Length: results.data?.dataframe_2?.length || 0,
-            dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : [],
-            metadata: results.metadata
-        });
-
-        // Validate the data structure
-        if (!results.data || !Array.isArray(results.data.dataframe_2)) {
-            console.error('Invalid data structure received:', results);
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Invalid data structure' 
-            });
-        }
-
-        // Log the first record for debugging
-        if (results.data.dataframe_2.length > 0) {
-            console.log('Sample record:', results.data.dataframe_2[0]);
-        }
-
-        // Save results to file with proper structure
-        const dataToSave = {
-            timestamp: new Date().toISOString(),
-            data: {
-                dataframe_2: results.data.dataframe_2,
-                dataframe_3: results.data.dataframe_3 || null
-            }
-        };
-
-        await fs.promises.writeFile(
-            STORAGE_FILE, 
-            JSON.stringify(dataToSave, null, 2)
-        );
-
-        console.log('Saved results:', {
-            timestamp: dataToSave.timestamp,
-            recordCount: dataToSave.data.dataframe_2.length,
-            hasDataframe3: !!dataToSave.data.dataframe_3
-        });
-
-        res.json({ 
-            success: true,
-            recordCount: dataToSave.data.dataframe_2.length
-        });
-    } catch (error) {
-        console.error('Error saving hex results:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
-    }
-});
-
 // Add endpoint for streaming Hex results
 app.get('/api/hex-results/stream', (req, res) => {
     try {
-        // Set SSE headers
+        // Set SSE headers with a longer timeout
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
+            'Connection': 'keep-alive',
+            'Keep-Alive': 'timeout=120'
         });
+
+        // Track processing state
+        let processingState = {
+            lastProcessedIndex: 0,
+            totalRecordsSent: 0,
+            isProcessing: false
+        };
 
         // Send initial connection message
         res.write('data: {"type":"connected"}\n\n');
 
-        // Read and validate the stored results
-        const results = loadResults();
-        if (!results?.data?.dataframe_2) {
-            console.warn('No valid results found in storage');
-            res.write('data: {"type":"error","message":"No data available"}\n\n');
-            res.end();
-            return;
-        }
-
-        const totalRecords = results.data.dataframe_2.length;
-        const pageSize = 250;
-        const totalPages = Math.ceil(totalRecords / pageSize);
-
-        console.log('Streaming data:', {
-            totalRecords,
-            pageSize,
-            totalPages
-        });
-
-        let currentPage = 0;
-        let recordsSent = 0;
-
-        // Function to send the next chunk
-        const sendNextChunk = () => {
-            if (currentPage >= totalPages) {
-                res.end();
-                return;
+        // Function to check for results
+        const checkResults = async () => {
+            if (processingState.isProcessing) {
+                return; // Skip if already processing
             }
 
-            const start = currentPage * pageSize;
-            const end = Math.min(start + pageSize, totalRecords);
-            const chunk = results.data.dataframe_2.slice(start, end);
-            recordsSent += chunk.length;
+            try {
+                processingState.isProcessing = true;
+                const results = loadResults();
+                
+                if (!results?.data?.dataframe_2) {
+                    processingState.isProcessing = false;
+                    return;
+                }
 
-            // Send progress update
-            res.write(`data: ${JSON.stringify({
-                type: 'progress',
-                message: `Processing page ${currentPage + 1} of ${totalPages}`,
-                totalRecords,
-                currentPage: currentPage + 1,
-                totalPages,
-                recordsProcessed: recordsSent
-            })}\n\n`);
+                const totalRecords = results.data.dataframe_2.length;
+                const CHUNK_SIZE = 500;
+                const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
 
-            // Send chunk data
-            res.write(`data: ${JSON.stringify({
-                success: true,
-                data: {
-                    timestamp: results.timestamp,
-                    data: {
-                        dataframe_2: chunk,
-                        dataframe_3: currentPage === totalPages - 1 ? results.data.dataframe_3 : null
+                // Only send progress if we haven't started or if we're resuming
+                if (processingState.lastProcessedIndex === 0) {
+                    res.write(`data: {"type":"progress","message":"Starting data processing...","totalRecords":${totalRecords},"totalChunks":${totalChunks}}\n\n`);
+                }
+
+                // Process remaining data in chunks
+                for (let i = processingState.lastProcessedIndex; i < totalRecords; i += CHUNK_SIZE) {
+                    const chunk = results.data.dataframe_2.slice(i, Math.min(i + CHUNK_SIZE, totalRecords));
+                    const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
+                    
+                    // Send progress update
+                    res.write(`data: {"type":"progress","message":"Processing records ${i + 1} to ${Math.min(i + CHUNK_SIZE, totalRecords)}","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
+                    
+                    const chunkData = {
+                        success: true,
+                        data: {
+                            timestamp: results.timestamp,
+                            data: {
+                                dataframe_2: chunk,
+                                dataframe_3: i + CHUNK_SIZE >= totalRecords ? results.data.dataframe_3 : null
+                            }
+                        },
+                        totalChunks,
+                        currentChunk: chunkNum,
+                        totalRecords,
+                        recordsProcessed: i + chunk.length,
+                        isLastChunk: i + CHUNK_SIZE >= totalRecords
+                    };
+
+                    try {
+                        const chunkString = JSON.stringify(chunkData);
+                        res.write(`data: ${chunkString}\n\n`);
+                        
+                        // Update processing state
+                        processingState.lastProcessedIndex = i + CHUNK_SIZE;
+                        processingState.totalRecordsSent += chunk.length;
+
+                        // Add small delay between chunks to prevent overwhelming the client
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    } catch (stringifyError) {
+                        console.error('Error sending chunk:', stringifyError);
+                        res.write(`data: {"type":"error","message":"Error processing chunk ${chunkNum}"}\n\n`);
                     }
-                },
-                totalPages,
-                currentPage: currentPage + 1,
-                totalRecords,
-                recordsProcessed: recordsSent,
-                isLastPage: currentPage === totalPages - 1
-            })}\n\n`);
 
-            currentPage++;
+                    // Clear chunk data
+                    chunk.length = 0;
+                }
+
+                // Check if we've processed everything
+                if (processingState.totalRecordsSent >= totalRecords) {
+                    res.write(`data: {"type":"complete","message":"Processing complete","totalRecords":${totalRecords}}\n\n`);
+                    await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
+                    res.end();
+                    return;
+                }
+
+                processingState.isProcessing = false;
+            } catch (error) {
+                console.error('Error in checkResults:', error);
+                res.write(`data: {"type":"error","message":"Error processing results: ${error.message}"}\n\n`);
+                processingState.isProcessing = false;
+            }
         };
 
-        // Send first chunk immediately
-        sendNextChunk();
-
-        // Set up interval to send remaining chunks
-        const interval = setInterval(() => {
-            if (currentPage >= totalPages) {
-                clearInterval(interval);
-                return;
-            }
-            sendNextChunk();
-        }, 100);
+        // Check for results more frequently
+        const interval = setInterval(async () => {
+            await checkResults();
+        }, 1000);
 
         // Handle client disconnect
         req.on('close', () => {
             clearInterval(interval);
+            // Don't clear the file immediately on disconnect to allow for reconnection
+            setTimeout(async () => {
+                try {
+                    const results = loadResults();
+                    if (results?.data?.dataframe_2?.length === processingState.totalRecordsSent) {
+                        await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
+                    }
+                } catch (error) {
+                    console.error('Error cleaning up after disconnect:', error);
+                }
+            }, 5000);
         });
 
     } catch (error) {
         console.error('Error in hex-results stream:', error);
-        res.write(`data: {"type":"error","message":"${error.message}"}\n\n`);
-        res.end();
+        res.status(500).end();
+    }
+});
+
+// Add endpoint to receive Hex results
+app.post('/api/hex-results', async (req, res) => {
+    try {
+        const results = req.body;
+        console.log('Received raw request body:', {
+            hasData: !!results.data,
+            dataframe2Length: results.data?.dataframe_2?.length,
+            dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
+        });
+
+        // Save results to file
+        await fs.promises.writeFile(STORAGE_FILE, JSON.stringify({
+            timestamp: new Date().toISOString(),
+            data: results.data
+        }));
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error saving hex results:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

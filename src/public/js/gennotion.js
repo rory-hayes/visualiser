@@ -203,8 +203,25 @@ async function checkServerStatus() {
 
 function displayResults(data) {
     try {
+        // Show results section
+        resultsSection.classList.remove('hidden');
+        resultsContent.innerHTML = ''; // Clear previous results
+        
+        // Add metrics container
+        const metricsContainer = document.createElement('div');
+        metricsContainer.className = 'bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6';
+        metricsContainer.innerHTML = formatResults(data.data.dataframe_2, data.data.dataframe_3);
+        resultsContent.appendChild(metricsContainer);
+        
+        // Calculate metrics
         const metrics = calculateMetrics(data.data.dataframe_2, data.data.dataframe_3);
         updateMetricsDisplay(metrics);
+        
+        // Create or ensure graph container exists
+        let container = document.createElement('div');
+        container.id = 'graph-container';
+        container.className = 'w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden';
+        resultsContent.appendChild(container);
         
         // Create graph visualization
         createGraphVisualization(data.data.dataframe_2);

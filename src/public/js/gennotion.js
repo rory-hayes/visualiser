@@ -415,6 +415,7 @@ function transformDataForGraph(data) {
         const links = new Set(); // Use Set to avoid duplicate links
         const nodeMap = new Map();
         const depthMap = new Map(); // Track nodes by depth
+        const collectionChildrenMap = new Map(); // Track children of collections
 
         // First pass: Create all nodes and organize by depth
         data.forEach(item => {
@@ -431,17 +432,24 @@ function transformDataForGraph(data) {
 
             // Create node if it doesn't exist
             if (!nodeMap.has(item.ID)) {
+                // Clean up the type string to be more readable
+                let type = item.TYPE?.toLowerCase() || 'page';
+                // Remove any prefix/suffix and just keep the core type
+                type = type.replace(/_page$/, '')  // Remove _page suffix
+                         .replace(/^page_/, '')    // Remove page_ prefix
+                         .replace(/^collection_view_/, 'view_'); // Simplify collection_view to view
+
                 const node = {
                     id: item.ID,
-                    title: item.TITLE || item.TEXT || item.NAME || `${item.TYPE} ${item.ID.substring(0, 8)}`,
-                    type: item.TYPE?.toLowerCase() || 'page',
+                    title: type, // Just show the type as the title
+                    type: type,
                     url: item.URL,
                     createdTime: item.CREATED_TIME ? new Date(item.CREATED_TIME) : null,
                     lastEditedTime: item.LAST_EDITED_TIME ? new Date(item.LAST_EDITED_TIME) : null,
                     depth: depth,
                     hasChildren: item.HAS_CHILDREN === 'true' || item.HAS_CHILDREN === true,
-                    isCollection: item.TYPE?.toLowerCase().includes('collection'),
-                    isDatabase: item.TYPE?.toLowerCase().includes('database'),
+                    isCollection: type.includes('collection'),
+                    isDatabase: type.includes('database'),
                     parentId: item.PARENT_ID,
                     spaceId: item.SPACE_ID,
                     ancestors: []
@@ -460,10 +468,18 @@ function transformDataForGraph(data) {
 
                 nodes.push(node);
                 nodeMap.set(item.ID, node);
+
+                // Track children of collections/databases
+                if (item.PARENT_ID) {
+                    if (!collectionChildrenMap.has(item.PARENT_ID)) {
+                        collectionChildrenMap.set(item.PARENT_ID, new Set());
+                    }
+                    collectionChildrenMap.get(item.PARENT_ID).add(item.ID);
+                }
             }
         });
 
-        // Second pass: Create all hierarchical relationships
+        // Second pass: Create all relationships
         nodes.forEach(node => {
             // 1. Direct parent-child relationships (stronger connection)
             if (node.parentId && nodeMap.has(node.parentId)) {
@@ -475,21 +491,22 @@ function transformDataForGraph(data) {
                 }));
             }
 
-            // 2. Ancestor relationships (showing full hierarchy)
-            if (Array.isArray(node.ancestors)) {
-                node.ancestors.forEach(ancestorId => {
-                    if (nodeMap.has(ancestorId) && ancestorId !== node.parentId) {
+            // 2. Collection/Database relationships
+            if (node.isCollection || node.isDatabase) {
+                const children = collectionChildrenMap.get(node.id) || new Set();
+                children.forEach(childId => {
+                    if (nodeMap.has(childId)) {
                         links.add(JSON.stringify({
-                            source: ancestorId,
-                            target: node.id,
-                            type: 'ancestor',
-                            value: 1 // Weaker connection for ancestor relationships
+                            source: node.id,
+                            target: childId,
+                            type: 'collection-child',
+                            value: 2 // Medium strength for collection-child relationships
                         }));
                     }
                 });
             }
 
-            // 3. Collection/Database relationships
+            // 3. View relationships
             if (node.type?.includes('view')) {
                 const parentNode = nodeMap.get(node.parentId);
                 if (parentNode && (parentNode.isCollection || parentNode.isDatabase)) {
@@ -502,18 +519,33 @@ function transformDataForGraph(data) {
                 }
             }
 
-            // 4. Connect nodes at adjacent depths
+            // 4. Depth-based relationships
             const currentDepth = node.depth;
             const nodesAtNextDepth = depthMap.get(currentDepth + 1);
             if (nodesAtNextDepth) {
                 nodesAtNextDepth.forEach(childId => {
                     const childNode = nodeMap.get(childId);
-                    if (childNode && childNode.ancestors.includes(node.id)) {
+                    if (childNode && 
+                        (childNode.ancestors.includes(node.id) || childNode.parentId === node.id)) {
                         links.add(JSON.stringify({
                             source: node.id,
                             target: childId,
                             type: 'depth-connection',
-                            value: 2
+                            value: 1 // Weaker connection for depth-based relationships
+                        }));
+                    }
+                });
+            }
+
+            // 5. Ancestor relationships (showing full hierarchy)
+            if (Array.isArray(node.ancestors)) {
+                node.ancestors.forEach(ancestorId => {
+                    if (nodeMap.has(ancestorId) && ancestorId !== node.parentId) {
+                        links.add(JSON.stringify({
+                            source: ancestorId,
+                            target: node.id,
+                            type: 'ancestor',
+                            value: 1 // Weaker connection for ancestor relationships
                         }));
                     }
                 });
@@ -603,130 +635,6 @@ function formatResults(graphData, insightsData) {
                     </div>
                 </div>
             </div>
-
-            <!-- Usage Metrics -->
-            <div class="mb-8 p-4 bg-green-50 rounded-lg">
-                <h3 class="font-semibold text-lg text-green-900 mb-3">Usage Metrics</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Daily Active Users</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.daily_active_users)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Weekly Active Users</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.weekly_active_users)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Monthly Active Users</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_active_users)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Pages per User</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.pages_per_user)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Engagement Score</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.engagement_score)}%</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Collaboration Rate</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.collaboration_rate)}%</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Growth Metrics -->
-            <div class="mb-8 p-4 bg-blue-50 rounded-lg">
-                <h3 class="font-semibold text-lg text-blue-900 mb-3">Growth Metrics</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Growth Rate</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.growth_rate)}%</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Member Growth Rate</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_member_growth_rate)}%</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Content Growth Rate</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_content_growth_rate)}%</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Pages Created (Month)</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.pages_created_last_month)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Expected Members (Year)</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.expected_members_in_next_year)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Blocks Created (Year)</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.blocks_created_last_year)}</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Performance Metrics -->
-            <div class="mb-8 p-4 bg-purple-50 rounded-lg">
-                <h3 class="font-semibold text-lg text-purple-900 mb-3">Performance Metrics</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Organization Score</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_organization_score)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Productivity Score</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_productivity_score)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Collaboration Score</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_collaboration_score)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">AI Productivity Gain</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.ai_productivity_gain)}</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Automation Potential</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.automation_potential)}%</div>
-                    </div>
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">Time Savings (hrs)</div>
-                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.projected_time_savings)}</div>
-                    </div>
-                </div>
-            </div>
-
-            // <!-- ROI Metrics -->
-            // <div class="mb-8 p-4 bg-yellow-50 rounded-lg">
-            //     <h3 class="font-semibold text-lg text-yellow-900 mb-3">ROI Metrics</h3>
-            //     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            //         <div class="bg-white p-3 rounded shadow-sm">
-            //             <div class="text-sm text-gray-500">Current Plan Cost</div>
-            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics.current_plan)}</div>
-            //         </div>
-            //         <div class="bg-white p-3 rounded shadow-sm">
-            //             <div class="text-sm text-gray-500">Enterprise Plan ROI</div>
-            //             <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_roi)}%</div>
-            //         </div>
-            //         <div class="bg-white p-3 rounded shadow-sm">
-            //             <div class="text-sm text-gray-500">Enterprise AI ROI</div>
-            //             <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_w_ai_roi)}%</div>
-            //         </div>
-            //         <div class="bg-white p-3 rounded shadow-sm">
-            //             <div class="text-sm text-gray-500">10% Growth Savings</div>
-            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['10_percent_increase'])}</div>
-            //         </div>
-            //         <div class="bg-white p-3 rounded shadow-sm">
-            //             <div class="text-sm text-gray-500">20% Growth Savings</div>
-            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['20_percent_increase'])}</div>
-            //         </div>
-            //         <div class="bg-white p-3 rounded shadow-sm">
-            //             <div class="text-sm text-gray-500">50% Growth Savings</div>
-            //             <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['50_percent_increase'])}</div>
-            //         </div>
-            //     </div>
-            // </div>
 
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>

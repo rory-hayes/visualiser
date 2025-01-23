@@ -352,11 +352,11 @@ function createGraphVisualization(graphData) {
             return;
         }
 
-        const data = graphData.dataframe_2;
-        if (!Array.isArray(data) || data.length === 0) {
-            console.warn('No graph data to visualize');
-            return;
-        }
+        console.log('Creating visualization with data:', {
+            hasDataframe2: !!graphData.dataframe_2,
+            recordCount: graphData.dataframe_2.length,
+            sampleRecord: graphData.dataframe_2[0]
+        });
 
         const container = document.getElementById('graph-container');
         if (!container) {
@@ -368,79 +368,132 @@ function createGraphVisualization(graphData) {
         container.innerHTML = '';
 
         // Transform data for visualization
-        const { nodes, links } = transformDataForGraph(data);
+        const { nodes, links } = transformDataForGraph(graphData.dataframe_2);
+
+        if (nodes.length === 0) {
+            console.warn('No nodes to visualize');
+            container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
+            return;
+        }
+
+        console.log('Visualization data prepared:', {
+            nodes: nodes.length,
+            links: links.length,
+            nodeTypes: [...new Set(nodes.map(n => n.type))]
+        });
 
         // Initialize the graph with the transformed data
         initializeGraph({ 
             nodes: nodes,
-            links: links,
-            insightsData: graphData.dataframe_3
+            links: links
         }, container);
-
-        console.log('Graph visualization initialized with:', {
-            nodes: nodes.length,
-            links: links.length,
-            hasInsights: !!graphData.dataframe_3
-        });
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
+        const container = document.getElementById('graph-container');
+        if (container) {
+            container.innerHTML = '<div class="p-4 text-red-500">Error initializing graph visualization</div>';
+        }
     }
 }
 
 // Update transformDataForGraph to handle the new data structure
 function transformDataForGraph(data) {
     try {
+        if (!Array.isArray(data)) {
+            console.error('Invalid data format:', data);
+            return { nodes: [], links: [] };
+        }
+
+        console.log('Processing data for graph:', {
+            totalRecords: data.length,
+            sampleRecord: data[0]
+        });
+
         const nodes = [];
         const links = [];
         const nodeMap = new Map();
 
-        // Process in chunks to prevent memory issues
-        const CHUNK_SIZE = 100;
-        
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-            const chunk = data.slice(i, i + CHUNK_SIZE);
-            
-            chunk.forEach(item => {
-                // Create node
+        // First pass: Create nodes
+        data.forEach(item => {
+            if (!item.ID) {
+                console.warn('Item missing ID:', item);
+                return;
+            }
+
+            // Create node if it doesn't exist
+            if (!nodeMap.has(item.ID)) {
                 const node = {
-                    id: item.ID || item.id,
-                    title: item.TEXT || item.text || item.TITLE || item.title || 'Untitled',
-                    type: item.TYPE || item.type || 'page',
+                    id: item.ID,
+                    title: item.TEXT || item.TITLE || 'Untitled',
+                    type: item.TYPE || 'page',
+                    url: item.URL,
                     createdTime: item.CREATED_TIME ? new Date(item.CREATED_TIME) : null,
-                    depth: Number(item.DEPTH || item.depth) || 0,
-                    url: item.URL || item.url
+                    lastEditedTime: item.LAST_EDITED_TIME ? new Date(item.LAST_EDITED_TIME) : null,
+                    depth: parseInt(item.DEPTH) || 0,
+                    hasChildren: item.HAS_CHILDREN === 'true' || item.HAS_CHILDREN === true,
+                    isCollection: item.TYPE?.includes('collection'),
+                    isDatabase: item.TYPE?.includes('database'),
+                    ancestors: item.ANCESTORS ? item.ANCESTORS.split(',').filter(Boolean) : []
                 };
-
                 nodes.push(node);
-                nodeMap.set(node.id, node);
+                nodeMap.set(item.ID, node);
+            }
+        });
 
-                // Create link if there's a parent
-                const parentId = item.PARENT_ID || item.parent_id;
-                if (parentId) {
+        // Second pass: Create links based on ancestors
+        nodes.forEach(node => {
+            if (node.ancestors && node.ancestors.length > 0) {
+                // Create links to immediate parent and grandparent
+                const immediateParent = node.ancestors[node.ancestors.length - 1];
+                if (immediateParent && nodeMap.has(immediateParent)) {
                     links.push({
-                        source: parentId,
+                        source: immediateParent,
                         target: node.id,
-                        value: 1
+                        value: 1,
+                        type: 'parent-child'
                     });
                 }
-            });
-        }
+            }
+
+            // If it's a collection/database, add links to its views
+            if (node.isCollection || node.isDatabase) {
+                data.forEach(item => {
+                    if (item.PARENT_ID === node.id && item.TYPE?.includes('view')) {
+                        links.push({
+                            source: node.id,
+                            target: item.ID,
+                            value: 1,
+                            type: 'collection-view'
+                        });
+                    }
+                });
+            }
+        });
 
         // Convert link references from IDs to actual node objects
         const processedLinks = links.map(link => {
-            const source = nodeMap.get(link.source);
-            const target = nodeMap.get(link.target);
+            const source = typeof link.source === 'string' ? nodeMap.get(link.source) : link.source;
+            const target = typeof link.target === 'string' ? nodeMap.get(link.target) : link.target;
+            
             if (source && target) {
-                return { source, target, value: link.value };
+                return { 
+                    source, 
+                    target, 
+                    value: link.value,
+                    type: link.type
+                };
             }
             return null;
         }).filter(Boolean);
 
-        console.log('Transformed graph data:', {
-            originalLength: data.length,
+        console.log('Graph data transformed:', {
+            originalRecords: data.length,
             nodes: nodes.length,
-            links: processedLinks.length
+            links: processedLinks.length,
+            nodeTypes: [...new Set(nodes.map(n => n.type))],
+            sampleNode: nodes[0],
+            sampleLink: processedLinks[0]
         });
 
         return { nodes, links: processedLinks };

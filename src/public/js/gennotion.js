@@ -195,7 +195,7 @@ function listenForResults() {
         connectionTimeout = setTimeout(() => {
             if (eventSource.readyState !== EventSource.CLOSED) {
                 console.log('Connection timeout - closing EventSource');
-                eventSource.close();
+        eventSource.close();
                 showStatus('Connection timeout. Please try again.', false);
             }
         }, 300000); // 5 minutes timeout
@@ -206,16 +206,16 @@ function listenForResults() {
             showStatus('Connection established', true);
         };
 
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
                 
                 if (data.type === 'progress') {
                     totalExpectedRecords = data.totalRecords;
                     showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
                     showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
-                    return;
-                }
+                return;
+            }
 
                 if (!data.data?.data?.dataframe_2) {
                     return;
@@ -260,17 +260,17 @@ function listenForResults() {
                             },
                             success: true
                         });
-                        eventSource.close();
+                eventSource.close();
                     }
-                }
-            } catch (error) {
+            }
+        } catch (error) {
                 console.error('Error processing message:', error);
                 showStatus(`Error processing data: ${error.message}`, false);
-            }
-        };
+        }
+    };
 
-        eventSource.onerror = (error) => {
-            console.error('EventSource error:', error);
+    eventSource.onerror = (error) => {
+        console.error('EventSource error:', error);
             console.log('EventSource readyState:', eventSource.readyState);
             
             if (eventSource.readyState === EventSource.CLOSED) {
@@ -279,7 +279,7 @@ function listenForResults() {
                     retryCount++;
                     showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
                     setTimeout(() => {
-                        eventSource.close();
+        eventSource.close();
                         connectEventSource();
                     }, 2000 * retryCount);
                 } else {
@@ -383,7 +383,10 @@ function createGraphVisualization(graphData) {
         });
 
         // Initialize the graph with the transformed data
-        initializeGraph(graphData, container);
+        initializeGraph({ 
+            nodes: nodes,
+            links: links
+        }, container);
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
@@ -412,7 +415,6 @@ function transformDataForGraph(data) {
         const links = new Set(); // Use Set to avoid duplicate links
         const nodeMap = new Map();
         const depthMap = new Map(); // Track nodes by depth
-        const collectionChildrenMap = new Map(); // Track children of collections
 
         // First pass: Create all nodes and organize by depth
         data.forEach(item => {
@@ -465,18 +467,10 @@ function transformDataForGraph(data) {
 
                 nodes.push(node);
                 nodeMap.set(item.ID, node);
-
-                // Track children of collections/databases
-                if (item.PARENT_ID) {
-                    if (!collectionChildrenMap.has(item.PARENT_ID)) {
-                        collectionChildrenMap.set(item.PARENT_ID, new Set());
-                    }
-                    collectionChildrenMap.get(item.PARENT_ID).add(item.ID);
-                }
             }
         });
 
-        // Second pass: Create all relationships
+        // Second pass: Create all hierarchical relationships
         nodes.forEach(node => {
             // 1. Direct parent-child relationships (stronger connection)
             if (node.parentId && nodeMap.has(node.parentId)) {
@@ -488,53 +482,7 @@ function transformDataForGraph(data) {
                 }));
             }
 
-            // 2. Collection/Database relationships
-            if (node.isCollection || node.isDatabase) {
-                const children = collectionChildrenMap.get(node.id) || new Set();
-                children.forEach(childId => {
-                    if (nodeMap.has(childId)) {
-                        links.add(JSON.stringify({
-                            source: node.id,
-                            target: childId,
-                            type: 'collection-child',
-                            value: 2 // Medium strength for collection-child relationships
-                        }));
-                    }
-                });
-            }
-
-            // 3. View relationships
-            if (node.type?.includes('view')) {
-                const parentNode = nodeMap.get(node.parentId);
-                if (parentNode && (parentNode.isCollection || parentNode.isDatabase)) {
-                    links.add(JSON.stringify({
-                        source: node.parentId,
-                        target: node.id,
-                        type: 'collection-view',
-                        value: 2 // Medium strength for collection-view relationships
-                    }));
-                }
-            }
-
-            // 4. Depth-based relationships
-            const currentDepth = node.depth;
-            const nodesAtNextDepth = depthMap.get(currentDepth + 1);
-            if (nodesAtNextDepth) {
-                nodesAtNextDepth.forEach(childId => {
-                    const childNode = nodeMap.get(childId);
-                    if (childNode && 
-                        (childNode.ancestors.includes(node.id) || childNode.parentId === node.id)) {
-                        links.add(JSON.stringify({
-                            source: node.id,
-                            target: childId,
-                            type: 'depth-connection',
-                            value: 1 // Weaker connection for depth-based relationships
-                        }));
-                    }
-                });
-            }
-
-            // 5. Ancestor relationships (showing full hierarchy)
+            // 2. Ancestor relationships (showing full hierarchy)
             if (Array.isArray(node.ancestors)) {
                 node.ancestors.forEach(ancestorId => {
                     if (nodeMap.has(ancestorId) && ancestorId !== node.parentId) {
@@ -546,6 +494,19 @@ function transformDataForGraph(data) {
                         }));
                     }
                 });
+            }
+
+            // 3. Collection/Database relationships
+            if (node.type?.includes('view')) {
+                const parentNode = nodeMap.get(node.parentId);
+                if (parentNode && (parentNode.isCollection || parentNode.isDatabase)) {
+                    links.add(JSON.stringify({
+                        source: node.parentId,
+                        target: node.id,
+                        type: 'collection-view',
+                        value: 2 // Medium strength for collection-view relationships
+                    }));
+                }
             }
         });
 
@@ -836,18 +797,24 @@ function drag(simulation) {
 // Initialize the force-directed graph
 function initializeGraph(data, container) {
     try {
-        // Validate container and data
-        if (!container || !data || !Array.isArray(data.nodes) || !Array.isArray(data.links)) {
-            console.error('Invalid container or graph data:', { container, data });
+        // Validate container
+        if (!container) {
+            console.error('Graph container is null or undefined');
+            return;
+        }
+
+        // Validate graph data
+        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.links)) {
+            console.error('Invalid graph data:', data);
             return;
         }
 
         const { nodes, links } = data;
 
-        // Clear container
+        // Clear any existing graph
         container.innerHTML = '';
 
-        // Set dimensions
+        // Initialize the visualization
         const width = container.clientWidth || 800;
         const height = container.clientHeight || 600;
 
@@ -865,61 +832,22 @@ function initializeGraph(data, container) {
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        // Time-based grouping
-        const timeGroups = new Map();
-        const timeRange = {
-            min: d3.min(nodes, d => d.createdTime ? d.createdTime.getTime() : Infinity),
-            max: d3.max(nodes, d => d.createdTime ? d.createdTime.getTime() : -Infinity)
-        };
-
-        // Group nodes by time periods (e.g., months)
-        nodes.forEach(node => {
-            if (node.createdTime) {
-                const timeKey = new Date(node.createdTime.getFullYear(), node.createdTime.getMonth()).getTime();
-                if (!timeGroups.has(timeKey)) {
-                    timeGroups.set(timeKey, []);
-                }
-                timeGroups.get(timeKey).push(node);
-            }
-        });
-
-        // Create temporal force simulation
+        // Create the force simulation
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(d => {
-                    // Adjust link distance based on temporal difference
-                    const sourceTime = d.source.createdTime ? d.source.createdTime.getTime() : timeRange.min;
-                    const targetTime = d.target.createdTime ? d.target.createdTime.getTime() : timeRange.min;
-                    const timeDiff = Math.abs(sourceTime - targetTime);
-                    const normalizedDiff = timeDiff / (timeRange.max - timeRange.min);
-                    return 50 + (normalizedDiff * 200); // Base distance + temporal factor
-                }))
+                .distance(100))
             .force('charge', d3.forceManyBody()
-                .strength(d => {
-                    // Nodes from same time period have stronger attraction
-                    const sameTimeCount = timeGroups.get(
-                        d.createdTime ? 
-                        new Date(d.createdTime.getFullYear(), d.createdTime.getMonth()).getTime() : 
-                        timeRange.min
-                    )?.length || 1;
-                    return -100 * (1 / Math.sqrt(sameTimeCount));
-                }))
+                .strength(-500)
+                .distanceMax(500))
             .force('center', d3.forceCenter(width / 2, height / 2))
             .force('collision', d3.forceCollide().radius(30))
-            // Add temporal positioning force
-            .force('temporal-x', d3.forceX(d => {
-                if (!d.createdTime) return width / 2;
-                const timePosition = (d.createdTime.getTime() - timeRange.min) / (timeRange.max - timeRange.min);
-                return 100 + (width - 200) * timePosition;
-            }).strength(0.2))
-            .force('temporal-y', d3.forceY(d => {
-                if (!d.createdTime) return height / 2;
-                const depthFactor = d.depth / 15; // Normalize depth (assuming max depth of 15)
-                return 100 + (height - 200) * depthFactor;
-            }).strength(0.2));
+            .force('x', d3.forceX(width / 2).strength(0.1))
+            .force('y', d3.forceY(height / 2).strength(0.1))
+            .alphaDecay(0.01)
+            .velocityDecay(0.2);
 
-        // Create links
+        // Add links
         const link = g.append('g')
             .attr('class', 'links')
             .selectAll('line')
@@ -927,9 +855,9 @@ function initializeGraph(data, container) {
             .join('line')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', d => d.value || 1);
+            .attr('stroke-width', 2);
 
-        // Create nodes
+        // Add nodes
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
@@ -947,56 +875,14 @@ function initializeGraph(data, container) {
             .join('text')
             .attr('dx', 12)
             .attr('dy', 4)
-            .text(d => d.title)
+            .text(d => d.title?.substring(0, 20))
             .style('font-size', '10px')
             .style('fill', '#666');
 
-        // Add tooltips
-        const tooltip = d3.select(container)
-            .append('div')
-            .attr('class', 'tooltip')
-            .style('opacity', 0)
-            .style('position', 'absolute')
-            .style('pointer-events', 'none')
-            .style('background-color', 'white')
-            .style('padding', '10px')
-            .style('border-radius', '5px')
-            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
-            .style('z-index', '1000');
-
-        // Node hover behavior
-        node.on('mouseover', (event, d) => {
-            tooltip.transition()
-                .duration(200)
-                .style('opacity', .9);
-            tooltip.html(`
-                <div class="p-2">
-                    <strong class="block text-lg mb-1">${d.title}</strong>
-                    <span class="block text-sm text-gray-500">Type: ${d.type}</span>
-                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
-                    <span class="block text-sm text-gray-500">Depth: ${d.depth}</span>
-                </div>
-            `)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 10) + 'px');
-
-            // Highlight connected nodes
-            const connectedNodes = new Set();
-            links.forEach(l => {
-                if (l.source.id === d.id) connectedNodes.add(l.target.id);
-                if (l.target.id === d.id) connectedNodes.add(l.source.id);
-            });
-
-            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.1);
-            link.style('opacity', l => l.source.id === d.id || l.target.id === d.id ? 1 : 0.1);
-        })
-        .on('mouseout', () => {
-            tooltip.transition()
-                .duration(500)
-                .style('opacity', 0);
-            node.style('opacity', 1);
-            link.style('opacity', 0.6);
-        });
+        // Initialize timeline if we have dates
+        if (nodes.some(n => n.createdTime)) {
+        initializeTimeline(container, nodes, node, link, svg);
+        }
 
         // Update positions on each tick
         simulation.on('tick', () => {
@@ -1015,13 +901,75 @@ function initializeGraph(data, container) {
                 .attr('y', d => d.y);
         });
 
-        // Initialize timeline if we have dates
-        if (nodes.some(n => n.createdTime)) {
-            initializeTimeline(container, nodes, node, link, svg);
-        }
+        // Add tooltips
+        const tooltip = d3.select(container)
+            .append('div')
+            .attr('class', 'tooltip')
+            .style('opacity', 0)
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background-color', 'white')
+            .style('padding', '10px')
+            .style('border-radius', '5px')
+            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+            .style('max-width', '300px')
+            .style('z-index', '1000');
+
+        node.on('mouseover', (event, d) => {
+            // Fix node position during hover
+            d.fx = d.x;
+            d.fy = d.y;
+            
+            // Show tooltip
+            tooltip.transition()
+                .duration(200)
+                .style('opacity', .9);
+                
+            tooltip.html(`
+                <div class="p-2">
+                    <strong class="block text-lg mb-1">${d.title}</strong>
+                    <span class="block text-sm text-gray-500">Type: ${d.type}</span>
+                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
+                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
+                </div>
+            `)
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px');
+
+            // Highlight connected nodes
+            const connectedNodes = new Set();
+            links.forEach(l => {
+                if (l.source.id === d.id) connectedNodes.add(l.target.id);
+                if (l.target.id === d.id) connectedNodes.add(l.source.id);
+            });
+
+            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.1);
+            link.style('opacity', l => 
+                l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
+            );
+        })
+        .on('mouseout', (event, d) => {
+            // Release fixed position
+            d.fx = null;
+            d.fy = null;
+            
+            // Hide tooltip
+            tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
+
+            // Reset node visibility
+            node.style('opacity', 1);
+            link.style('opacity', 0.6);
+        });
 
         // Store data for resize handling
-        container._graphData = { nodes, links, width, height };
+        container._graphData = {
+            nodes,
+            links,
+            width,
+            height
+        };
 
         // Initial zoom to fit
         const bounds = g.node().getBBox();
@@ -1032,7 +980,7 @@ function initializeGraph(data, container) {
         ];
         svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
-        // Start simulation
+        // Start simulation with higher alpha
         simulation.alpha(1).restart();
 
     } catch (error) {
@@ -1147,14 +1095,14 @@ function showStatus(message, showSpinner = false) {
     const statusSpinner = document.getElementById('statusSpinner');
     
     if (statusSection && statusText) {
-        statusSection.classList.remove('hidden');
-        statusText.textContent = message;
-        
+    statusSection.classList.remove('hidden');
+    statusText.textContent = message;
+    
         if (statusSpinner) {
-            if (showSpinner) {
-                statusSpinner.classList.remove('hidden');
-            } else {
-                statusSpinner.classList.add('hidden');
+    if (showSpinner) {
+        statusSpinner.classList.remove('hidden');
+    } else {
+        statusSpinner.classList.add('hidden');
             }
         }
     } else {

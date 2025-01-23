@@ -322,7 +322,9 @@ function listenForResults() {
 
             currentEventSource.onmessage = (event) => {
                 try {
+                    console.log('Raw event data received:', event.data);
                     const data = JSON.parse(event.data);
+                    console.log('Parsed event data:', data);
                     
                     if (data.type === 'progress') {
                         dataManager.totalRecords = data.totalRecords;
@@ -332,8 +334,16 @@ function listenForResults() {
                     }
 
                     if (!data.data?.data?.dataframe_2) {
+                        console.warn('Missing dataframe_2 in received data:', data);
                         return;
                     }
+
+                    // Log the actual data being processed
+                    console.log('Processing dataframe_2:', {
+                        length: data.data.data.dataframe_2.length,
+                        sample: data.data.data.dataframe_2[0],
+                        hasDataframe3: !!data.data.data.dataframe_3
+                    });
 
                     // Add new records to data manager
                     dataManager.addRecords(data.data.data.dataframe_2);
@@ -343,23 +353,28 @@ function listenForResults() {
                         dataManager.dataframe3 = data.data.data.dataframe_3;
                     }
 
-                    console.log('Received page:', {
-                        currentPage: data.currentPage,
-                        totalPages: data.totalPages,
+                    console.log('Data manager state:', {
                         processedRecords: dataManager.processedRecords,
-                        totalRecords: data.totalRecords
+                        nodesCount: dataManager.graphNodes.size,
+                        linksCount: dataManager.graphLinks.size
                     });
 
                     showProgress(dataManager.processedRecords, data.totalRecords);
 
                     // Process final results when all pages are received
                     if (data.isLastPage || dataManager.processedRecords >= dataManager.totalRecords) {
+                        console.log('Processing final results');
                         const finalData = {
                             data: {
-                                dataframe_2: data.data.data.dataframe_2,
-                                dataframe_3: data.data.data.dataframe_3
+                                dataframe_2: Array.from(dataManager.graphNodes.values()),
+                                dataframe_3: dataManager.dataframe3
                             }
                         };
+
+                        console.log('Final data to be processed:', {
+                            nodesCount: finalData.data.dataframe_2.length,
+                            hasDataframe3: !!finalData.data.dataframe_3
+                        });
 
                         processResults(finalData);
                         currentEventSource.close();
@@ -367,6 +382,11 @@ function listenForResults() {
                     }
                 } catch (error) {
                     console.error('Error processing message:', error);
+                    console.error('Error details:', {
+                        error: error.message,
+                        stack: error.stack,
+                        eventData: event.data
+                    });
                     showStatus(`Error processing data: ${error.message}`, false);
                 }
             };
@@ -458,8 +478,14 @@ function displayResults(data) {
 
 function createGraphVisualization(graphData) {
     try {
+        console.log('Starting graph visualization with data:', {
+            hasData: !!graphData,
+            length: graphData?.length || 0,
+            sampleNode: graphData?.[0]
+        });
+
         if (!Array.isArray(graphData) || graphData.length === 0) {
-            console.warn('No graph data to visualize');
+            console.warn('No graph data to visualize:', graphData);
             return;
         }
 
@@ -471,18 +497,20 @@ function createGraphVisualization(graphData) {
 
         // Clear previous graph
         container.innerHTML = '';
+        console.log('Previous graph cleared');
 
-        // Transform data for D3
-        const { nodes, links } = transformDataForGraph(graphData);
-        
-        // Store data for resize handling
-        window._lastGraphData = { graphData };
-        
         // Initialize the graph
+        console.log('Initializing graph with data length:', graphData.length);
         initializeGraph({ data: { dataframe_2: graphData } }, container);
+        console.log('Graph initialization complete');
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
+        console.error('Error details:', {
+            error: error.message,
+            stack: error.stack,
+            dataLength: graphData?.length
+        });
     }
 }
 
@@ -1554,47 +1582,74 @@ function calculateMetrics(graphData, insightsData) {
 // Add the missing processResults function
 function processResults(data) {
     try {
-        console.log('Processing results:', {
+        console.log('Starting processResults with data:', {
             hasData: !!data,
-            recordCount: data?.data?.dataframe_2?.length || 0,
+            dataStructure: data ? Object.keys(data) : [],
+            dataframe2Length: data?.data?.dataframe_2?.length || 0,
             hasDataframe3: !!data?.data?.dataframe_3
         });
+
+        // Validate data structure
+        if (!data?.data?.dataframe_2) {
+            console.error('Invalid data structure:', data);
+            showStatus('Error: Invalid data structure received', false);
+            return;
+        }
 
         // Show results section
         const resultsSection = document.getElementById('resultsSection');
         if (resultsSection) {
             resultsSection.classList.remove('hidden');
+            console.log('Results section displayed');
+        } else {
+            console.error('Results section element not found');
         }
 
         // Clear previous results
         const resultsContent = document.getElementById('resultsContent');
         if (resultsContent) {
             resultsContent.innerHTML = '';
+            console.log('Previous results cleared');
+        } else {
+            console.error('Results content element not found');
         }
 
         // Format and display results
-        if (data?.data?.dataframe_2) {
-            const formattedResults = formatResults(data.data.dataframe_2, data.data.dataframe_3);
-            if (resultsContent) {
-                resultsContent.innerHTML = formattedResults;
-            }
-
-            // Calculate and update metrics
-            const metrics = calculateMetrics(data.data.dataframe_2, data.data.dataframe_3);
-            updateMetricsDisplay(metrics);
-
-            // Create graph visualization
-            const container = document.getElementById('graph-container');
-            if (container) {
-                createGraphVisualization(data.data.dataframe_2);
-            }
-
-            showStatus('Analysis complete', false);
-        } else {
-            showStatus('No data available for analysis', false);
+        const formattedResults = formatResults(data.data.dataframe_2, data.data.dataframe_3);
+        if (resultsContent) {
+            resultsContent.innerHTML = formattedResults;
+            console.log('Results formatted and displayed');
         }
+
+        // Calculate and update metrics
+        console.log('Calculating metrics for data:', {
+            nodesCount: data.data.dataframe_2.length,
+            sampleNode: data.data.dataframe_2[0]
+        });
+        
+        const metrics = calculateMetrics(data.data.dataframe_2, data.data.dataframe_3);
+        console.log('Calculated metrics:', metrics);
+        
+        updateMetricsDisplay(metrics);
+        console.log('Metrics display updated');
+
+        // Create graph visualization
+        const container = document.getElementById('graph-container');
+        if (container) {
+            console.log('Creating graph visualization');
+            createGraphVisualization(data.data.dataframe_2);
+        } else {
+            console.error('Graph container not found');
+        }
+
+        showStatus('Analysis complete', false);
     } catch (error) {
-        console.error('Error processing results:', error);
+        console.error('Error in processResults:', error);
+        console.error('Error details:', {
+            error: error.message,
+            stack: error.stack,
+            inputData: data
+        });
         showStatus(`Error processing results: ${error.message}`, false);
     }
 }

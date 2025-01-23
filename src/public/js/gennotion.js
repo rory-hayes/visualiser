@@ -120,6 +120,9 @@ function listenForResults() {
     let accumulatedRecords = [];
     let lastProcessedChunk = 0;
     let totalExpectedRecords = 0;
+    let connectionAttempts = 0;
+    const MAX_CONNECTION_ATTEMPTS = 3;
+    let currentEventSource = null;
     
     function showProgress(current, total) {
         // First ensure status section is visible
@@ -165,86 +168,126 @@ function listenForResults() {
     }
 
     function connectEventSource() {
-        // Show initial status
-        showStatus('Connecting to event stream...');
+        if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
+            showStatus('Failed to establish connection after multiple attempts. Please try again later.', false);
+            return null;
+        }
+
+        connectionAttempts++;
+        showStatus(`Connecting to event stream (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})...`, true);
         
-        const eventSource = new EventSource('/api/hex-results/stream');
-        
-        eventSource.onopen = () => {
-            console.log('EventSource connection opened');
-            retryCount = 0; // Reset retry count on successful connection
-            showStatus('Connection established', true);
-        };
+        // Close existing connection if any
+        if (currentEventSource) {
+            currentEventSource.close();
+        }
 
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                
-                if (data.type === 'progress') {
-                    totalExpectedRecords = data.totalRecords;
-                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
-                    showProgress(data.recordsProcessed, data.totalRecords);
-                    return;
-                }
+        // Create new EventSource with error handling
+        try {
+            currentEventSource = new EventSource('/api/hex-results/stream');
+            
+            currentEventSource.onopen = () => {
+                console.log('EventSource connection opened');
+                connectionAttempts = 0; // Reset connection attempts on successful connection
+                retryCount = 0; // Reset retry count
+                showStatus('Connection established', true);
+            };
 
-                if (!data.data?.data?.dataframe_2) {
-                    return;
-                }
-
-                const newRecords = data.data.data.dataframe_2;
-                const currentChunk = data.currentChunk;
-
-                // Only process new chunks
-                if (currentChunk > lastProcessedChunk) {
-                    accumulatedRecords = accumulatedRecords.concat(newRecords);
-                    lastProcessedChunk = currentChunk;
+            currentEventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
                     
-                    console.log('Received chunk:', {
-                        currentChunk,
-                        totalChunks: data.totalChunks,
-                        accumulatedRecords: accumulatedRecords.length,
-                        totalRecords: data.totalRecords
-                    });
+                    if (data.type === 'progress') {
+                        totalExpectedRecords = data.totalRecords;
+                        showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
+                        showProgress(data.recordsProcessed, data.totalRecords);
+                        return;
+                    }
 
-                    showProgress(accumulatedRecords.length, data.totalRecords);
+                    if (!data.data?.data?.dataframe_2) {
+                        return;
+                    }
 
-                    // If this is the last chunk, process all data
-                    if (data.isLastChunk || accumulatedRecords.length >= totalExpectedRecords) {
-                        const finalData = {
-                            data: {
-                                dataframe_2: accumulatedRecords,
-                                dataframe_3: data.data.data.dataframe_3
-                            }
-                        };
-                        processResults(finalData);
-                        eventSource.close();
+                    const newRecords = data.data.data.dataframe_2;
+                    const currentChunk = data.currentChunk;
+
+                    // Only process new chunks
+                    if (currentChunk > lastProcessedChunk) {
+                        accumulatedRecords = accumulatedRecords.concat(newRecords);
+                        lastProcessedChunk = currentChunk;
+                        
+                        console.log('Received chunk:', {
+                            currentChunk,
+                            totalChunks: data.totalChunks,
+                            accumulatedRecords: accumulatedRecords.length,
+                            totalRecords: data.totalRecords
+                        });
+
+                        showProgress(accumulatedRecords.length, data.totalRecords);
+
+                        // If this is the last chunk, process all data
+                        if (data.isLastChunk || accumulatedRecords.length >= totalExpectedRecords) {
+                            const finalData = {
+                                data: {
+                                    dataframe_2: accumulatedRecords,
+                                    dataframe_3: data.data.data.dataframe_3
+                                }
+                            };
+                            processResults(finalData);
+                            currentEventSource.close();
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing message:', error);
+                    showStatus(`Error processing data: ${error.message}`, false);
+                }
+            };
+
+            currentEventSource.onerror = async (error) => {
+                console.error('EventSource error:', error);
+                console.log('EventSource readyState:', currentEventSource.readyState);
+                
+                // Check server health before retrying
+                const isHealthy = await checkServerHealth();
+                
+                if (!isHealthy) {
+                    showStatus('Server is not responding. Please try again later.', false);
+                    currentEventSource.close();
+                    return;
+                }
+
+                if (currentEventSource.readyState === EventSource.CLOSED) {
+                    if (retryCount < MAX_RETRIES) {
+                        retryCount++;
+                        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff with max 10s
+                        showStatus(`Connection lost. Retrying in ${delay/1000} seconds... (${retryCount}/${MAX_RETRIES})`, true);
+                        
+                        setTimeout(() => {
+                            currentEventSource.close();
+                            connectEventSource();
+                        }, delay);
+                    } else {
+                        showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
+                        currentEventSource.close();
                     }
                 }
-            } catch (error) {
-                console.error('Error processing message:', error);
-                showStatus(`Error processing data: ${error.message}`, false);
-            }
-        };
+            };
 
-        eventSource.onerror = (error) => {
-            console.error('EventSource error:', error);
-            console.log('EventSource readyState:', eventSource.readyState);
-            
-            if (eventSource.readyState === EventSource.CLOSED) {
-                if (retryCount < MAX_RETRIES) {
-                    retryCount++;
-                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
-                    setTimeout(() => {
-                        eventSource.close();
-                        connectEventSource();
-                    }, 2000 * retryCount); // Exponential backoff
-                } else {
-                    showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
-                }
-            }
-        };
+            return currentEventSource;
+        } catch (error) {
+            console.error('Error creating EventSource:', error);
+            showStatus('Failed to establish connection. Please try again.', false);
+            return null;
+        }
+    }
 
-        return eventSource;
+    async function checkServerHealth() {
+        try {
+            const response = await fetch('/api/health');
+            return response.ok;
+        } catch (error) {
+            console.error('Health check failed:', error);
+            return false;
+        }
     }
 
     return connectEventSource();

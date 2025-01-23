@@ -121,32 +121,137 @@ function listenForResults() {
     const MAX_CONNECTION_ATTEMPTS = 3;
     let currentEventSource = null;
 
-    // Use a more memory-efficient data structure
+    // Use a more memory-efficient data structure with incremental graph building
     const dataManager = {
-        records: [],
-        dataframe3: null,
         totalRecords: 0,
         processedRecords: 0,
+        dataframe3: null,
+        graphNodes: new Map(), // Use Map for efficient node lookup
+        graphLinks: new Set(), // Use Set to avoid duplicate links
         
         addRecords(newRecords) {
-            // Process records in smaller batches to avoid memory spikes
-            const BATCH_SIZE = 100;
-            for (let i = 0; i < newRecords.length; i += BATCH_SIZE) {
-                const batch = newRecords.slice(i, i + BATCH_SIZE);
-                this.records.push(...batch);
+            try {
+                // Process records in smaller batches and update graph immediately
+                const BATCH_SIZE = 100;
+                for (let i = 0; i < newRecords.length; i += BATCH_SIZE) {
+                    const batch = newRecords.slice(i, i + BATCH_SIZE);
+                    this.processRecordBatch(batch);
+                    
+                    // Clear references to help garbage collection
+                    batch.length = 0;
+                }
                 
-                // Clear references to help garbage collection
-                batch.length = 0;
+                // Update graph visualization after each chunk
+                this.updateGraphVisualization();
+                
+            } catch (error) {
+                console.error('Error processing records:', error);
             }
-            this.processedRecords = this.records.length;
+        },
+
+        processRecordBatch(records) {
+            records.forEach(record => {
+                // Add or update node
+                this.graphNodes.set(record.ID, {
+                    id: record.ID,
+                    title: record.TEXT || record.TYPE,
+                    type: record.TYPE,
+                    createdTime: record.CREATED_TIME ? new Date(record.CREATED_TIME) : null,
+                    parent: record.PARENT_ID
+                });
+
+                // Add link if there's a parent
+                if (record.PARENT_ID) {
+                    this.graphLinks.add(`${record.PARENT_ID}-${record.ID}`);
+                }
+            });
+
+            this.processedRecords += records.length;
+        },
+
+        updateGraphVisualization() {
+            const container = document.getElementById('graph-container');
+            if (!container) return;
+
+            // Convert Map and Set to arrays for D3
+            const nodes = Array.from(this.graphNodes.values());
+            const links = Array.from(this.graphLinks).map(linkId => {
+                const [sourceId, targetId] = linkId.split('-');
+                return {
+                    source: this.graphNodes.get(sourceId),
+                    target: this.graphNodes.get(targetId)
+                };
+            });
+
+            // Update or initialize the graph
+            if (!container._simulation) {
+                // First time - initialize the graph
+                initializeGraph({ nodes, links }, container);
+            } else {
+                // Update existing graph
+                updateGraph({ nodes, links }, container);
+            }
         },
 
         clear() {
-            this.records.length = 0;
+            this.graphNodes.clear();
+            this.graphLinks.clear();
             this.dataframe3 = null;
             this.processedRecords = 0;
+            
+            // Clear graph visualization
+            const container = document.getElementById('graph-container');
+            if (container) {
+                container.innerHTML = '';
+                container._simulation = null;
+            }
         }
     };
+
+    // Add this function to update existing graph
+    function updateGraph(graphData, container) {
+        const simulation = container._simulation;
+        if (!simulation) return;
+
+        // Update nodes and links
+        const svg = d3.select(container).select('svg');
+        const g = svg.select('g');
+
+        // Update nodes
+        const node = g.select('.nodes')
+            .selectAll('circle')
+            .data(graphData.nodes, d => d.id);
+
+        // Enter new nodes
+        node.enter()
+            .append('circle')
+            .attr('r', 8)
+            .attr('fill', d => colorScale(d.type))
+            .call(drag(simulation));
+
+        // Remove old nodes
+        node.exit().remove();
+
+        // Update links
+        const link = g.select('.links')
+            .selectAll('line')
+            .data(graphData.links, d => `${d.source.id}-${d.target.id}`);
+
+        // Enter new links
+        link.enter()
+            .append('line')
+            .attr('stroke', '#999')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 2);
+
+        // Remove old links
+        link.exit().remove();
+
+        // Update simulation
+        simulation.nodes(graphData.nodes);
+        simulation.force('link').links(graphData.links);
+        simulation.alpha(0.3).restart();
+    }
 
     function showProgress(current, total) {
         // First ensure status section is visible
@@ -251,8 +356,8 @@ function listenForResults() {
                     if (data.isLastPage || dataManager.processedRecords >= dataManager.totalRecords) {
                         const finalData = {
                             data: {
-                                dataframe_2: dataManager.records,
-                                dataframe_3: dataManager.dataframe3
+                                dataframe_2: data.data.data.dataframe_2,
+                                dataframe_3: data.data.data.dataframe_3
                             }
                         };
 
@@ -302,31 +407,21 @@ function listenForResults() {
         }
     }
 
-    async function checkServerHealth() {
+    // Add this helper function to check server status
+    async function checkServerStatus() {
         try {
             const response = await fetch('/api/health');
-            return response.ok;
+            if (!response.ok) {
+                throw new Error('Server health check failed');
+            }
+            return true;
         } catch (error) {
-            console.error('Health check failed:', error);
+            console.error('Server health check error:', error);
             return false;
         }
     }
 
     return connectEventSource();
-}
-
-// Add this helper function to check server status
-async function checkServerStatus() {
-    try {
-        const response = await fetch('/api/health');
-        if (!response.ok) {
-            throw new Error('Server health check failed');
-        }
-        return true;
-    } catch (error) {
-        console.error('Server health check error:', error);
-        return false;
-    }
 }
 
 function displayResults(data) {

@@ -117,13 +117,37 @@ async function processWorkspace(workspaceId) {
 function listenForResults() {
     let retryCount = 0;
     const MAX_RETRIES = 5;
-    let accumulatedRecords = [];
-    let lastProcessedChunk = 0;
-    let totalExpectedRecords = 0;
     let connectionAttempts = 0;
     const MAX_CONNECTION_ATTEMPTS = 3;
     let currentEventSource = null;
-    
+
+    // Use a more memory-efficient data structure
+    const dataManager = {
+        records: [],
+        dataframe3: null,
+        totalRecords: 0,
+        processedRecords: 0,
+        
+        addRecords(newRecords) {
+            // Process records in smaller batches to avoid memory spikes
+            const BATCH_SIZE = 100;
+            for (let i = 0; i < newRecords.length; i += BATCH_SIZE) {
+                const batch = newRecords.slice(i, i + BATCH_SIZE);
+                this.records.push(...batch);
+                
+                // Clear references to help garbage collection
+                batch.length = 0;
+            }
+            this.processedRecords = this.records.length;
+        },
+
+        clear() {
+            this.records.length = 0;
+            this.dataframe3 = null;
+            this.processedRecords = 0;
+        }
+    };
+
     function showProgress(current, total) {
         // First ensure status section is visible
         const statusSection = document.getElementById('statusSection');
@@ -176,19 +200,18 @@ function listenForResults() {
         connectionAttempts++;
         showStatus(`Connecting to event stream (attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS})...`, true);
         
-        // Close existing connection if any
         if (currentEventSource) {
             currentEventSource.close();
         }
 
-        // Create new EventSource with error handling
         try {
             currentEventSource = new EventSource('/api/hex-results/stream');
             
             currentEventSource.onopen = () => {
                 console.log('EventSource connection opened');
-                connectionAttempts = 0; // Reset connection attempts on successful connection
-                retryCount = 0; // Reset retry count
+                connectionAttempts = 0;
+                retryCount = 0;
+                dataManager.clear();
                 showStatus('Connection established', true);
             };
 
@@ -197,8 +220,8 @@ function listenForResults() {
                     const data = JSON.parse(event.data);
                     
                     if (data.type === 'progress') {
-                        totalExpectedRecords = data.totalRecords;
-                        showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
+                        dataManager.totalRecords = data.totalRecords;
+                        showStatus(`Processing page ${data.currentPage} of ${data.totalPages}`, true);
                         showProgress(data.recordsProcessed, data.totalRecords);
                         return;
                     }
@@ -207,34 +230,35 @@ function listenForResults() {
                         return;
                     }
 
-                    const newRecords = data.data.data.dataframe_2;
-                    const currentChunk = data.currentChunk;
+                    // Add new records to data manager
+                    dataManager.addRecords(data.data.data.dataframe_2);
+                    
+                    // Store dataframe3 if it's available
+                    if (data.data.data.dataframe_3) {
+                        dataManager.dataframe3 = data.data.data.dataframe_3;
+                    }
 
-                    // Only process new chunks
-                    if (currentChunk > lastProcessedChunk) {
-                        accumulatedRecords = accumulatedRecords.concat(newRecords);
-                        lastProcessedChunk = currentChunk;
-                        
-                        console.log('Received chunk:', {
-                            currentChunk,
-                            totalChunks: data.totalChunks,
-                            accumulatedRecords: accumulatedRecords.length,
-                            totalRecords: data.totalRecords
-                        });
+                    console.log('Received page:', {
+                        currentPage: data.currentPage,
+                        totalPages: data.totalPages,
+                        processedRecords: dataManager.processedRecords,
+                        totalRecords: data.totalRecords
+                    });
 
-                        showProgress(accumulatedRecords.length, data.totalRecords);
+                    showProgress(dataManager.processedRecords, data.totalRecords);
 
-                        // If this is the last chunk, process all data
-                        if (data.isLastChunk || accumulatedRecords.length >= totalExpectedRecords) {
-                            const finalData = {
-                                data: {
-                                    dataframe_2: accumulatedRecords,
-                                    dataframe_3: data.data.data.dataframe_3
-                                }
-                            };
-                            processResults(finalData);
-                            currentEventSource.close();
-                        }
+                    // Process final results when all pages are received
+                    if (data.isLastPage || dataManager.processedRecords >= dataManager.totalRecords) {
+                        const finalData = {
+                            data: {
+                                dataframe_2: dataManager.records,
+                                dataframe_3: dataManager.dataframe3
+                            }
+                        };
+
+                        processResults(finalData);
+                        currentEventSource.close();
+                        dataManager.clear();
                     }
                 } catch (error) {
                     console.error('Error processing message:', error);
@@ -244,11 +268,8 @@ function listenForResults() {
 
             currentEventSource.onerror = async (error) => {
                 console.error('EventSource error:', error);
-                console.log('EventSource readyState:', currentEventSource.readyState);
                 
-                // Check server health before retrying
                 const isHealthy = await checkServerHealth();
-                
                 if (!isHealthy) {
                     showStatus('Server is not responding. Please try again later.', false);
                     currentEventSource.close();
@@ -258,7 +279,7 @@ function listenForResults() {
                 if (currentEventSource.readyState === EventSource.CLOSED) {
                     if (retryCount < MAX_RETRIES) {
                         retryCount++;
-                        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Exponential backoff with max 10s
+                        const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
                         showStatus(`Connection lost. Retrying in ${delay/1000} seconds... (${retryCount}/${MAX_RETRIES})`, true);
                         
                         setTimeout(() => {
@@ -268,6 +289,7 @@ function listenForResults() {
                     } else {
                         showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
                         currentEventSource.close();
+                        dataManager.clear();
                     }
                 }
             };

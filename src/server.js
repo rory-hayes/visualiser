@@ -614,122 +614,123 @@ async function callHexAPI(workspaceId, projectId) {
 // Add endpoint for streaming Hex results
 app.get('/api/hex-results/stream', (req, res) => {
     try {
-        // Set SSE headers with a longer timeout
+        // Set SSE headers with a longer timeout and compression
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
-            'Keep-Alive': 'timeout=120'
+            'Keep-Alive': 'timeout=120',
+            'Transfer-Encoding': 'chunked'
         });
 
         // Track processing state
-        let processingState = {
-            lastProcessedIndex: 0,
-            totalRecordsSent: 0,
-            isProcessing: false
+        const state = {
+            isProcessing: false,
+            currentPage: 0,
+            recordsSent: 0,
+            pageSize: 250, // Smaller page size for better memory management
+            results: null
         };
 
         // Send initial connection message
         res.write('data: {"type":"connected"}\n\n');
 
-        // Function to check for results
-        const checkResults = async () => {
-            if (processingState.isProcessing) {
-                return; // Skip if already processing
-            }
-
+        async function processNextPage() {
+            if (state.isProcessing) return;
+            
             try {
-                processingState.isProcessing = true;
-                const results = loadResults();
-                
-                if (!results?.data?.dataframe_2) {
-                    processingState.isProcessing = false;
-                    return;
-                }
+                state.isProcessing = true;
 
-                const totalRecords = results.data.dataframe_2.length;
-                const CHUNK_SIZE = 500;
-                const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
-
-                // Only send progress if we haven't started or if we're resuming
-                if (processingState.lastProcessedIndex === 0) {
-                    res.write(`data: {"type":"progress","message":"Starting data processing...","totalRecords":${totalRecords},"totalChunks":${totalChunks}}\n\n`);
-                }
-
-                // Process remaining data in chunks
-                for (let i = processingState.lastProcessedIndex; i < totalRecords; i += CHUNK_SIZE) {
-                    const chunk = results.data.dataframe_2.slice(i, Math.min(i + CHUNK_SIZE, totalRecords));
-                    const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
-                    
-                    // Send progress update
-                    res.write(`data: {"type":"progress","message":"Processing records ${i + 1} to ${Math.min(i + CHUNK_SIZE, totalRecords)}","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
-                    
-                    const chunkData = {
-                        success: true,
-                        data: {
-                            timestamp: results.timestamp,
-                            data: {
-                                dataframe_2: chunk,
-                                dataframe_3: i + CHUNK_SIZE >= totalRecords ? results.data.dataframe_3 : null
-                            }
-                        },
-                        totalChunks,
-                        currentChunk: chunkNum,
-                        totalRecords,
-                        recordsProcessed: i + chunk.length,
-                        isLastChunk: i + CHUNK_SIZE >= totalRecords
-                    };
-
-                    try {
-                        const chunkString = JSON.stringify(chunkData);
-                        res.write(`data: ${chunkString}\n\n`);
-                        
-                        // Update processing state
-                        processingState.lastProcessedIndex = i + CHUNK_SIZE;
-                        processingState.totalRecordsSent += chunk.length;
-
-                        // Add small delay between chunks to prevent overwhelming the client
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    } catch (stringifyError) {
-                        console.error('Error sending chunk:', stringifyError);
-                        res.write(`data: {"type":"error","message":"Error processing chunk ${chunkNum}"}\n\n`);
+                // Load results if not loaded
+                if (!state.results) {
+                    state.results = loadResults();
+                    if (!state.results?.data?.dataframe_2) {
+                        state.isProcessing = false;
+                        return;
                     }
-
-                    // Clear chunk data
-                    chunk.length = 0;
                 }
 
-                // Check if we've processed everything
-                if (processingState.totalRecordsSent >= totalRecords) {
+                const totalRecords = state.results.data.dataframe_2.length;
+                const totalPages = Math.ceil(totalRecords / state.pageSize);
+
+                // Send progress update
+                res.write(`data: {"type":"progress","message":"Processing page ${state.currentPage + 1} of ${totalPages}","totalRecords":${totalRecords},"currentPage":${state.currentPage + 1},"totalPages":${totalPages},"recordsProcessed":${state.recordsSent}}\n\n`);
+
+                // Get current page of records
+                const startIdx = state.currentPage * state.pageSize;
+                const endIdx = Math.min(startIdx + state.pageSize, totalRecords);
+                const pageRecords = state.results.data.dataframe_2.slice(startIdx, endIdx);
+
+                // Prepare chunk data
+                const chunkData = {
+                    success: true,
+                    data: {
+                        timestamp: state.results.timestamp,
+                        data: {
+                            dataframe_2: pageRecords,
+                            dataframe_3: state.currentPage === totalPages - 1 ? state.results.data.dataframe_3 : null
+                        }
+                    },
+                    totalPages,
+                    currentPage: state.currentPage + 1,
+                    totalRecords,
+                    recordsProcessed: state.recordsSent + pageRecords.length,
+                    isLastPage: state.currentPage === totalPages - 1
+                };
+
+                // Send chunk
+                res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
+
+                // Update state
+                state.recordsSent += pageRecords.length;
+                state.currentPage++;
+
+                // Clear references to help garbage collection
+                pageRecords.length = 0;
+
+                // Check if we're done
+                if (state.currentPage >= totalPages) {
                     res.write(`data: {"type":"complete","message":"Processing complete","totalRecords":${totalRecords}}\n\n`);
+                    
+                    // Clear the results file
                     await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
+                    
+                    // Clear state
+                    state.results = null;
+                    
                     res.end();
                     return;
                 }
 
-                processingState.isProcessing = false;
-            } catch (error) {
-                console.error('Error in checkResults:', error);
-                res.write(`data: {"type":"error","message":"Error processing results: ${error.message}"}\n\n`);
-                processingState.isProcessing = false;
-            }
-        };
+                // Add delay between pages to prevent overwhelming the client
+                await new Promise(resolve => setTimeout(resolve, 100));
+                state.isProcessing = false;
 
-        // Check for results more frequently
+            } catch (error) {
+                console.error('Error processing page:', error);
+                res.write(`data: {"type":"error","message":"Error processing page: ${error.message}"}\n\n`);
+                state.isProcessing = false;
+            }
+        }
+
+        // Process pages at regular intervals
         const interval = setInterval(async () => {
-            await checkResults();
-        }, 1000);
+            if (!state.isProcessing) {
+                await processNextPage();
+            }
+        }, 500);
 
         // Handle client disconnect
         req.on('close', () => {
             clearInterval(interval);
-            // Don't clear the file immediately on disconnect to allow for reconnection
+            // Don't clear the file immediately to allow for reconnection
             setTimeout(async () => {
                 try {
-                    const results = loadResults();
-                    if (results?.data?.dataframe_2?.length === processingState.totalRecordsSent) {
+                    if (state.results && state.recordsSent >= state.results.data.dataframe_2.length) {
                         await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
                     }
+                    // Clear state
+                    state.results = null;
                 } catch (error) {
                     console.error('Error cleaning up after disconnect:', error);
                 }

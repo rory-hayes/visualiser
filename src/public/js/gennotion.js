@@ -432,19 +432,32 @@ function transformDataForGraph(data) {
                     lastEditedTime: item.LAST_EDITED_TIME ? new Date(item.LAST_EDITED_TIME) : null,
                     depth: parseInt(item.DEPTH) || 0,
                     hasChildren: item.HAS_CHILDREN === 'true' || item.HAS_CHILDREN === true,
-                    isCollection: item.TYPE?.includes('collection'),
-                    isDatabase: item.TYPE?.includes('database'),
-                    ancestors: item.ANCESTORS ? item.ANCESTORS.split(',').filter(Boolean) : []
+                    isCollection: item.TYPE?.toLowerCase().includes('collection'),
+                    isDatabase: item.TYPE?.toLowerCase().includes('database'),
+                    ancestors: []
                 };
+
+                // Parse ANCESTORS field
+                try {
+                    if (item.ANCESTORS) {
+                        // Remove newlines and extra whitespace
+                        const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
+                        node.ancestors = JSON.parse(cleanedAncestors);
+                    }
+                } catch (error) {
+                    console.warn('Error parsing ancestors for node:', item.ID, error);
+                    node.ancestors = [];
+                }
+
                 nodes.push(node);
                 nodeMap.set(item.ID, node);
             }
         });
 
-        // Second pass: Create links based on ancestors
+        // Second pass: Create links based on ancestors and parent-child relationships
         nodes.forEach(node => {
             if (node.ancestors && node.ancestors.length > 0) {
-                // Create links to immediate parent and grandparent
+                // Create links to immediate parent
                 const immediateParent = node.ancestors[node.ancestors.length - 1];
                 if (immediateParent && nodeMap.has(immediateParent)) {
                     links.push({
@@ -458,11 +471,13 @@ function transformDataForGraph(data) {
 
             // If it's a collection/database, add links to its views
             if (node.isCollection || node.isDatabase) {
-                data.forEach(item => {
-                    if (item.PARENT_ID === node.id && item.TYPE?.includes('view')) {
+                nodes.forEach(potentialChild => {
+                    if (potentialChild.ancestors && 
+                        potentialChild.ancestors.includes(node.id) && 
+                        potentialChild.type?.toLowerCase().includes('view')) {
                         links.push({
                             source: node.id,
-                            target: item.ID,
+                            target: potentialChild.id,
                             value: 1,
                             type: 'collection-view'
                         });

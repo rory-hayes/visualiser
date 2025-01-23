@@ -347,12 +347,12 @@ function displayResults(response) {
 function createGraphVisualization(graphData) {
     try {
         // Validate and extract the data
-        if (!graphData || !graphData.data?.dataframe_2) {
+        if (!graphData || !graphData.dataframe_2) {
             console.error('Invalid graph data structure:', graphData);
             return;
         }
 
-        const data = graphData.data?.dataframe_2 || graphData;
+        const data = graphData.dataframe_2;
         if (!Array.isArray(data) || data.length === 0) {
             console.warn('No graph data to visualize');
             return;
@@ -367,16 +367,19 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Initialize the graph with the correct data structure
+        // Transform data for visualization
+        const { nodes, links } = transformDataForGraph(data);
+
+        // Initialize the graph with the transformed data
         initializeGraph({ 
-            data: {
-                dataframe_2: data,
-                dataframe_3: graphData.dataframe_3
-            }
+            nodes: nodes,
+            links: links,
+            insightsData: graphData.dataframe_3
         }, container);
 
         console.log('Graph visualization initialized with:', {
-            nodes: data.length,
+            nodes: nodes.length,
+            links: links.length,
             hasInsights: !!graphData.dataframe_3
         });
 
@@ -385,45 +388,66 @@ function createGraphVisualization(graphData) {
     }
 }
 
-function transformGraphData(graphData) {
-    const elements = {
-        nodes: [],
-        edges: []
-    };
-
+// Update transformDataForGraph to handle the new data structure
+function transformDataForGraph(data) {
     try {
+        const nodes = [];
+        const links = [];
+        const nodeMap = new Map();
+
         // Process in chunks to prevent memory issues
         const CHUNK_SIZE = 100;
         
-        for (let i = 0; i < graphData.length; i += CHUNK_SIZE) {
-            const chunk = graphData.slice(i, i + CHUNK_SIZE);
+        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+            const chunk = data.slice(i, i + CHUNK_SIZE);
             
-            chunk.forEach(node => {
-                // Add node
-                elements.nodes.push({
-                    data: {
-                        id: node.ID,
-                        type: node.TYPE
-                    }
-                });
+            chunk.forEach(item => {
+                // Create node
+                const node = {
+                    id: item.ID || item.id,
+                    title: item.TEXT || item.text || item.TITLE || item.title || 'Untitled',
+                    type: item.TYPE || item.type || 'page',
+                    createdTime: item.CREATED_TIME ? new Date(item.CREATED_TIME) : null,
+                    depth: Number(item.DEPTH || item.depth) || 0,
+                    url: item.URL || item.url
+                };
 
-                // Add edge if there's a parent
-                if (node.PARENT_ID) {
-                    elements.edges.push({
-                        data: {
-                            id: `${node.PARENT_ID}-${node.ID}`,
-                            source: node.PARENT_ID,
-                            target: node.ID
-                        }
+                nodes.push(node);
+                nodeMap.set(node.id, node);
+
+                // Create link if there's a parent
+                const parentId = item.PARENT_ID || item.parent_id;
+                if (parentId) {
+                    links.push({
+                        source: parentId,
+                        target: node.id,
+                        value: 1
                     });
                 }
             });
         }
+
+        // Convert link references from IDs to actual node objects
+        const processedLinks = links.map(link => {
+            const source = nodeMap.get(link.source);
+            const target = nodeMap.get(link.target);
+            if (source && target) {
+                return { source, target, value: link.value };
+            }
+            return null;
+        }).filter(Boolean);
+
+        console.log('Transformed graph data:', {
+            originalLength: data.length,
+            nodes: nodes.length,
+            links: processedLinks.length
+        });
+
+        return { nodes, links: processedLinks };
     } catch (error) {
         console.error('Error transforming graph data:', error);
+        return { nodes: [], links: [] };
     }
-
-    return elements;
 }
 
 function formatResults(graphData, insightsData) {
@@ -702,63 +726,6 @@ function debounce(func, wait) {
     };
 }
 
-// Update transformDataForGraph to handle the new data structure
-function transformDataForGraph(data) {
-    try {
-        if (!Array.isArray(data) || data.length === 0) {
-            console.error('Invalid input data');
-            return { nodes: [], links: [] };
-        }
-
-        // Create nodes array with date validation
-        const nodes = data.map(item => {
-            let createdTime = null;
-            if (item.created_time || item.CREATED_TIME) {
-                const timestamp = item.created_time || item.CREATED_TIME;
-                createdTime = new Date(typeof timestamp === 'string' ? parseInt(timestamp) : timestamp);
-                if (isNaN(createdTime.getTime())) {
-                    console.warn(`Invalid date for node ${item.id || item.ID}`);
-                    createdTime = null;
-                }
-            }
-
-            return {
-                id: item.id || item.ID,
-                title: item.text || item.TEXT || item.title || item.type || item.TYPE || 'Untitled',
-                type: item.type || item.TYPE || 'page',
-                createdTime,
-                depth: Number(item.depth || item.DEPTH) || 0,
-                parent: item.parent_id || item.PARENT_ID
-            };
-        });
-
-        // Create links array
-        const links = [];
-        const nodeMap = new Map(nodes.map(n => [n.id, n]));
-
-        nodes.forEach(node => {
-            if (node.parent && nodeMap.has(node.parent)) {
-                links.push({
-                    source: nodeMap.get(node.parent),
-                    target: node,
-                    value: 1
-                });
-            }
-        });
-
-        console.log('Transformed graph data:', {
-            nodes: nodes.length,
-            links: links.length,
-            sampleNode: nodes[0]
-        });
-
-        return { nodes, links };
-    } catch (error) {
-        console.error('Error transforming data:', error);
-        return { nodes: [], links: [] };
-    }
-}
-
 // Timeline slider functionality
 function updateNodesVisibility(currentTime, node, link, nodes) {
     try {
@@ -852,7 +819,7 @@ function drag(simulation) {
 }
 
 // Initialize the force-directed graph
-function initializeGraph(graphData, container) {
+function initializeGraph(data, container) {
     try {
         // Validate container
         if (!container) {
@@ -861,70 +828,15 @@ function initializeGraph(graphData, container) {
         }
 
         // Validate graph data
-        if (!graphData || (!Array.isArray(graphData) && !graphData.data?.dataframe_2)) {
-            console.error('Invalid graph data:', graphData);
+        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.links)) {
+            console.error('Invalid graph data:', data);
             return;
         }
+
+        const { nodes, links } = data;
 
         // Clear any existing graph
         container.innerHTML = '';
-
-        // Extract data from the response
-        const df2 = graphData.data?.dataframe_2 || graphData;
-
-        // Validate df2
-        if (!Array.isArray(df2) || df2.length === 0) {
-            console.error('Invalid or empty dataframe_2:', df2);
-            container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
-            return;
-        }
-
-        // Create nodes array with proper date handling
-        const nodes = df2.map(item => {
-            let createdTime = null;
-            
-            // Handle both string and number timestamps
-            if (item.CREATED_TIME) {
-                const timestamp = typeof item.CREATED_TIME === 'string' ? 
-                    Date.parse(item.CREATED_TIME) : 
-                    item.CREATED_TIME;
-                    
-                if (!isNaN(timestamp)) {
-                    const date = new Date(timestamp);
-                    const year = date.getFullYear();
-                    
-                    // Validate year is reasonable
-                    if (year >= 2000 && year <= 2100) {
-                        createdTime = date;
-                    } else {
-                        console.warn(`Invalid year ${year} for node ${item.id}`);
-                    }
-                }
-            }
-            
-            return {
-                id: item.ID || item.id,
-                title: item.TEXT || item.title || item.TYPE || 'Untitled',
-                url: item.URL || item.url,
-                type: item.TYPE || 'page',
-                createdTime: createdTime,
-                parent: item.PARENT_ID || item.parent
-            };
-        });
-
-        // Create links array
-        const links = [];
-        nodes.forEach(node => {
-            if (node.parent) {
-                const parentNode = nodes.find(n => n.id === node.parent);
-                if (parentNode) {
-                    links.push({
-                        source: parentNode,
-                        target: node
-                    });
-                }
-            }
-        });
 
         // Initialize the visualization
         const width = container.clientWidth || 800;
@@ -991,8 +903,10 @@ function initializeGraph(graphData, container) {
             .style('font-size', '10px')
             .style('fill', '#666');
 
-        // Initialize timeline
-        initializeTimeline(container, nodes, node, link, svg);
+        // Initialize timeline if we have dates
+        if (nodes.some(n => n.createdTime)) {
+            initializeTimeline(container, nodes, node, link, svg);
+        }
 
         // Update positions on each tick
         simulation.on('tick', () => {
@@ -1069,8 +983,8 @@ function initializeGraph(graphData, container) {
                 .style('opacity', 0);
 
             // Reset node visibility
-            const currentTime = new Date(parseInt(document.getElementById('timelineSlider').value));
-            updateNodesVisibility(currentTime, node, link, nodes);
+            node.style('opacity', 1);
+            link.style('opacity', 0.6);
         });
 
         // Store data for resize handling

@@ -20,6 +20,7 @@ const PORT = process.env.PORT || 3000;
 const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
 const CLIENT_ID = process.env.NOTION_CLIENT_ID;
 const CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
+const HEX_API_TOKEN = '5b97b8d1945b14acc5c2faed5e314310438e038640df2ff475d357993d0217826b3db99144ebf236d189778cda42898e';
 
 // Verify environment variables are loaded
 console.log('Environment check:', {
@@ -455,7 +456,7 @@ async function callHexAPI(workspaceId, projectId) {
             use_cached_sql_results: true
         }, {
             headers: {
-                'Authorization': `Bearer ${process.env.HEX_API_KEY}`,
+                'Authorization': `Bearer ${HEX_API_TOKEN}`,
                 'Content-Type': 'application/json'
             }
         });

@@ -326,6 +326,7 @@ function listenForResults() {
                     const data = JSON.parse(event.data);
                     console.log('Parsed event data:', data);
                     
+                    // Handle progress updates
                     if (data.type === 'progress') {
                         dataManager.totalRecords = data.totalRecords;
                         showStatus(`Processing page ${data.currentPage} of ${data.totalPages}`, true);
@@ -333,52 +334,61 @@ function listenForResults() {
                         return;
                     }
 
-                    if (!data.data?.data?.dataframe_2) {
-                        console.warn('Missing dataframe_2 in received data:', data);
-                        return;
-                    }
-
-                    // Log the actual data being processed
-                    console.log('Processing dataframe_2:', {
-                        length: data.data.data.dataframe_2.length,
-                        sample: data.data.data.dataframe_2[0],
-                        hasDataframe3: !!data.data.data.dataframe_3
-                    });
-
-                    // Add new records to data manager
-                    dataManager.addRecords(data.data.data.dataframe_2);
-                    
-                    // Store dataframe3 if it's available
-                    if (data.data.data.dataframe_3) {
-                        dataManager.dataframe3 = data.data.data.dataframe_3;
-                    }
-
-                    console.log('Data manager state:', {
-                        processedRecords: dataManager.processedRecords,
-                        nodesCount: dataManager.graphNodes.size,
-                        linksCount: dataManager.graphLinks.size
-                    });
-
-                    showProgress(dataManager.processedRecords, data.totalRecords);
-
-                    // Process final results when all pages are received
-                    if (data.isLastPage || dataManager.processedRecords >= dataManager.totalRecords) {
-                        console.log('Processing final results');
-                        const finalData = {
-                            data: {
-                                dataframe_2: Array.from(dataManager.graphNodes.values()),
-                                dataframe_3: dataManager.dataframe3
-                            }
-                        };
-
-                        console.log('Final data to be processed:', {
-                            nodesCount: finalData.data.dataframe_2.length,
-                            hasDataframe3: !!finalData.data.dataframe_3
+                    // Handle data chunks
+                    if (data.data?.data) {
+                        const { dataframe_2, dataframe_3 } = data.data.data;
+                        
+                        console.log('Processing data chunk:', {
+                            dataframe2Length: dataframe_2?.length || 0,
+                            hasDataframe3: !!dataframe_3,
+                            isLastPage: data.isLastPage
                         });
 
-                        processResults(finalData);
-                        currentEventSource.close();
-                        dataManager.clear();
+                        // Process dataframe_2 if it exists and has data
+                        if (Array.isArray(dataframe_2) && dataframe_2.length > 0) {
+                            dataManager.addRecords(dataframe_2);
+                        }
+                        
+                        // Store dataframe3 if it's available
+                        if (dataframe_3) {
+                            dataManager.dataframe3 = dataframe_3;
+                        }
+
+                        console.log('Data manager state after processing:', {
+                            processedRecords: dataManager.processedRecords,
+                            nodesCount: dataManager.graphNodes.size,
+                            linksCount: dataManager.graphLinks.size
+                        });
+
+                        // Process final results when all data is received
+                        if (data.isLastPage || (data.currentPage === data.totalPages)) {
+                            console.log('Processing final results');
+                            
+                            // Only process if we have collected some data
+                            if (dataManager.graphNodes.size > 0) {
+                                const finalData = {
+                                    data: {
+                                        dataframe_2: Array.from(dataManager.graphNodes.values()),
+                                        dataframe_3: dataManager.dataframe3
+                                    }
+                                };
+
+                                console.log('Final data to be processed:', {
+                                    nodesCount: finalData.data.dataframe_2.length,
+                                    hasDataframe3: !!finalData.data.dataframe_3
+                                });
+
+                                processResults(finalData);
+                            } else {
+                                console.warn('No data collected to process');
+                                showStatus('No data available for visualization', false);
+                            }
+                            
+                            currentEventSource.close();
+                            dataManager.clear();
+                        }
+                    } else {
+                        console.warn('Received message without expected data structure:', data);
                     }
                 } catch (error) {
                     console.error('Error processing message:', error);

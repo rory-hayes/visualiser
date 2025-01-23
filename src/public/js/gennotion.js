@@ -2,8 +2,6 @@
 const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
 const HEX_API_URL = 'https://app.hex.tech/api/v1';
 
-import { calculateMetrics, generateReport } from './reportGenerator.js';
-
 // DOM Elements
 const workspaceIdsInput = document.getElementById('workspaceIds');
 const generateBtn = document.getElementById('generateBtn');
@@ -44,6 +42,14 @@ async function handleGenerateReport() {
 
 async function processWorkspace(workspaceId) {
     try {
+        showStatus('Checking server status...', true);
+        
+        const isServerHealthy = await checkServerStatus();
+        if (!isServerHealthy) {
+            showStatus('Server is not responding. Please try again later.');
+            return;
+        }
+
         // Trigger Hex report
         showStatus(`Triggering report for workspace ${workspaceId}...`, true);
         
@@ -53,7 +59,8 @@ async function processWorkspace(workspaceId) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                _input_text: workspaceId
+                workspaceId,
+                projectId: HEX_PROJECT_ID
             })
         });
 
@@ -153,37 +160,6 @@ async function checkServerStatus() {
     } catch (error) {
         console.error('Server health check error:', error);
         return false;
-    }
-}
-
-// Modify the generateReport function to include status checks
-async function generateReport(workspaceId) {
-    try {
-        showStatus('Checking server status...', true);
-        
-        const isServerHealthy = await checkServerStatus();
-        if (!isServerHealthy) {
-            showStatus('Server is not responding. Please try again later.');
-            return;
-        }
-
-        const response = await fetch('/api/generate-report', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ workspaceId })
-        });
-
-        if (!response.ok) {
-            throw new Error('Failed to generate report');
-        }
-
-        showStatus('Report generation started. Connecting to server...', true);
-        listenForResults();
-    } catch (error) {
-        console.error('Error generating report:', error);
-        showStatus('Error generating report. Please try again.');
     }
 }
 

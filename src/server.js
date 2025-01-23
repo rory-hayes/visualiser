@@ -749,5 +749,10 @@ app.get('/api/logs', (req, res) => {
     }
 });
 
+// Add health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'healthy' });
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

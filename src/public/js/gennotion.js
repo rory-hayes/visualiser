@@ -38,7 +38,7 @@ async function handleGenerateReport() {
 
     } catch (error) {
         console.error('Error generating report:', error);
-        showStatus(`Error: ${error.message}`, false);
+        showStatus('Error generating report. Please try again.');
     }
 }
 
@@ -92,85 +92,99 @@ async function processWorkspace(workspaceId) {
 }
 
 function listenForResults() {
-    // Close any existing event source
-    if (eventSource) {
-        eventSource.close();
-    }
+    const eventSource = new EventSource('/api/hex-results/stream');
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+    
+    showStatus('Waiting for results...', true);
 
-    // Create new event source
-    eventSource = new EventSource('/api/hex-results/stream');
+    eventSource.onopen = () => {
+        console.log('EventSource connection opened');
+        showStatus('Connected to server. Processing data...', true);
+    };
 
     eventSource.onmessage = (event) => {
         try {
-            console.log('Raw event data received:', event.data);
-            
             const data = JSON.parse(event.data);
-            console.log('Parsed event data:', data);
-            
-            if (data.type === 'connected') {
-                console.log('Connected to results stream');
-                return;
-            }
-
-            if (data.success && data.data) {
-                console.log('Processing successful data:', {
-                    success: data.success,
-                    hasData: !!data.data,
-                    dataStructure: {
-                        hasDataframe2: data.data?.data?.dataframe_2 ? 'yes' : 'no',
-                        hasDataframe3: data.data?.data?.dataframe_3 ? 'yes' : 'no',
-                        dataframe2Length: data.data?.data?.dataframe_2?.length,
-                        dataframe3Length: data.data?.data?.dataframe_3?.length
-                    }
-                });
-
-                // Send final results to server for logging
-                fetch('/api/log-data', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        type: 'final-results',
-                        data: data.data
-                    })
-                }).catch(error => {
-                    console.error('Error logging final results:', error);
-                });
-                
-                // Hide spinner and update status
-                showStatus('Results received!', false);
-                
-                try {
-                    // Display results
-                    displayResults(data.data);
-                } catch (displayError) {
-                    console.error('Error in displayResults:', displayError);
-                    console.error('Data structure that caused error:', JSON.stringify(data.data, null, 2));
-                    showStatus('Error displaying results. Check console for details.', false);
-                }
-                
-                // Close event source
+            if (data && data.data) {
                 eventSource.close();
+                showStatus('Rendering results...');
+                displayResults(data);
+                resultsSection.classList.remove('hidden');
             } else {
-                console.warn('Received data without success or data property:', data);
-                showStatus('Received incomplete data. Please try again.', false);
-                eventSource.close();
+                console.warn('Received empty or invalid data:', data);
+                showStatus('Processing workspace data...', true);
             }
         } catch (error) {
             console.error('Error processing event data:', error);
-            console.error('Raw event data that caused error:', event.data);
-            showStatus('Error processing results. Please try again.', false);
-            eventSource.close();
+            retryConnection();
         }
     };
 
     eventSource.onerror = (error) => {
         console.error('EventSource error:', error);
         console.error('EventSource readyState:', eventSource.readyState);
-        showStatus('Error receiving results. Please try again.', false);
-        eventSource.close();
+        retryConnection();
     };
+
+    function retryConnection() {
+        if (retryCount < MAX_RETRIES) {
+            retryCount++;
+            showStatus(`Connection lost. Retrying (${retryCount}/${MAX_RETRIES})...`, true);
+            setTimeout(() => {
+                eventSource.close();
+                listenForResults();
+            }, 2000);
+        } else {
+            showStatus('Failed to connect. Please try again.', false);
+            eventSource.close();
+        }
+    }
+}
+
+// Add this helper function to check server status
+async function checkServerStatus() {
+    try {
+        const response = await fetch('/api/health');
+        if (!response.ok) {
+            throw new Error('Server health check failed');
+        }
+        return true;
+    } catch (error) {
+        console.error('Server health check error:', error);
+        return false;
+    }
+}
+
+// Modify the generateReport function to include status checks
+async function generateReport(workspaceId) {
+    try {
+        showStatus('Checking server status...', true);
+        
+        const isServerHealthy = await checkServerStatus();
+        if (!isServerHealthy) {
+            showStatus('Server is not responding. Please try again later.');
+            return;
+        }
+
+        const response = await fetch('/api/generate-report', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ workspaceId })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to generate report');
+        }
+
+        showStatus('Report generation started. Connecting to server...', true);
+        listenForResults();
+    } catch (error) {
+        console.error('Error generating report:', error);
+        showStatus('Error generating report. Please try again.');
+    }
 }
 
 function displayResults(data) {

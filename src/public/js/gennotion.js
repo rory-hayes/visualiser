@@ -1597,4 +1597,20 @@ function processResults(data) {
         console.error('Error processing results:', error);
         showStatus(`Error processing results: ${error.message}`, false);
     }
+}
+
+// Add the missing checkServerStatus function
+async function checkServerStatus() {
+    try {
+        const response = await fetch('/api/health');
+        if (!response.ok) {
+            console.error('Server health check failed:', response.status);
+            return false;
+        }
+        const data = await response.json();
+        return data.status === 'healthy';
+    } catch (error) {
+        console.error('Server health check error:', error);
+        return false;
+    }
 } 

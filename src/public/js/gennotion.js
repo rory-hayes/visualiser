@@ -218,6 +218,7 @@ function listenForResults() {
             }
 
             if (!data.data?.data?.dataframe_2) {
+                console.warn('No dataframe_2 in received data');
                 return;
             }
 
@@ -226,7 +227,7 @@ function listenForResults() {
 
             // Only process new chunks
             if (currentChunk > lastProcessedChunk) {
-                // Concatenate new records
+                // Concatenate new records without any limit
                 accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
                 
                 // Store dataframe_3 if available and not already stored
@@ -393,10 +394,7 @@ function createGraphVisualization(graphData) {
         });
 
         // Initialize the graph with the transformed data
-        initializeGraph({ 
-            nodes: nodes,
-            links: links
-        }, container);
+        initializeGraph(graphData, container);
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
@@ -627,20 +625,6 @@ function formatResults(graphData, insightsData) {
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                             </svg>
                         </button>
-                    </div>
-
-                    <!-- Timeline Container -->
-                    <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
-                        <div class="flex justify-between mb-2">
-                            <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
-                            <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
-                        </div>
-                        <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
-                            <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
-                            <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
-                                <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
-                            </div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -912,6 +896,12 @@ function initializeGraph(data, container) {
 
         const { nodes, links } = data;
 
+        console.log('Initializing graph with:', {
+            nodes: nodes.length,
+            links: links.length,
+            hasCreatedTime: nodes.some(n => n.CREATED_TIME)
+        });
+
         // Clear any existing graph
         container.innerHTML = '';
 
@@ -938,16 +928,16 @@ function initializeGraph(data, container) {
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(d => 100 + (d.value || 1) * 20)) // Longer distances for stronger relationships
+                .distance(d => 100 + (d.value || 1) * 20))
             .force('charge', d3.forceManyBody()
-                .strength(d => -300 - nodes.length * 0.5) // Adjust repulsion based on node count
+                .strength(d => -300 - nodes.length * 0.5)
                 .distanceMax(width / 2))
             .force('center', d3.forceCenter(width / 2, height / 2))
             .force('collision', d3.forceCollide().radius(baseRadius * 2))
             .force('x', d3.forceX(width / 2).strength(0.05))
             .force('y', d3.forceY(height / 2).strength(0.05))
-            .alphaDecay(0.02) // Slower decay for more stable settling
-            .velocityDecay(0.3); // Higher decay for less chaotic movement
+            .alphaDecay(0.02)
+            .velocityDecay(0.3);
 
         // Add links
         const link = g.append('g')
@@ -982,8 +972,11 @@ function initializeGraph(data, container) {
             .style('fill', '#666');
 
         // Initialize timeline if we have dates
-        if (nodes.some(n => n.createdTime)) {
+        if (nodes.some(n => n.CREATED_TIME)) {
+            console.log('Initializing timeline with nodes containing CREATED_TIME');
             initializeTimeline(container, nodes, node, link, svg);
+        } else {
+            console.warn('No nodes with CREATED_TIME found');
         }
 
         // Update positions on each tick
@@ -1030,7 +1023,7 @@ function initializeGraph(data, container) {
                 <div class="p-2">
                     <strong class="block text-lg mb-1">${d.title}</strong>
                     <span class="block text-sm text-gray-500">Type: ${d.type}</span>
-                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
+                    ${d.CREATED_TIME ? `<span class="block text-sm text-gray-500">Created: ${new Date(d.CREATED_TIME).toLocaleDateString()}</span>` : ''}
                 </div>
             `)
             .style('left', (event.pageX + 10) + 'px')
@@ -1070,7 +1063,7 @@ function initializeGraph(data, container) {
 
         // Calculate initial zoom to fit with more padding
         const bounds = g.node().getBBox();
-        const scale = 0.4 / Math.max(bounds.width / width, bounds.height / height); // Reduced scale for more zoom-out
+        const scale = 0.4 / Math.max(bounds.width / width, bounds.height / height);
         const translate = [
             (width - scale * bounds.width) / 2 - scale * bounds.x,
             (height - scale * bounds.height) / 2 - scale * bounds.y

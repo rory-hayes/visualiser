@@ -14,9 +14,6 @@ const resultsContent = document.getElementById('resultsContent');
 // Event Source for receiving results
 let eventSource = null;
 
-// Move totalExpectedRecords to file scope
-let totalExpectedRecords = 0;
-
 // Event Listeners
 generateBtn.addEventListener('click', handleGenerateReport);
 
@@ -124,11 +121,9 @@ function listenForResults() {
         dataframe_2: [],
         dataframe_3: null
     };
-    let processedChunks = new Set();
-    let totalChunks = 0;
-    let totalRecords = 0;
+    let lastProcessedChunk = 0;
+    let totalExpectedRecords = 0;
     let connectionTimeout = null;
-    let isProcessingResults = false;
     
     function showProgress(current, total, chunk, totalChunks) {
         // First ensure status section is visible
@@ -144,28 +139,31 @@ function listenForResults() {
             progressElement.id = 'progress-container';
             progressElement.className = 'mt-4 bg-white rounded-lg shadow p-4';
             
+            // Try to append to status section first
             const statusElement = document.getElementById('status');
             if (statusElement) {
                 statusElement.appendChild(progressElement);
             } else {
+                // Fallback to status section if status element doesn't exist
                 statusSection?.appendChild(progressElement);
             }
         }
 
-        // Use the actual total records for calculations
+        // Ensure we have valid numbers before formatting
         const currentCount = typeof current === 'number' ? current : 0;
+        const totalCount = typeof total === 'number' ? total : 0;
         const currentChunk = typeof chunk === 'number' ? chunk : 0;
         const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : 0;
 
         if (progressElement) {
-            const percentage = total > 0 ? Math.round((currentCount / total) * 100) : 0;
+            const percentage = totalCount > 0 ? Math.round((currentCount / totalCount) * 100) : 0;
             const chunkPercentage = totalChunksCount > 0 ? Math.round((currentChunk / totalChunksCount) * 100) : 0;
             
             progressElement.innerHTML = `
                 <div class="space-y-4">
                     <div>
                         <div class="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Records: ${currentCount.toLocaleString()} / ${total.toLocaleString()}</span>
+                            <span>Records: ${currentCount.toLocaleString()} / ${totalCount.toLocaleString()}</span>
                             <span>${percentage}%</span>
                         </div>
                         <div class="bg-gray-200 rounded-full h-2.5 mb-2">
@@ -193,10 +191,11 @@ function listenForResults() {
         
         const eventSource = new EventSource('/api/hex-results/stream');
         
+        // Set connection timeout
         connectionTimeout = setTimeout(() => {
             if (eventSource.readyState !== EventSource.CLOSED) {
                 console.log('Connection timeout - closing EventSource');
-                eventSource.close();
+        eventSource.close();
                 showStatus('Connection timeout. Please try again.', false);
             }
         }, 300000); // 5 minutes timeout
@@ -207,140 +206,85 @@ function listenForResults() {
             showStatus('Connection established', true);
         };
 
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log('Received event data:', data); // Debug log
+    eventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
                 
-                // Update total records and chunks from metadata
-                if (data.metadata) {
-                    totalChunks = data.metadata.total_chunks || totalChunks;
-                    totalRecords = data.metadata.total_records || totalRecords;
-                    console.log('Updated metadata:', { totalChunks, totalRecords }); // Debug log
-                }
+                if (data.type === 'progress') {
+                    totalExpectedRecords = data.totalRecords;
+                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
+                    showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
+                return;
+            }
 
-                // Handle case where data might be empty or missing
-                if (!data.data) {
-                    console.warn('No data field in received message');
+                if (!data.data?.data?.dataframe_2) {
                     return;
                 }
 
-                // Initialize dataframe_2 as empty array if not present
-                if (!data.data.dataframe_2) {
-                    data.data.dataframe_2 = [];
-                }
-
-                const newRecords = data.data.dataframe_2;
-                const currentChunk = data.metadata?.chunk || 0;
+                const newRecords = data.data.data.dataframe_2;
+                const currentChunk = data.currentChunk;
 
                 // Only process new chunks
-                if (!processedChunks.has(currentChunk)) {
-                    processedChunks.add(currentChunk);
-                    
-                    // Concatenate new records
+                if (currentChunk > lastProcessedChunk) {
                     accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
-                    
-                    // Store dataframe_3 if available
-                    if (data.data.dataframe_3 && !accumulatedData.dataframe_3) {
-                        accumulatedData.dataframe_3 = data.data.dataframe_3;
+                    if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
+                        accumulatedData.dataframe_3 = data.data.data.dataframe_3;
                     }
+                    lastProcessedChunk = currentChunk;
                     
-                    console.log('Processed chunk:', {
+                    console.log('Received chunk:', {
                         currentChunk,
-                        totalChunks,
-                        newRecordsCount: newRecords.length,
+                        totalChunks: data.totalChunks,
                         accumulatedRecords: accumulatedData.dataframe_2.length,
-                        totalRecords,
-                        processedChunks: processedChunks.size,
-                        hasDataframe3: !!accumulatedData.dataframe_3
+                        totalRecords: data.totalRecords
                     });
 
                     showProgress(
                         accumulatedData.dataframe_2.length, 
-                        totalRecords,
-                        processedChunks.size,
-                        totalChunks
+                        data.totalRecords,
+                        currentChunk,
+                        data.totalChunks
                     );
 
-                    // Check if all chunks received
-                    if (processedChunks.size === totalChunks && !isProcessingResults) {
-                        isProcessingResults = true;
-                        console.log('Processing complete dataset:', {
-                            totalRecordsReceived: accumulatedData.dataframe_2.length,
-                            expectedRecords: totalRecords,
-                            chunks: `${processedChunks.size}/${totalChunks}`,
-                            hasDataframe3: !!accumulatedData.dataframe_3
-                        });
-                        
+                    // If this is the last chunk, process all data
+                    if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
                         clearTimeout(connectionTimeout);
                         displayResults({
                             data: {
                                 dataframe_2: accumulatedData.dataframe_2,
                                 dataframe_3: accumulatedData.dataframe_3
                             },
-                            metadata: data.metadata,
+                            metadata: {
+                                status: 'success',
+                                timestamp: new Date().toISOString()
+                            },
                             success: true
                         });
-                        eventSource.close();
-                    } else {
-                        console.log('Waiting for more chunks...', {
-                            received: processedChunks.size,
-                            total: totalChunks
-                        });
+                eventSource.close();
                     }
-                }
-            } catch (error) {
-                console.error('Error processing message:', error, 'Raw event data:', event.data);
-                showStatus(`Error processing data: ${error.message}`, false);
             }
-        };
+        } catch (error) {
+                console.error('Error processing message:', error);
+                showStatus(`Error processing data: ${error.message}`, false);
+        }
+    };
 
-        eventSource.onerror = (error) => {
-            console.error('EventSource error:', error);
-            console.log('EventSource readyState:', eventSource.readyState, 'URL:', eventSource.url);
-            
-            // Check if we have accumulated any data
-            const hasAccumulatedData = accumulatedData.dataframe_2.length > 0;
+    eventSource.onerror = (error) => {
+        console.error('EventSource error:', error);
+            console.log('EventSource readyState:', eventSource.readyState);
             
             if (eventSource.readyState === EventSource.CLOSED) {
                 clearTimeout(connectionTimeout);
-                
-                // If we have accumulated data and this is a connection close, try to process what we have
-                if (hasAccumulatedData && processedChunks.size > 0) {
-                    console.log('Connection closed but processing accumulated data:', {
-                        recordsReceived: accumulatedData.dataframe_2.length,
-                        chunksProcessed: processedChunks.size
-                    });
-                    
-                    isProcessingResults = true;
-                    displayResults({
-                        data: {
-                            dataframe_2: accumulatedData.dataframe_2,
-                            dataframe_3: accumulatedData.dataframe_3
-                        },
-                        metadata: { partial: true },
-                        success: true
-                    });
-                    return;
-                }
-                
-                // Otherwise attempt to reconnect
                 if (retryCount < MAX_RETRIES) {
                     retryCount++;
-                    const backoffTime = Math.min(2000 * Math.pow(2, retryCount - 1), 30000); // Exponential backoff
-                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES} in ${backoffTime/1000}s...`, true);
-                    
+                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
                     setTimeout(() => {
-                        console.log(`Attempting reconnection ${retryCount}/${MAX_RETRIES}`);
-                        eventSource.close();
+        eventSource.close();
                         connectEventSource();
-                    }, backoffTime);
+                    }, 2000 * retryCount);
                 } else {
                     showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
                 }
-            } else if (eventSource.readyState === EventSource.CONNECTING) {
-                console.log('EventSource is attempting to reconnect...');
-                showStatus('Reconnecting to server...', true);
             }
         };
 
@@ -370,21 +314,6 @@ function displayResults(response) {
             throw new Error('Invalid response format');
         }
 
-        // Get the actual records count from the response
-        const receivedRecords = response.data.dataframe_2.length;
-        console.log('Processing complete dataset for display:', {
-            receivedRecords,
-            totalExpected: totalExpectedRecords,
-            hasDataframe3: !!response.data.dataframe_3
-        });
-
-        // Validate we have all expected records
-        if (receivedRecords < totalExpectedRecords) {
-            console.warn(`Incomplete dataset received: ${receivedRecords} of ${totalExpectedRecords} records`);
-            showStatus('Waiting for complete dataset...');
-            return;
-        }
-
         // Show results section
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = ''; // Clear previous results
@@ -405,12 +334,7 @@ function displayResults(response) {
         container.className = 'w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden';
         resultsContent.appendChild(container);
         
-        console.log('Creating visualization with complete dataset:', {
-            totalRecords: receivedRecords,
-            hasDataframe3: !!response.data.dataframe_3
-        });
-        
-        // Create graph visualization with the complete dataset
+        // Create graph visualization with the new data structure
         createGraphVisualization(response.data);
         
         showStatus('Analysis complete');
@@ -428,8 +352,11 @@ function createGraphVisualization(graphData) {
             return;
         }
 
-        const totalRecords = graphData.dataframe_2.length;
-        console.log('Starting visualization with total records:', totalRecords);
+        console.log('Creating visualization with data:', {
+            hasDataframe2: !!graphData.dataframe_2,
+            recordCount: graphData.dataframe_2.length,
+            sampleRecord: graphData.dataframe_2[0]
+        });
 
         const container = document.getElementById('graph-container');
         if (!container) {
@@ -440,25 +367,26 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Transform all data at once
-        console.log('Starting data transformation for all records');
-        const transformedData = transformDataForGraph(graphData.dataframe_2);
+        // Transform data for visualization
+        const { nodes, links } = transformDataForGraph(graphData.dataframe_2);
 
-        if (!transformedData.nodes.length) {
+        if (nodes.length === 0) {
             console.warn('No nodes to visualize');
             container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
             return;
         }
 
         console.log('Visualization data prepared:', {
-            originalRecords: totalRecords,
-            transformedNodes: transformedData.nodes.length,
-            transformedLinks: transformedData.links.length,
-            nodeTypes: [...new Set(transformedData.nodes.map(n => n.type))]
+            nodes: nodes.length,
+            links: links.length,
+            nodeTypes: [...new Set(nodes.map(n => n.type))]
         });
 
-        // Initialize the graph with all transformed data
-        initializeGraph(transformedData, container);
+        // Initialize the graph with the transformed data
+        initializeGraph({ 
+            nodes: nodes,
+            links: links
+        }, container);
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
@@ -477,20 +405,23 @@ function transformDataForGraph(data) {
             return { nodes: [], links: [] };
         }
 
-        console.log('Starting graph data transformation:', {
-            totalRecords: data.length
+        console.log('Processing data for graph:', {
+            totalRecords: data.length,
+            sampleRecord: data[0],
+            maxDepth: Math.max(...data.map(item => parseInt(item.DEPTH) || 0))
         });
 
-        // Initialize data structures
         const nodes = [];
-        const links = new Set();
+        const links = new Set(); // Use Set to avoid duplicate links
         const nodeMap = new Map();
-        const depthMap = new Map();
+        const depthMap = new Map(); // Track nodes by depth
 
-        // First pass: Create all nodes
-        console.log('Creating nodes...');
-        data.forEach((item, index) => {
-            if (!item.ID) return;
+        // First pass: Create all nodes and organize by depth
+        data.forEach(item => {
+            if (!item.ID) {
+                console.warn('Item missing ID:', item);
+                return;
+            }
 
             const depth = parseInt(item.DEPTH) || 0;
             if (!depthMap.has(depth)) {
@@ -498,47 +429,45 @@ function transformDataForGraph(data) {
             }
             depthMap.get(depth).add(item.ID);
 
+            // Create node if it doesn't exist
             if (!nodeMap.has(item.ID)) {
+                // Clean up the type string to be more readable
                 let type = item.TYPE?.toLowerCase() || 'page';
-                type = type.replace(/_page$/, '')
-                         .replace(/^page_/, '')
-                         .replace(/^collection_view_/, 'view_');
+                // Remove any prefix/suffix and just keep the core type
+                type = type.replace(/_page$/, '')  // Remove _page suffix
+                         .replace(/^page_/, '')    // Remove page_ prefix
+                         .replace(/^collection_view_/, 'view_'); // Simplify collection_view to view
 
                 const node = {
                     id: item.ID,
-                    title: type,
+                    title: type, // Just show the type as the title
                     type: type,
                     depth: depth,
                     parentId: item.PARENT_ID,
                     spaceId: item.SPACE_ID,
                     parentPageId: item.PARENT_PAGE_ID,
-                    ancestors: [],
-                    CREATED_TIME: item.CREATED_TIME
+                    ancestors: []
                 };
 
+                // Parse ANCESTORS field
                 try {
                     if (item.ANCESTORS) {
                         const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
                         node.ancestors = JSON.parse(cleanedAncestors);
                     }
                 } catch (error) {
-                    console.warn('Error parsing ancestors for node:', item.ID);
+                    console.warn('Error parsing ancestors for node:', item.ID, error);
                     node.ancestors = [];
                 }
 
                 nodes.push(node);
                 nodeMap.set(item.ID, node);
             }
-
-            if (index % 10000 === 0) {
-                console.log(`Processed ${index + 1}/${data.length} nodes`);
-            }
         });
 
-        // Second pass: Create all links
-        console.log('Creating links...');
-        nodes.forEach((node, index) => {
-            // Direct parent-child relationship
+        // Second pass: Create all hierarchical relationships
+        nodes.forEach(node => {
+            // 1. Direct parent-child relationship (strongest)
             if (node.parentId && nodeMap.has(node.parentId)) {
                 links.add(JSON.stringify({
                     source: node.parentId,
@@ -548,8 +477,9 @@ function transformDataForGraph(data) {
                 }));
             }
 
-            // Process ancestors
-            if (Array.isArray(node.ancestors)) {
+            // 2. Process ancestors array to create full hierarchical path
+            if (Array.isArray(node.ancestors) && node.ancestors.length > 0) {
+                // Create links between each consecutive pair in the ancestors array
                 for (let i = 0; i < node.ancestors.length - 1; i++) {
                     const currentAncestor = node.ancestors[i];
                     const parentAncestor = node.ancestors[i + 1];
@@ -565,7 +495,7 @@ function transformDataForGraph(data) {
                 }
             }
 
-            // Connect to parent page if different from direct parent
+            // 3. Connect to parent page if different from direct parent
             if (node.parentPageId && 
                 nodeMap.has(node.parentPageId) && 
                 node.parentPageId !== node.parentId) {
@@ -577,12 +507,26 @@ function transformDataForGraph(data) {
                 }));
             }
 
-            if (index % 10000 === 0) {
-                console.log(`Processed ${index + 1}/${nodes.length} links`);
-            }
+            // 4. Connect nodes at same depth level that share a parent
+            const nodesAtSameDepth = Array.from(depthMap.get(node.depth) || []);
+            nodesAtSameDepth.forEach(otherId => {
+                if (otherId !== node.id) {
+                    const otherNode = nodeMap.get(otherId);
+                    if (otherNode && 
+                        otherNode.parentId === node.parentId && 
+                        node.parentId) {
+                        links.add(JSON.stringify({
+                            source: node.parentId,
+                            target: otherId,
+                            type: 'sibling',
+                            value: 1
+                        }));
+                    }
+                }
+            });
         });
 
-        // Convert links to array and resolve references
+        // Convert links back to array and resolve node references
         const processedLinks = Array.from(links).map(linkStr => {
             const link = JSON.parse(linkStr);
             const source = nodeMap.get(link.source);
@@ -599,13 +543,13 @@ function transformDataForGraph(data) {
             return null;
         }).filter(Boolean);
 
-        // Log final statistics
+        // Log detailed statistics
         const depthStats = {};
         depthMap.forEach((nodes, depth) => {
             depthStats[depth] = nodes.size;
         });
 
-        console.log('Graph transformation complete:', {
+        console.log('Graph data transformed:', {
             originalRecords: data.length,
             nodes: nodes.length,
             links: processedLinks.length,
@@ -687,6 +631,20 @@ function formatResults(graphData, insightsData) {
                             </svg>
                         </button>
                     </div>
+
+                    <!-- Timeline Container -->
+                    <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
+                            <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
+                        </div>
+                        <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
+                            <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
+                            <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
+                                <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -761,108 +719,6 @@ function debounce(func, wait) {
 }
 
 // Timeline slider functionality
-function initializeTimeline(container, nodes, node, link, svg) {
-    try {
-        // Validate inputs
-        if (!container || !nodes || !node || !link || !svg) {
-            console.error('Missing required parameters for timeline initialization');
-            return;
-        }
-
-        // Find valid date range from CREATED_TIME field
-        const validDates = nodes
-            .map(n => n.CREATED_TIME ? new Date(n.CREATED_TIME) : null)
-            .filter(Boolean);
-        
-        if (validDates.length === 0) {
-            console.warn('No valid dates found in nodes');
-            return;
-        }
-
-        // Set start date to beginning of day and end date to end of day
-        const startDate = new Date(Math.min(...validDates));
-        startDate.setHours(0, 0, 0, 0);  // Start of day
-
-        const endDate = new Date(Math.max(...validDates));
-        endDate.setHours(23, 59, 59, 999);  // End of day
-
-        // Log date range information
-        console.log(`
-            Timeline Initialization:
-            Total nodes: ${nodes.length}
-            Nodes with valid dates: ${validDates.length}
-            Nodes without dates: ${nodes.length - validDates.length}
-            Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
-            Start timestamp: ${startDate.getTime()}
-            End timestamp: ${endDate.getTime()}
-        `);
-
-        // Create timeline container if it doesn't exist
-        let timelineContainer = container.querySelector('.timeline-container');
-        if (!timelineContainer) {
-            timelineContainer = document.createElement('div');
-            timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
-            container.appendChild(timelineContainer);
-        }
-        
-        timelineContainer.innerHTML = `
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-medium text-gray-600">${startDate.toLocaleDateString()}</span>
-                <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
-                <span class="text-sm font-medium text-gray-600">${endDate.toLocaleDateString()}</span>
-            </div>
-            <div class="relative">
-                <input type="range" 
-                    min="${startDate.getTime()}" 
-                    max="${endDate.getTime()}" 
-                    value="${endDate.getTime()}" 
-                    step="86400000"
-                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                    id="timelineSlider">
-            </div>
-        `;
-
-        // Timeline slider functionality
-        const slider = timelineContainer.querySelector('#timelineSlider');
-        if (!slider) {
-            console.error('Failed to find timeline slider element');
-            return;
-        }
-        
-        // Set initial state to show all nodes
-        const initialTime = new Date(endDate);
-        updateNodesVisibility(initialTime, node, link, nodes);
-
-        // Update visibility on slider change
-        slider.addEventListener('input', (event) => {
-            const currentTime = new Date(parseInt(event.target.value));
-            currentTime.setHours(23, 59, 59, 999);
-            updateNodesVisibility(currentTime, node, link, nodes);
-        });
-
-        // Reset visibility when clicking outside nodes
-        svg.on('click', (event) => {
-            if (event.target.tagName === 'svg') {
-                const currentTime = new Date(parseInt(slider.value));
-                currentTime.setHours(23, 59, 59, 999);
-                updateNodesVisibility(currentTime, node, link, nodes);
-            }
-        });
-
-        // Make sure the timeline container is visible
-        timelineContainer.style.display = 'block';
-        timelineContainer.style.opacity = '1';
-
-    } catch (error) {
-        console.error('Error in initializeTimeline:', error);
-        console.error('Error details:', {
-            error: error.message,
-            stack: error.stack
-        });
-    }
-}
-
-// Update the updateNodesVisibility function to work with CREATED_TIME
 function updateNodesVisibility(currentTime, node, link, nodes) {
     try {
         const currentDateDisplay = document.getElementById('currentDate');
@@ -874,15 +730,21 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
         let visibleCount = 0;
         let noDateCount = 0;
 
-        // Update visibility based on CREATED_TIME
+        // Debug log before update
+        console.log('Updating visibility for date:', currentTime.toLocaleDateString(), {
+            totalNodes: nodes.length,
+            currentTimestamp: currentTime.getTime()
+        });
+
+        // Update visibility based on creation time
         node.style('opacity', d => {
-            if (!d.CREATED_TIME) {
+            if (!d.createdTime) {
                 noDateCount++;
                 return 1; // Show nodes without dates
             }
 
-            const nodeDate = new Date(d.CREATED_TIME);
-            const isVisible = nodeDate.getTime() <= currentTime.getTime();
+            // Compare timestamps and ensure proper visibility
+            const isVisible = d.createdTime.getTime() <= currentTime.getTime();
             if (isVisible) {
                 visibleCount++;
                 return 1;
@@ -890,28 +752,36 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
             return 0.1;
         });
         
-        // Update links visibility
+        // Update links visibility only between visible nodes
         link.style('opacity', d => {
-            const sourceDate = d.source.CREATED_TIME ? new Date(d.source.CREATED_TIME) : null;
-            const targetDate = d.target.CREATED_TIME ? new Date(d.target.CREATED_TIME) : null;
-            
-            const sourceVisible = !sourceDate || sourceDate.getTime() <= currentTime.getTime();
-            const targetVisible = !targetDate || targetDate.getTime() <= currentTime.getTime();
-            
+            const sourceVisible = !d.source.createdTime || d.source.createdTime.getTime() <= currentTime.getTime();
+            const targetVisible = !d.target.createdTime || d.target.createdTime.getTime() <= currentTime.getTime();
             return sourceVisible && targetVisible ? 0.6 : 0.1;
         });
 
         console.log(`
-            Visibility Update:
+            Date Range Info:
             Current Time: ${currentTime.toLocaleDateString()}
+            Current Timestamp: ${currentTime.getTime()}
             Visible nodes: ${visibleCount}
             Nodes without dates: ${noDateCount}
             Total nodes: ${nodes.length}
         `);
 
+        // Verify visibility counts match expectations
+        const expectedVisible = nodes.filter(n => !n.createdTime || n.createdTime.getTime() <= currentTime.getTime()).length;
+        if (visibleCount + noDateCount !== expectedVisible) {
+            console.warn('Visibility count mismatch:', {
+                counted: visibleCount + noDateCount,
+                expected: expectedVisible,
+                difference: expectedVisible - (visibleCount + noDateCount)
+            });
+        }
+
     } catch (error) {
         console.error('Error in updateNodesVisibility:', error);
         console.error('Current Time:', currentTime);
+        console.error('Node sample:', node.data()[0]);
     }
 }
 
@@ -957,19 +827,12 @@ function initializeGraph(data, container) {
 
         const { nodes, links } = data;
 
-        console.log('Initializing graph with:', {
-            nodes: nodes.length,
-            links: links.length,
-            hasCreatedTime: nodes.some(n => n.CREATED_TIME)
-        });
-
         // Clear any existing graph
         container.innerHTML = '';
 
-        // Initialize the visualization with larger dimensions for more space
+        // Initialize the visualization
         const width = container.clientWidth || 800;
         const height = container.clientHeight || 600;
-        const baseRadius = Math.min(width, height) / 50; // Dynamic node size based on container
 
         // Create SVG with zoom support
         const svg = d3.select(container)
@@ -978,27 +841,27 @@ function initializeGraph(data, container) {
             .attr('height', height)
             .attr('viewBox', [0, 0, width, height]);
 
-        // Add zoom behavior with adjusted scale range
+        // Add zoom behavior
         const g = svg.append('g');
         const zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        // Create the force simulation with gentler forces
+        // Create the force simulation
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(d => 100 + (d.value || 1) * 20))
+                .distance(100))
             .force('charge', d3.forceManyBody()
-                .strength(d => -300 - nodes.length * 0.5)
-                .distanceMax(width / 2))
+                .strength(-500)
+                .distanceMax(500))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(baseRadius * 2))
-            .force('x', d3.forceX(width / 2).strength(0.05))
-            .force('y', d3.forceY(height / 2).strength(0.05))
-            .alphaDecay(0.02)
-            .velocityDecay(0.3);
+            .force('collision', d3.forceCollide().radius(30))
+            .force('x', d3.forceX(width / 2).strength(0.1))
+            .force('y', d3.forceY(height / 2).strength(0.1))
+            .alphaDecay(0.01)
+            .velocityDecay(0.2);
 
         // Add links
         const link = g.append('g')
@@ -1008,36 +871,33 @@ function initializeGraph(data, container) {
             .join('line')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', d => Math.sqrt(d.value || 1));
+            .attr('stroke-width', 2);
 
-        // Add nodes with adjusted size
+        // Add nodes
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
-            .attr('r', baseRadius)
+            .attr('r', 8)
             .attr('fill', d => colorScale(d.type))
             .call(drag(simulation));
 
-        // Add labels with adjusted positioning
+        // Add labels
         const labels = g.append('g')
             .attr('class', 'labels')
             .selectAll('text')
             .data(nodes)
             .join('text')
-            .attr('dx', baseRadius + 4)
+            .attr('dx', 12)
             .attr('dy', 4)
-            .text(d => d.title)
+            .text(d => d.title?.substring(0, 20))
             .style('font-size', '10px')
             .style('fill', '#666');
 
         // Initialize timeline if we have dates
-        if (nodes.some(n => n.CREATED_TIME)) {
-            console.log('Initializing timeline with nodes containing CREATED_TIME');
-            initializeTimeline(container, nodes, node, link, svg);
-        } else {
-            console.warn('No nodes with CREATED_TIME found');
+        if (nodes.some(n => n.createdTime)) {
+        initializeTimeline(container, nodes, node, link, svg);
         }
 
         // Update positions on each tick
@@ -1071,11 +931,12 @@ function initializeGraph(data, container) {
             .style('max-width', '300px')
             .style('z-index', '1000');
 
-        // Add hover effects
         node.on('mouseover', (event, d) => {
+            // Fix node position during hover
             d.fx = d.x;
             d.fy = d.y;
             
+            // Show tooltip
             tooltip.transition()
                 .duration(200)
                 .style('opacity', .9);
@@ -1084,7 +945,8 @@ function initializeGraph(data, container) {
                 <div class="p-2">
                     <strong class="block text-lg mb-1">${d.title}</strong>
                     <span class="block text-sm text-gray-500">Type: ${d.type}</span>
-                    ${d.CREATED_TIME ? `<span class="block text-sm text-gray-500">Created: ${new Date(d.CREATED_TIME).toLocaleDateString()}</span>` : ''}
+                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
+                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
                 </div>
             `)
             .style('left', (event.pageX + 10) + 'px')
@@ -1103,13 +965,16 @@ function initializeGraph(data, container) {
             );
         })
         .on('mouseout', (event, d) => {
+            // Release fixed position
             d.fx = null;
             d.fy = null;
             
+            // Hide tooltip
             tooltip.transition()
                 .duration(500)
                 .style('opacity', 0);
 
+            // Reset node visibility
             node.style('opacity', 1);
             link.style('opacity', 0.6);
         });
@@ -1122,21 +987,17 @@ function initializeGraph(data, container) {
             height
         };
 
-        // Calculate initial zoom to fit with more padding
+        // Initial zoom to fit
         const bounds = g.node().getBBox();
-        const scale = 0.4 / Math.max(bounds.width / width, bounds.height / height);
+        const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
         const translate = [
             (width - scale * bounds.width) / 2 - scale * bounds.x,
             (height - scale * bounds.height) / 2 - scale * bounds.y
         ];
+        svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
-        // Apply initial transform with a transition
-        svg.transition()
-            .duration(750)
-            .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
-
-        // Start simulation with lower alpha
-        simulation.alpha(0.5).restart();
+        // Start simulation with higher alpha
+        simulation.alpha(1).restart();
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
@@ -1146,20 +1007,118 @@ function initializeGraph(data, container) {
     }
 }
 
+function initializeTimeline(container, nodes, node, link, svg) {
+    try {
+        // Validate inputs
+        if (!container || !nodes || !node || !link || !svg) {
+            console.error('Missing required parameters for timeline initialization');
+            return;
+        }
+
+        // Find valid date range
+        const validDates = nodes.map(n => n.createdTime).filter(Boolean);
+        
+        if (validDates.length === 0) {
+            console.warn('No valid dates found in nodes');
+            return;
+        }
+
+        // Set start date to beginning of day and end date to end of day
+        const startDate = new Date(Math.min(...validDates));
+        startDate.setHours(0, 0, 0, 0);  // Start of day
+
+        const endDate = new Date(Math.max(...validDates));
+        endDate.setHours(23, 59, 59, 999);  // End of day
+
+        // Log date range information
+        console.log(`
+            Timeline Initialization:
+            Total nodes: ${nodes.length}
+            Nodes with valid dates: ${validDates.length}
+            Nodes without dates: ${nodes.length - validDates.length}
+            Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
+            Start timestamp: ${startDate.getTime()}
+            End timestamp: ${endDate.getTime()}
+        `);
+
+        // Add timeline slider
+        const timelineContainer = document.createElement('div');
+        timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
+        
+        timelineContainer.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
+                <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
+                <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
+            </div>
+            <input type="range" 
+                min="${startDate?.getTime() || 0}" 
+                max="${endDate?.getTime() || 100}" 
+                value="${endDate?.getTime() || 100}" 
+                step="86400000"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                id="timelineSlider">
+        `;
+        container.appendChild(timelineContainer);
+
+        // Timeline slider functionality
+        const slider = document.getElementById('timelineSlider');
+        if (!slider) {
+            console.error('Failed to find timeline slider element');
+            return;
+        }
+        
+        // Set initial state to show all nodes
+        const initialTime = new Date(endDate);
+        console.log('Setting initial timeline state:', {
+            date: initialTime.toLocaleDateString(),
+            timestamp: initialTime.getTime()
+        });
+        updateNodesVisibility(initialTime, node, link, nodes);
+
+        slider.addEventListener('input', (event) => {
+            const currentTime = new Date(parseInt(event.target.value));
+            // Set to end of selected day
+            currentTime.setHours(23, 59, 59, 999);
+            console.log('Timeline slider moved:', {
+                date: currentTime.toLocaleDateString(),
+                timestamp: currentTime.getTime()
+            });
+            updateNodesVisibility(currentTime, node, link, nodes);
+        });
+
+        // Reset visibility when clicking outside nodes
+        svg.on('click', (event) => {
+            if (event.target.tagName === 'svg') {
+                const currentTime = new Date(parseInt(slider.value));
+                // Set to end of selected day
+                currentTime.setHours(23, 59, 59, 999);
+                updateNodesVisibility(currentTime, node, link, nodes);
+            }
+        });
+    } catch (error) {
+        console.error('Error in initializeTimeline:', error);
+        console.error('Error details:', {
+            error: error.message,
+            stack: error.stack
+        });
+    }
+}
+
 function showStatus(message, showSpinner = false) {
     const statusSection = document.getElementById('statusSection');
     const statusText = document.getElementById('statusText');
     const statusSpinner = document.getElementById('statusSpinner');
     
     if (statusSection && statusText) {
-        statusSection.classList.remove('hidden');
-        statusText.textContent = message;
-        
+    statusSection.classList.remove('hidden');
+    statusText.textContent = message;
+    
         if (statusSpinner) {
-            if (showSpinner) {
-                statusSpinner.classList.remove('hidden');
-            } else {
-                statusSpinner.classList.add('hidden');
+    if (showSpinner) {
+        statusSpinner.classList.remove('hidden');
+    } else {
+        statusSpinner.classList.add('hidden');
             }
         }
     } else {

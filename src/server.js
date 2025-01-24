@@ -21,7 +21,6 @@ const REDIRECT_URI = 'https://visualiser-xhjh.onrender.com/callback';
 const CLIENT_ID = process.env.NOTION_CLIENT_ID;
 const CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
 const HEX_API_TOKEN = '5b97b8d1945b14acc5c2faed5e314310438e038640df2ff475d357993d0217826b3db99144ebf236d189778cda42898e';
-const RESULTS_LOCK_FILE = path.join(process.cwd(), 'hex_results.lock');
 
 // Verify environment variables are loaded
 console.log('Environment check:', {
@@ -73,66 +72,56 @@ function saveResults(results) {
             throw new Error('Invalid results format');
         }
 
-        // Create lock file to prevent concurrent writes
-        if (fs.existsSync(RESULTS_LOCK_FILE)) {
-            console.log('Another write operation in progress, waiting...');
-            return false;
-        }
-
-        // Create lock file
-        fs.writeFileSync(RESULTS_LOCK_FILE, new Date().toISOString());
-
-        try {
-            // Ensure the data is properly structured
-            const safeResults = {
-                timestamp: new Date().toISOString(),
-                data: {
-                    dataframe_2: Array.isArray(results.data?.dataframe_2) ? results.data.dataframe_2.map(item => {
-                        return Object.fromEntries(
-                            Object.entries(item || {}).map(([key, value]) => [
-                                key,
-                                value === undefined ? null : value
-                            ])
-                        );
-                    }) : [],
-                    dataframe_3: results.data?.dataframe_3 ? 
-                        JSON.parse(JSON.stringify(results.data.dataframe_3)) : null
-                }
-            };
-
-            // Write to temporary file first
-            const tempFile = `${STORAGE_FILE}.tmp`;
-            const stringified = JSON.stringify(safeResults, (key, value) => {
-                if (value === undefined) return null;
-                if (typeof value === 'bigint') return value.toString();
-                if (value instanceof Error) return value.message;
-                return value;
-            });
-
-            // Validate JSON string before writing
-            JSON.parse(stringified);
-
-            // Write to temp file and verify
-            fs.writeFileSync(tempFile, stringified, 'utf8');
-            const verification = fs.readFileSync(tempFile, 'utf8');
-            JSON.parse(verification); // Validate JSON is parseable
-            
-            // If verification passes, move to actual file
-            fs.renameSync(tempFile, STORAGE_FILE);
-
-            console.log('Successfully saved results:', {
-                fileSize: stringified.length,
-                recordCount: safeResults.data.dataframe_2.length,
-                hasDataframe3: !!safeResults.data.dataframe_3
-            });
-
-            return true;
-        } finally {
-            // Always remove lock file when done
-            if (fs.existsSync(RESULTS_LOCK_FILE)) {
-                fs.unlinkSync(RESULTS_LOCK_FILE);
+        // Ensure the data is properly structured
+        const safeResults = {
+            timestamp: new Date().toISOString(),
+            data: {
+                dataframe_2: Array.isArray(results.data?.dataframe_2) ? results.data.dataframe_2.map(item => {
+                    // Clean each item to ensure it's JSON-safe
+                    return Object.fromEntries(
+                        Object.entries(item || {}).map(([key, value]) => [
+                            key,
+                            value === undefined ? null : value
+                        ])
+                    );
+                }) : [],
+                dataframe_3: results.data?.dataframe_3 ? 
+                    JSON.parse(JSON.stringify(results.data.dataframe_3)) : null
             }
+        };
+
+        // Write to temporary file first
+        const tempFile = `${STORAGE_FILE}.tmp`;
+        const stringified = JSON.stringify(safeResults, (key, value) => {
+            if (value === undefined) return null;
+            if (typeof value === 'bigint') return value.toString();
+            if (value instanceof Error) return value.message;
+            return value;
+        });
+
+        // Validate JSON string before writing
+        try {
+            JSON.parse(stringified);
+        } catch (parseError) {
+            console.error('Invalid JSON generated:', parseError);
+            throw new Error('Failed to generate valid JSON');
         }
+
+        // Write to temp file and verify
+        fs.writeFileSync(tempFile, stringified, 'utf8');
+        const verification = fs.readFileSync(tempFile, 'utf8');
+        JSON.parse(verification); // Validate JSON is parseable
+        
+        // If verification passes, move to actual file
+        fs.renameSync(tempFile, STORAGE_FILE);
+
+        console.log('Successfully saved results:', {
+            fileSize: stringified.length,
+            recordCount: safeResults.data.dataframe_2.length,
+            hasDataframe3: !!safeResults.data.dataframe_3
+        });
+
+        return true;
     } catch (error) {
         console.error('Error saving results:', error);
         // Clean up temp file if it exists
@@ -140,11 +129,8 @@ function saveResults(results) {
             if (fs.existsSync(`${STORAGE_FILE}.tmp`)) {
                 fs.unlinkSync(`${STORAGE_FILE}.tmp`);
             }
-            if (fs.existsSync(RESULTS_LOCK_FILE)) {
-                fs.unlinkSync(RESULTS_LOCK_FILE);
-            }
         } catch (cleanupError) {
-            console.error('Error cleaning up temp files:', cleanupError);
+            console.error('Error cleaning up temp file:', cleanupError);
         }
         throw error;
     }
@@ -152,12 +138,6 @@ function saveResults(results) {
 
 function loadResults() {
     try {
-        // Wait if there's a write operation in progress
-        if (fs.existsSync(RESULTS_LOCK_FILE)) {
-            console.log('Write operation in progress, waiting before reading...');
-            return null;
-        }
-
         if (!fs.existsSync(STORAGE_FILE)) {
             console.log('Storage file does not exist:', STORAGE_FILE);
             return { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
@@ -177,7 +157,25 @@ function loadResults() {
             parsedData = JSON.parse(fileContent);
         } catch (parseError) {
             console.error('Initial JSON parse error:', parseError);
-            return { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
+            
+            // Try to fix common JSON issues
+            fileContent = fileContent
+                .replace(/[\u0000-\u0019]+/g, '') // Remove control characters
+                .replace(/,\s*}/g, '}')           // Remove trailing commas
+                .replace(/,\s*\]/g, ']')          // Remove trailing commas in arrays
+                .replace(/\\/g, '\\\\')           // Escape backslashes
+                .replace(/"\s+"/g, '" "')         // Fix spaces between strings
+                .replace(/}\s*{/g, '},{');        // Fix adjacent objects
+            
+            try {
+                parsedData = JSON.parse(fileContent);
+            } catch (secondError) {
+                console.error('Failed to recover JSON:', secondError);
+                // Reset file with empty structure
+                const emptyData = { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
+                fs.writeFileSync(STORAGE_FILE, JSON.stringify(emptyData), 'utf8');
+                return emptyData;
+            }
         }
 
         // Validate structure

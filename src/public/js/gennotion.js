@@ -367,9 +367,10 @@ function createGraphVisualization(graphData) {
             return;
         }
 
+        const totalRecords = graphData.dataframe_2.length;
         console.log('Creating visualization with data:', {
-            hasDataframe2: !!graphData.dataframe_2,
-            recordCount: graphData.dataframe_2.length,
+            hasDataframe2: true,
+            recordCount: totalRecords,
             sampleRecord: graphData.dataframe_2[0]
         });
 
@@ -382,22 +383,24 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Transform data for visualization
+        // Transform all data without any limits
+        console.log('Starting data transformation for all records:', totalRecords);
         const transformedData = transformDataForGraph(graphData.dataframe_2);
 
-        if (transformedData.nodes.length === 0) {
+        if (!transformedData.nodes.length) {
             console.warn('No nodes to visualize');
             container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
             return;
         }
 
         console.log('Visualization data prepared:', {
-            nodes: transformedData.nodes.length,
-            links: transformedData.links.length,
+            originalRecords: totalRecords,
+            transformedNodes: transformedData.nodes.length,
+            transformedLinks: transformedData.links.length,
             nodeTypes: [...new Set(transformedData.nodes.map(n => n.type))]
         });
 
-        // Initialize the graph with the transformed data
+        // Initialize the graph with the complete transformed data
         initializeGraph(transformedData, container);
 
     } catch (error) {
@@ -417,25 +420,28 @@ function transformDataForGraph(data) {
             return { nodes: [], links: [] };
         }
 
+        const totalRecords = data.length;
         console.log('Starting graph data transformation:', {
-            totalRecords: data.length,
+            totalRecords,
             sampleRecord: data[0]
         });
 
-        // Process nodes in chunks to avoid blocking the UI
-        const CHUNK_SIZE = 500; // Reduced chunk size for smoother processing
+        // Initialize data structures
         const nodes = [];
         const links = new Set();
         const nodeMap = new Map();
         const depthMap = new Map();
         let processedCount = 0;
 
-        // Process nodes in chunks
+        // Process nodes in smaller chunks to avoid UI blocking
+        const CHUNK_SIZE = 250; // Smaller chunks for smoother processing
+        const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
+
+        // First pass: Create all nodes
         for (let i = 0; i < data.length; i += CHUNK_SIZE) {
             const chunk = data.slice(i, i + CHUNK_SIZE);
             processedCount += chunk.length;
             
-            // First pass for chunk: Create nodes
             chunk.forEach(item => {
                 if (!item.ID) return;
 
@@ -478,11 +484,20 @@ function transformDataForGraph(data) {
                 }
             });
 
-            // Second pass for chunk: Create links
-            chunk.forEach(item => {
-                const node = nodeMap.get(item.ID);
-                if (!node) return;
+            // Log progress for first pass
+            const progress = Math.round((processedCount / totalRecords) * 100);
+            console.log(`Node creation progress: ${processedCount}/${totalRecords} (${progress}%)`);
+        }
 
+        // Reset for second pass
+        processedCount = 0;
+
+        // Second pass: Create all links
+        for (let i = 0; i < nodes.length; i += CHUNK_SIZE) {
+            const chunk = nodes.slice(i, i + CHUNK_SIZE);
+            processedCount += chunk.length;
+
+            chunk.forEach(node => {
                 // Direct parent-child relationship
                 if (node.parentId && nodeMap.has(node.parentId)) {
                     links.add(JSON.stringify({
@@ -523,8 +538,9 @@ function transformDataForGraph(data) {
                 }
             });
 
-            // Log progress
-            console.log(`Processed ${processedCount}/${data.length} records (${Math.round(processedCount/data.length*100)}%)`);
+            // Log progress for second pass
+            const progress = Math.round((processedCount / nodes.length) * 100);
+            console.log(`Link creation progress: ${processedCount}/${nodes.length} (${progress}%)`);
         }
 
         // Convert links to array and resolve references
@@ -544,14 +560,14 @@ function transformDataForGraph(data) {
             return null;
         }).filter(Boolean);
 
-        // Log statistics
+        // Log final statistics
         const depthStats = {};
         depthMap.forEach((nodes, depth) => {
             depthStats[depth] = nodes.size;
         });
 
         console.log('Graph transformation complete:', {
-            originalRecords: data.length,
+            originalRecords: totalRecords,
             nodes: nodes.length,
             links: processedLinks.length,
             nodesByDepth: depthStats,

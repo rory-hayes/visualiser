@@ -123,85 +123,47 @@ function listenForResults() {
     };
     let lastProcessedChunk = 0;
     let totalExpectedRecords = 0;
-    let connectionTimeout = null;
-    let isProcessingComplete = false;
-    let reconnectDelay = 1000; // Start with 1 second delay
     
-    function showProgress(current, total, chunk, totalChunks) {
+    function showProgress(current, total) {
+        // First ensure status section is visible
         const statusSection = document.getElementById('statusSection');
         if (statusSection) {
             statusSection.classList.remove('hidden');
         }
 
+        // Get or create progress container
         let progressElement = document.getElementById('progress-container');
         if (!progressElement) {
             progressElement = document.createElement('div');
             progressElement.id = 'progress-container';
             progressElement.className = 'mt-4 bg-white rounded-lg shadow p-4';
+            
+            // Try to append to status section first
             const statusElement = document.getElementById('status');
             if (statusElement) {
                 statusElement.appendChild(progressElement);
             } else {
+                // Fallback to status section if status element doesn't exist
                 statusSection?.appendChild(progressElement);
             }
         }
 
+        // Ensure we have valid numbers before formatting
         const currentCount = typeof current === 'number' ? current : 0;
         const totalCount = typeof total === 'number' ? total : 0;
-        const currentChunk = typeof chunk === 'number' ? chunk : 0;
-        const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : 0;
 
         if (progressElement) {
             const percentage = totalCount > 0 ? Math.round((currentCount / totalCount) * 100) : 0;
-            const chunkPercentage = totalChunksCount > 0 ? Math.round((currentChunk / totalChunksCount) * 100) : 0;
-            
             progressElement.innerHTML = `
-                <div class="space-y-4">
-                    <div>
-                        <div class="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Records: ${currentCount.toLocaleString()} / ${totalCount.toLocaleString()}</span>
-                            <span>${percentage}%</span>
-                        </div>
-                        <div class="bg-gray-200 rounded-full h-2.5 mb-2">
-                            <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
-                                 style="width: ${percentage}%"></div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Chunks: ${currentChunk} / ${totalChunksCount}</span>
-                            <span>${chunkPercentage}%</span>
-                        </div>
-                        <div class="bg-gray-200 rounded-full h-2.5">
-                            <div class="bg-green-600 h-2.5 rounded-full transition-all duration-300" 
-                                 style="width: ${chunkPercentage}%"></div>
-                        </div>
-                    </div>
+                <div class="progress-bar bg-gray-200 rounded-full h-2.5 mb-2">
+                    <div class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300" 
+                         style="width: ${percentage}%"></div>
+                </div>
+                <div class="flex justify-between text-sm text-gray-600">
+                    <span>Processing: ${currentCount.toLocaleString()} / ${totalCount.toLocaleString()}</span>
+                    <span>${percentage}%</span>
                 </div>
             `;
-        }
-    }
-
-    function handleConnectionError(eventSource, error) {
-        console.error('EventSource error:', error);
-        console.log('EventSource readyState:', eventSource.readyState);
-        
-        if (eventSource.readyState === EventSource.CLOSED) {
-            clearTimeout(connectionTimeout);
-            
-            if (!isProcessingComplete && retryCount < MAX_RETRIES) {
-                retryCount++;
-                showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
-                
-                // Exponential backoff for reconnection
-                reconnectDelay *= 2;
-                setTimeout(() => {
-                    eventSource.close();
-                    connectEventSource();
-                }, reconnectDelay);
-            } else if (!isProcessingComplete) {
-                showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
-            }
         }
     }
 
@@ -210,18 +172,9 @@ function listenForResults() {
         
         const eventSource = new EventSource('/api/hex-results/stream');
         
-        connectionTimeout = setTimeout(() => {
-            if (eventSource.readyState !== EventSource.CLOSED) {
-                console.log('Connection timeout - closing EventSource');
-                eventSource.close();
-                showStatus('Connection timeout. Please try again.', false);
-            }
-        }, 300000); // 5 minutes timeout
-
         eventSource.onopen = () => {
             console.log('EventSource connection opened');
             retryCount = 0;
-            reconnectDelay = 1000; // Reset delay on successful connection
             showStatus('Connection established', true);
         };
 
@@ -232,7 +185,7 @@ function listenForResults() {
                 if (data.type === 'progress') {
                     totalExpectedRecords = data.totalRecords;
                     showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
-                    showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
+                    showProgress(data.recordsProcessed, data.totalRecords);
                     return;
                 }
 
@@ -258,17 +211,10 @@ function listenForResults() {
                         totalRecords: data.totalRecords
                     });
 
-                    showProgress(
-                        accumulatedData.dataframe_2.length, 
-                        data.totalRecords,
-                        currentChunk,
-                        data.totalChunks
-                    );
+                    showProgress(accumulatedData.dataframe_2.length, data.totalRecords);
 
                     // If this is the last chunk, process all data
                     if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
-                        isProcessingComplete = true;
-                        clearTimeout(connectionTimeout);
                         displayResults({
                             data: {
                                 dataframe_2: accumulatedData.dataframe_2,
@@ -289,7 +235,23 @@ function listenForResults() {
             }
         };
 
-        eventSource.onerror = (error) => handleConnectionError(eventSource, error);
+        eventSource.onerror = (error) => {
+            console.error('EventSource error:', error);
+            console.log('EventSource readyState:', eventSource.readyState);
+            
+            if (eventSource.readyState === EventSource.CLOSED) {
+                if (retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
+                    setTimeout(() => {
+                        eventSource.close();
+                        connectEventSource();
+                    }, 2000 * retryCount);
+                } else {
+                    showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
+                }
+            }
+        };
 
         return eventSource;
     }
@@ -331,32 +293,10 @@ function displayResults(response) {
         const metrics = calculateMetrics(response.data.dataframe_2, response.data.dataframe_3);
         updateMetricsDisplay(metrics);
         
-        // Create graph container
+        // Create or ensure graph container exists
         let container = document.createElement('div');
         container.id = 'graph-container';
         container.className = 'w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden';
-        
-        // Add graph controls
-        container.innerHTML = `
-            <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
-                <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                    </svg>
-                </button>
-                <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                    </svg>
-                </button>
-                <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                    </svg>
-                </button>
-            </div>
-        `;
-        
         resultsContent.appendChild(container);
         
         // Create graph visualization with the new data structure
@@ -377,11 +317,11 @@ function createGraphVisualization(graphData) {
             return;
         }
 
-        console.log('Creating visualization with data:', {
-            hasDataframe2: !!graphData.dataframe_2,
-            recordCount: graphData.dataframe_2.length,
-            sampleRecord: graphData.dataframe_2[0]
-        });
+        const data = graphData.dataframe_2;
+        if (!Array.isArray(data) || data.length === 0) {
+            console.warn('No graph data to visualize');
+            return;
+        }
 
         const container = document.getElementById('graph-container');
         if (!container) {
@@ -392,203 +332,63 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Transform data for visualization
-        const { nodes, links } = transformDataForGraph(graphData.dataframe_2);
-
-        if (nodes.length === 0) {
-            console.warn('No nodes to visualize');
-            container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
-            return;
-        }
-
-        console.log('Visualization data prepared:', {
-            nodes: nodes.length,
-            links: links.length,
-            nodeTypes: [...new Set(nodes.map(n => n.type))]
-        });
-
-        // Initialize the graph with the transformed data
+        // Initialize the graph with the correct data structure
         initializeGraph({ 
-            nodes: nodes,
-            links: links
+            data: {
+                dataframe_2: data,
+                dataframe_3: graphData.dataframe_3
+            }
         }, container);
+
+        console.log('Graph visualization initialized with:', {
+            nodes: data.length,
+            hasInsights: !!graphData.dataframe_3
+        });
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);
-        const container = document.getElementById('graph-container');
-        if (container) {
-            container.innerHTML = '<div class="p-4 text-red-500">Error initializing graph visualization</div>';
-        }
     }
 }
 
-// Update transformDataForGraph to handle the new data structure
-function transformDataForGraph(data) {
+function transformGraphData(graphData) {
+    const elements = {
+        nodes: [],
+        edges: []
+    };
+
     try {
-        if (!Array.isArray(data)) {
-            console.error('Invalid data format:', data);
-            return { nodes: [], links: [] };
-        }
-
-        console.log('Processing data for graph:', {
-            totalRecords: data.length,
-            sampleRecord: data[0],
-            maxDepth: Math.max(...data.map(item => parseInt(item.DEPTH) || 0))
-        });
-
-        const nodes = [];
-        const links = new Set(); // Use Set to avoid duplicate links
-        const nodeMap = new Map();
-        const depthMap = new Map(); // Track nodes by depth
-
-        // First pass: Create all nodes and organize by depth
-        data.forEach(item => {
-            if (!item.ID) {
-                console.warn('Item missing ID:', item);
-                return;
-            }
-
-            const depth = parseInt(item.DEPTH) || 0;
-            if (!depthMap.has(depth)) {
-                depthMap.set(depth, new Set());
-            }
-            depthMap.get(depth).add(item.ID);
-
-            // Create node if it doesn't exist
-            if (!nodeMap.has(item.ID)) {
-                // Clean up the type string to be more readable
-                let type = item.TYPE?.toLowerCase() || 'page';
-                // Remove any prefix/suffix and just keep the core type
-                type = type.replace(/_page$/, '')  // Remove _page suffix
-                         .replace(/^page_/, '')    // Remove page_ prefix
-                         .replace(/^collection_view_/, 'view_'); // Simplify collection_view to view
-
-                const node = {
-                    id: item.ID,
-                    title: type, // Just show the type as the title
-                    type: type,
-                    depth: depth,
-                    parentId: item.PARENT_ID,
-                    spaceId: item.SPACE_ID,
-                    parentPageId: item.PARENT_PAGE_ID,
-                    ancestors: []
-                };
-
-                // Parse ANCESTORS field
-                try {
-                    if (item.ANCESTORS) {
-                        const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
-                        node.ancestors = JSON.parse(cleanedAncestors);
+        // Process in chunks to prevent memory issues
+        const CHUNK_SIZE = 100;
+        
+        for (let i = 0; i < graphData.length; i += CHUNK_SIZE) {
+            const chunk = graphData.slice(i, i + CHUNK_SIZE);
+            
+            chunk.forEach(node => {
+                // Add node
+                elements.nodes.push({
+                    data: {
+                        id: node.ID,
+                        type: node.TYPE
                     }
-                } catch (error) {
-                    console.warn('Error parsing ancestors for node:', item.ID, error);
-                    node.ancestors = [];
-                }
+                });
 
-                nodes.push(node);
-                nodeMap.set(item.ID, node);
-            }
-        });
-
-        // Second pass: Create all hierarchical relationships
-        nodes.forEach(node => {
-            // 1. Direct parent-child relationship (strongest)
-            if (node.parentId && nodeMap.has(node.parentId)) {
-                links.add(JSON.stringify({
-                    source: node.parentId,
-                    target: node.id,
-                    type: 'parent-child',
-                    value: 3
-                }));
-            }
-
-            // 2. Process ancestors array to create full hierarchical path
-            if (Array.isArray(node.ancestors) && node.ancestors.length > 0) {
-                // Create links between each consecutive pair in the ancestors array
-                for (let i = 0; i < node.ancestors.length - 1; i++) {
-                    const currentAncestor = node.ancestors[i];
-                    const parentAncestor = node.ancestors[i + 1];
-                    
-                    if (nodeMap.has(currentAncestor) && nodeMap.has(parentAncestor)) {
-                        links.add(JSON.stringify({
-                            source: parentAncestor,
-                            target: currentAncestor,
-                            type: 'ancestor-chain',
-                            value: 2
-                        }));
-                    }
-                }
-            }
-
-            // 3. Connect to parent page if different from direct parent
-            if (node.parentPageId && 
-                nodeMap.has(node.parentPageId) && 
-                node.parentPageId !== node.parentId) {
-                links.add(JSON.stringify({
-                    source: node.parentPageId,
-                    target: node.id,
-                    type: 'page-hierarchy',
-                    value: 1
-                }));
-            }
-
-            // 4. Connect nodes at same depth level that share a parent
-            const nodesAtSameDepth = Array.from(depthMap.get(node.depth) || []);
-            nodesAtSameDepth.forEach(otherId => {
-                if (otherId !== node.id) {
-                    const otherNode = nodeMap.get(otherId);
-                    if (otherNode && 
-                        otherNode.parentId === node.parentId && 
-                        node.parentId) {
-                        links.add(JSON.stringify({
-                            source: node.parentId,
-                            target: otherId,
-                            type: 'sibling',
-                            value: 1
-                        }));
-                    }
+                // Add edge if there's a parent
+                if (node.PARENT_ID) {
+                    elements.edges.push({
+                        data: {
+                            id: `${node.PARENT_ID}-${node.ID}`,
+                            source: node.PARENT_ID,
+                            target: node.ID
+                        }
+                    });
                 }
             });
-        });
-
-        // Convert links back to array and resolve node references
-        const processedLinks = Array.from(links).map(linkStr => {
-            const link = JSON.parse(linkStr);
-            const source = nodeMap.get(link.source);
-            const target = nodeMap.get(link.target);
-            
-            if (source && target) {
-                return {
-                    source,
-                    target,
-                    type: link.type,
-                    value: link.value
-                };
-            }
-            return null;
-        }).filter(Boolean);
-
-        // Log detailed statistics
-        const depthStats = {};
-        depthMap.forEach((nodes, depth) => {
-            depthStats[depth] = nodes.size;
-        });
-
-        console.log('Graph data transformed:', {
-            originalRecords: data.length,
-            nodes: nodes.length,
-            links: processedLinks.length,
-            nodesByDepth: depthStats,
-            nodeTypes: [...new Set(nodes.map(n => n.type))],
-            linkTypes: [...new Set(processedLinks.map(l => l.type))],
-            maxDepth: Math.max(...nodes.map(n => n.depth))
-        });
-
-        return { nodes, links: processedLinks };
+        }
     } catch (error) {
         console.error('Error transforming graph data:', error);
-        return { nodes: [], links: [] };
     }
+
+    return elements;
 }
 
 function formatResults(graphData, insightsData) {
@@ -635,9 +435,166 @@ function formatResults(graphData, insightsData) {
                 </div>
             </div>
 
+            <!-- Usage Metrics -->
+            <div class="mb-8 p-4 bg-green-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-green-900 mb-3">Usage Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Daily Active Users</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.daily_active_users)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Weekly Active Users</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.weekly_active_users)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Monthly Active Users</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_active_users)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Pages per User</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.pages_per_user)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Engagement Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.engagement_score)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Collaboration Rate</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.collaboration_rate)}%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Growth Metrics -->
+            <div class="mb-8 p-4 bg-blue-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-blue-900 mb-3">Growth Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Growth Rate</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.growth_rate)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Member Growth Rate</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_member_growth_rate)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Content Growth Rate</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.monthly_content_growth_rate)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Pages Created (Month)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.pages_created_last_month)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Expected Members (Year)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.expected_members_in_next_year)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Blocks Created (Year)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.blocks_created_last_year)}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Performance Metrics -->
+            <div class="mb-8 p-4 bg-purple-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-purple-900 mb-3">Performance Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Organization Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_organization_score)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Productivity Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_productivity_score)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Collaboration Score</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.current_collaboration_score)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">AI Productivity Gain</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.ai_productivity_gain)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Automation Potential</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.automation_potential)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Time Savings (hrs)</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.projected_time_savings)}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ROI Metrics -->
+            <div class="mb-8 p-4 bg-yellow-50 rounded-lg">
+                <h3 class="font-semibold text-lg text-yellow-900 mb-3">ROI Metrics</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Current Plan Cost</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics.current_plan)}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Enterprise Plan ROI</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_roi)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">Enterprise AI ROI</div>
+                        <div class="text-lg font-semibold text-gray-900">${formatValue(metrics.enterprise_plan_w_ai_roi)}%</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">10% Growth Savings</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['10_percent_increase'])}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">20% Growth Savings</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['20_percent_increase'])}</div>
+                    </div>
+                    <div class="bg-white p-3 rounded shadow-sm">
+                        <div class="text-sm text-gray-500">50% Growth Savings</div>
+                        <div class="text-lg font-semibold text-gray-900">$${formatValue(metrics['50_percent_increase'])}</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
-                <!-- Graph container will be created by createGraphVisualization -->
+                <div id="graph-container" class="w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden">
+                    <!-- Graph Controls -->
+                    <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
+                        <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                        </button>
+                        <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                            </svg>
+                        </button>
+                        <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- Timeline Container -->
+                    <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
+                            <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
+                        </div>
+                        <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
+                            <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
+                            <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
+                                <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     `;
@@ -708,6 +665,63 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// Update transformDataForGraph to handle the new data structure
+function transformDataForGraph(data) {
+    try {
+        if (!Array.isArray(data) || data.length === 0) {
+            console.error('Invalid input data');
+            return { nodes: [], links: [] };
+        }
+
+        // Create nodes array with date validation
+        const nodes = data.map(item => {
+            let createdTime = null;
+            if (item.created_time || item.CREATED_TIME) {
+                const timestamp = item.created_time || item.CREATED_TIME;
+                createdTime = new Date(typeof timestamp === 'string' ? parseInt(timestamp) : timestamp);
+                if (isNaN(createdTime.getTime())) {
+                    console.warn(`Invalid date for node ${item.id || item.ID}`);
+                    createdTime = null;
+                }
+            }
+
+            return {
+                id: item.id || item.ID,
+                title: item.text || item.TEXT || item.title || item.type || item.TYPE || 'Untitled',
+                type: item.type || item.TYPE || 'page',
+                createdTime,
+                depth: Number(item.depth || item.DEPTH) || 0,
+                parent: item.parent_id || item.PARENT_ID
+            };
+        });
+
+        // Create links array
+        const links = [];
+        const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+        nodes.forEach(node => {
+            if (node.parent && nodeMap.has(node.parent)) {
+                links.push({
+                    source: nodeMap.get(node.parent),
+                    target: node,
+                    value: 1
+                });
+            }
+        });
+
+        console.log('Transformed graph data:', {
+            nodes: nodes.length,
+            links: links.length,
+            sampleNode: nodes[0]
+        });
+
+        return { nodes, links };
+    } catch (error) {
+        console.error('Error transforming data:', error);
+        return { nodes: [], links: [] };
+    }
 }
 
 // Timeline slider functionality
@@ -803,7 +817,7 @@ function drag(simulation) {
 }
 
 // Initialize the force-directed graph
-function initializeGraph(data, container) {
+function initializeGraph(graphData, container) {
     try {
         // Validate container
         if (!container) {
@@ -812,15 +826,70 @@ function initializeGraph(data, container) {
         }
 
         // Validate graph data
-        if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.links)) {
-            console.error('Invalid graph data:', data);
+        if (!graphData || (!Array.isArray(graphData) && !graphData.data?.dataframe_2)) {
+            console.error('Invalid graph data:', graphData);
             return;
         }
 
-        const { nodes, links } = data;
-
         // Clear any existing graph
         container.innerHTML = '';
+
+        // Extract data from the response
+        const df2 = graphData.data?.dataframe_2 || graphData;
+
+        // Validate df2
+        if (!Array.isArray(df2) || df2.length === 0) {
+            console.error('Invalid or empty dataframe_2:', df2);
+            container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
+            return;
+        }
+
+        // Create nodes array with proper date handling
+        const nodes = df2.map(item => {
+            let createdTime = null;
+            
+            // Handle both string and number timestamps
+            if (item.CREATED_TIME) {
+                const timestamp = typeof item.CREATED_TIME === 'string' ? 
+                    Date.parse(item.CREATED_TIME) : 
+                    item.CREATED_TIME;
+                    
+                if (!isNaN(timestamp)) {
+                    const date = new Date(timestamp);
+                    const year = date.getFullYear();
+                    
+                    // Validate year is reasonable
+                    if (year >= 2000 && year <= 2100) {
+                        createdTime = date;
+                    } else {
+                        console.warn(`Invalid year ${year} for node ${item.id}`);
+                    }
+                }
+            }
+            
+            return {
+                id: item.ID || item.id,
+                title: item.TEXT || item.title || item.TYPE || 'Untitled',
+                url: item.URL || item.url,
+                type: item.TYPE || 'page',
+                createdTime: createdTime,
+                parent: item.PARENT_ID || item.parent
+            };
+        });
+
+        // Create links array
+        const links = [];
+        nodes.forEach(node => {
+            if (node.parent) {
+                const parentNode = nodes.find(n => n.id === node.parent);
+                if (parentNode) {
+                    links.push({
+                        source: parentNode,
+                        target: node
+                    });
+                }
+            }
+        });
 
         // Initialize the visualization
         const width = container.clientWidth || 800;
@@ -831,100 +900,66 @@ function initializeGraph(data, container) {
             .append('svg')
             .attr('width', width)
             .attr('height', height)
-            .attr('viewBox', [0, 0, width, height])
-            .style('background-color', '#f8fafc'); // Light background
+            .attr('viewBox', [0, 0, width, height]);
 
-        // Add zoom behavior with wider scale range
+        // Add zoom behavior
         const g = svg.append('g');
         const zoom = d3.zoom()
-            .scaleExtent([0.01, 4]) // Further reduced minimum scale
+            .scaleExtent([0.1, 4])
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        // Create a timeline container div that sits below the graph
-        const timelineDiv = document.createElement('div');
-        timelineDiv.className = 'timeline-wrapper absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm shadow-lg';
-        timelineDiv.style.height = '100px';
-        container.appendChild(timelineDiv);
-
-        // Pre-calculate node positions based on temporal or hierarchical layout
-        const depthGroups = new Map();
-        nodes.forEach(node => {
-            const depth = node.depth || 0;
-            if (!depthGroups.has(depth)) {
-                depthGroups.set(depth, []);
-            }
-            depthGroups.get(depth).push(node);
-        });
-
-        // Assign initial positions based on depth
-        const maxDepth = Math.max(...depthGroups.keys());
-        depthGroups.forEach((groupNodes, depth) => {
-            const xPos = (depth + 1) * (width / (maxDepth + 2));
-            groupNodes.forEach((node, i) => {
-                node.x = xPos + (Math.random() - 0.5) * 50; // Reduced random spread
-                node.y = height/2 + (Math.random() - 0.5) * height/3; // Reduced vertical spread
-            });
-        });
-
-        // Create the force simulation with gentler forces
+        // Create the force simulation
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(100)) // Reduced distance for tighter clustering
+                .distance(100))
             .force('charge', d3.forceManyBody()
-                .strength(-100) // Reduced repulsion
-                .distanceMax(300))
+                .strength(-500)
+                .distanceMax(500))
+            .force('center', d3.forceCenter(width / 2, height / 2))
             .force('collision', d3.forceCollide().radius(30))
-            .force('x', d3.forceX().x(d => (d.depth || 0 + 1) * (width / (maxDepth + 2))).strength(0.3))
+            .force('x', d3.forceX(width / 2).strength(0.1))
             .force('y', d3.forceY(height / 2).strength(0.1))
-            .alphaDecay(0.02) // Slower decay for smoother settling
-            .velocityDecay(0.5); // Higher velocity decay for less chaotic movement
+            .alphaDecay(0.01)
+            .velocityDecay(0.2);
 
-        // Add links with varying strength based on relationship type
+        // Add links
         const link = g.append('g')
             .attr('class', 'links')
             .selectAll('line')
             .data(links)
             .join('line')
-            .attr('stroke', '#cbd5e1') // Lighter stroke color
-            .attr('stroke-opacity', 0.4)
-            .attr('stroke-width', d => d.value || 1);
+            .attr('stroke', '#999')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', 2);
 
-        // Add nodes with transition
+        // Add nodes
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
-            .attr('r', 6) // Slightly smaller nodes
+            .attr('r', 8)
             .attr('fill', d => colorScale(d.type))
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 1.5)
             .call(drag(simulation));
 
-        // Add labels with better positioning and fade-in
+        // Add labels
         const labels = g.append('g')
             .attr('class', 'labels')
             .selectAll('text')
             .data(nodes)
             .join('text')
-            .attr('dx', 8)
-            .attr('dy', 3)
+            .attr('dx', 12)
+            .attr('dy', 4)
             .text(d => d.title?.substring(0, 20))
-            .style('font-size', '8px')
-            .style('fill', '#64748b')
-            .style('opacity', 0)
-            .transition()
-            .duration(1000)
-            .style('opacity', 0.7);
+            .style('font-size', '10px')
+            .style('fill', '#666');
 
-        // Initialize timeline if we have dates
-        if (nodes.some(n => n.createdTime)) {
-            initializeTimeline(timelineDiv, nodes, node, link, svg);
-        }
+        // Initialize timeline
+        initializeTimeline(container, nodes, node, link, svg);
 
-        // Smooth animation for initial layout
+        // Update positions on each tick
         simulation.on('tick', () => {
             link
                 .attr('x1', d => d.source.x)
@@ -941,21 +976,87 @@ function initializeGraph(data, container) {
                 .attr('y', d => d.y);
         });
 
-        // Initial zoom to fit with further reduced scale
+        // Add tooltips
+        const tooltip = d3.select(container)
+            .append('div')
+            .attr('class', 'tooltip')
+            .style('opacity', 0)
+            .style('position', 'absolute')
+            .style('pointer-events', 'none')
+            .style('background-color', 'white')
+            .style('padding', '10px')
+            .style('border-radius', '5px')
+            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
+            .style('max-width', '300px')
+            .style('z-index', '1000');
+
+        node.on('mouseover', (event, d) => {
+            // Fix node position during hover
+            d.fx = d.x;
+            d.fy = d.y;
+            
+            // Show tooltip
+            tooltip.transition()
+                .duration(200)
+                .style('opacity', .9);
+                
+            tooltip.html(`
+                <div class="p-2">
+                    <strong class="block text-lg mb-1">${d.title}</strong>
+                    <span class="block text-sm text-gray-500">Type: ${d.type}</span>
+                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
+                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
+                </div>
+            `)
+            .style('left', (event.pageX + 10) + 'px')
+            .style('top', (event.pageY - 10) + 'px');
+
+            // Highlight connected nodes
+            const connectedNodes = new Set();
+            links.forEach(l => {
+                if (l.source.id === d.id) connectedNodes.add(l.target.id);
+                if (l.target.id === d.id) connectedNodes.add(l.source.id);
+            });
+
+            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.1);
+            link.style('opacity', l => 
+                l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
+            );
+        })
+        .on('mouseout', (event, d) => {
+            // Release fixed position
+            d.fx = null;
+            d.fy = null;
+            
+            // Hide tooltip
+            tooltip.transition()
+                .duration(500)
+                .style('opacity', 0);
+
+            // Reset node visibility
+            const currentTime = new Date(parseInt(document.getElementById('timelineSlider').value));
+            updateNodesVisibility(currentTime, node, link, nodes);
+        });
+
+        // Store data for resize handling
+        container._graphData = {
+            nodes,
+            links,
+            width,
+            height
+        };
+
+        // Initial zoom to fit
         const bounds = g.node().getBBox();
-        const scale = 0.05 / Math.max(bounds.width / width, bounds.height / height);
+        const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
         const translate = [
             (width - scale * bounds.width) / 2 - scale * bounds.x,
             (height - scale * bounds.height) / 2 - scale * bounds.y
         ];
+        svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
-        // Smooth transition to initial view
-        svg.transition()
-            .duration(1000)
-            .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
-
-        // Start simulation with very low alpha for gentle start
-        simulation.alpha(0.1).restart();
+        // Start simulation with higher alpha
+        simulation.alpha(1).restart();
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
@@ -989,24 +1090,19 @@ function initializeTimeline(container, nodes, node, link, svg) {
         endDate.setHours(23, 59, 59, 999);  // End of day
 
         // Log date range information
-        console.log(`Timeline Initialization:
+        console.log(`
+            Timeline Initialization:
             Total nodes: ${nodes.length}
             Nodes with valid dates: ${validDates.length}
             Nodes without dates: ${nodes.length - validDates.length}
             Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
+            Start timestamp: ${startDate.getTime()}
+            End timestamp: ${endDate.getTime()}
         `);
 
-        // Remove existing timeline if present
-        const existingTimeline = container.querySelector('.timeline-container');
-        if (existingTimeline) {
-            existingTimeline.remove();
-        }
-
-        // Create timeline container with absolute positioning
+        // Add timeline slider
         const timelineContainer = document.createElement('div');
-        timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-50 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4';
-        timelineContainer.style.maxWidth = 'calc(100% - 2rem)';
-        timelineContainer.style.margin = '0 auto';
+        timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
         
         timelineContainer.innerHTML = `
             <div class="flex justify-between items-center mb-2">
@@ -1014,19 +1110,14 @@ function initializeTimeline(container, nodes, node, link, svg) {
                 <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
                 <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
             </div>
-            <div class="relative w-full">
-                <input type="range" 
-                    min="${startDate?.getTime() || 0}" 
-                    max="${endDate?.getTime() || 100}" 
-                    value="${endDate?.getTime() || 100}" 
-                    step="86400000"
-                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    id="timelineSlider">
-                <div class="timeline-progress absolute left-0 top-0 h-2 bg-blue-500 rounded-lg pointer-events-none" style="width: 100%"></div>
-            </div>
+            <input type="range" 
+                min="${startDate?.getTime() || 0}" 
+                max="${endDate?.getTime() || 100}" 
+                value="${endDate?.getTime() || 100}" 
+                step="86400000"
+                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                id="timelineSlider">
         `;
-        
-        // Append timeline to the container instead of document body
         container.appendChild(timelineContainer);
 
         // Timeline slider functionality
@@ -1038,26 +1129,20 @@ function initializeTimeline(container, nodes, node, link, svg) {
         
         // Set initial state to show all nodes
         const initialTime = new Date(endDate);
+        console.log('Setting initial timeline state:', {
+            date: initialTime.toLocaleDateString(),
+            timestamp: initialTime.getTime()
+        });
         updateNodesVisibility(initialTime, node, link, nodes);
 
         slider.addEventListener('input', (event) => {
             const currentTime = new Date(parseInt(event.target.value));
             // Set to end of selected day
             currentTime.setHours(23, 59, 59, 999);
-            
-            // Update progress bar width
-            const progress = ((currentTime.getTime() - startDate.getTime()) / (endDate.getTime() - startDate.getTime())) * 100;
-            const progressBar = timelineContainer.querySelector('.timeline-progress');
-            if (progressBar) {
-                progressBar.style.width = `${progress}%`;
-            }
-            
-            // Update current date display
-            const currentDateDisplay = timelineContainer.querySelector('#currentDate');
-            if (currentDateDisplay) {
-                currentDateDisplay.textContent = currentTime.toLocaleDateString();
-            }
-            
+            console.log('Timeline slider moved:', {
+                date: currentTime.toLocaleDateString(),
+                timestamp: currentTime.getTime()
+            });
             updateNodesVisibility(currentTime, node, link, nodes);
         });
 
@@ -1065,11 +1150,11 @@ function initializeTimeline(container, nodes, node, link, svg) {
         svg.on('click', (event) => {
             if (event.target.tagName === 'svg') {
                 const currentTime = new Date(parseInt(slider.value));
+                // Set to end of selected day
                 currentTime.setHours(23, 59, 59, 999);
                 updateNodesVisibility(currentTime, node, link, nodes);
             }
         });
-
     } catch (error) {
         console.error('Error in initializeTimeline:', error);
         console.error('Error details:', {
@@ -1085,14 +1170,14 @@ function showStatus(message, showSpinner = false) {
     const statusSpinner = document.getElementById('statusSpinner');
     
     if (statusSection && statusText) {
-    statusSection.classList.remove('hidden');
-    statusText.textContent = message;
-    
+        statusSection.classList.remove('hidden');
+        statusText.textContent = message;
+        
         if (statusSpinner) {
-    if (showSpinner) {
-        statusSpinner.classList.remove('hidden');
-    } else {
-        statusSpinner.classList.add('hidden');
+            if (showSpinner) {
+                statusSpinner.classList.remove('hidden');
+            } else {
+                statusSpinner.classList.add('hidden');
             }
         }
     } else {

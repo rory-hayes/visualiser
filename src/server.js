@@ -558,21 +558,21 @@ async function callHexAPI(workspaceId, projectId) {
         });
 
         const response = await axios.post(url, {
-            inputParams: {
+                inputParams: {
                 _input_text: workspaceId
-            },
-            updatePublishedResults: false,
-            useCachedSqlResults: true
+                },
+                updatePublishedResults: false,
+                useCachedSqlResults: true
         }, {
-            headers: {
-                'Authorization': `Bearer ${HEX_API_TOKEN}`,
-                'Content-Type': 'application/json'
-            }
+                headers: {
+                    'Authorization': `Bearer ${HEX_API_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
         });
 
         if (!response.data || !response.data.runId) {
             throw new Error('Invalid response from Hex API');
-        }
+            }
 
         console.log('Hex API response:', {
             status: response.status,
@@ -614,21 +614,19 @@ async function callHexAPI(workspaceId, projectId) {
 // Add endpoint for streaming Hex results
 app.get('/api/hex-results/stream', (req, res) => {
     try {
-        // Set SSE headers with a longer timeout and keep-alive
+        // Set SSE headers with a longer timeout
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
-            'Keep-Alive': 'timeout=300',
-            'X-Accel-Buffering': 'no' // Disable Nginx buffering
+            'Keep-Alive': 'timeout=120'
         });
 
         // Track processing state
         let processingState = {
             lastProcessedIndex: 0,
             totalRecordsSent: 0,
-            isProcessing: false,
-            chunkSize: 250 // Reduced chunk size for better memory management
+            isProcessing: false
         };
 
         // Send initial connection message
@@ -637,7 +635,7 @@ app.get('/api/hex-results/stream', (req, res) => {
         // Function to check for results
         const checkResults = async () => {
             if (processingState.isProcessing) {
-                return;
+                return; // Skip if already processing
             }
 
             try {
@@ -650,26 +648,21 @@ app.get('/api/hex-results/stream', (req, res) => {
                 }
 
                 const totalRecords = results.data.dataframe_2.length;
-                const totalChunks = Math.ceil(totalRecords / processingState.chunkSize);
+                const CHUNK_SIZE = 500;
+                const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
 
-                // Send initial progress if starting
+                // Only send progress if we haven't started or if we're resuming
                 if (processingState.lastProcessedIndex === 0) {
                     res.write(`data: {"type":"progress","message":"Starting data processing...","totalRecords":${totalRecords},"totalChunks":${totalChunks}}\n\n`);
                 }
 
-                // Process a limited number of chunks per iteration
-                const maxChunksPerIteration = 5;
-                let chunksProcessed = 0;
-
-                for (let i = processingState.lastProcessedIndex; 
-                     i < totalRecords && chunksProcessed < maxChunksPerIteration; 
-                     i += processingState.chunkSize) {
-                    
-                    const chunk = results.data.dataframe_2.slice(i, Math.min(i + processingState.chunkSize, totalRecords));
-                    const chunkNum = Math.floor(i / processingState.chunkSize) + 1;
+                // Process remaining data in chunks
+                for (let i = processingState.lastProcessedIndex; i < totalRecords; i += CHUNK_SIZE) {
+                    const chunk = results.data.dataframe_2.slice(i, Math.min(i + CHUNK_SIZE, totalRecords));
+                    const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
                     
                     // Send progress update
-                    res.write(`data: {"type":"progress","message":"Processing records ${i + 1} to ${Math.min(i + processingState.chunkSize, totalRecords)}","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
+                    res.write(`data: {"type":"progress","message":"Processing records ${i + 1} to ${Math.min(i + CHUNK_SIZE, totalRecords)}","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
                     
                     const chunkData = {
                         success: true,
@@ -677,14 +670,14 @@ app.get('/api/hex-results/stream', (req, res) => {
                             timestamp: results.timestamp,
                             data: {
                                 dataframe_2: chunk,
-                                dataframe_3: i + processingState.chunkSize >= totalRecords ? results.data.dataframe_3 : null
+                                dataframe_3: i + CHUNK_SIZE >= totalRecords ? results.data.dataframe_3 : null
                             }
                         },
                         totalChunks,
                         currentChunk: chunkNum,
                         totalRecords,
                         recordsProcessed: i + chunk.length,
-                        isLastChunk: i + processingState.chunkSize >= totalRecords
+                        isLastChunk: i + CHUNK_SIZE >= totalRecords
                     };
 
                     try {
@@ -692,24 +685,18 @@ app.get('/api/hex-results/stream', (req, res) => {
                         res.write(`data: ${chunkString}\n\n`);
                         
                         // Update processing state
-                        processingState.lastProcessedIndex = i + processingState.chunkSize;
+                        processingState.lastProcessedIndex = i + CHUNK_SIZE;
                         processingState.totalRecordsSent += chunk.length;
 
-                        // Add delay between chunks
+                        // Add small delay between chunks to prevent overwhelming the client
                         await new Promise(resolve => setTimeout(resolve, 100));
-                        chunksProcessed++;
-                        
-                        // Clear chunk data
-                        chunk.length = 0;
-                        
-                        // Force garbage collection if available
-                        if (global.gc) {
-                            global.gc();
-                        }
                     } catch (stringifyError) {
                         console.error('Error sending chunk:', stringifyError);
                         res.write(`data: {"type":"error","message":"Error processing chunk ${chunkNum}"}\n\n`);
                     }
+
+                    // Clear chunk data
+                    chunk.length = 0;
                 }
 
                 // Check if we've processed everything
@@ -728,15 +715,15 @@ app.get('/api/hex-results/stream', (req, res) => {
             }
         };
 
-        // Check for results less frequently for large datasets
+        // Check for results more frequently
         const interval = setInterval(async () => {
             await checkResults();
-        }, 2000);
+        }, 1000);
 
         // Handle client disconnect
         req.on('close', () => {
             clearInterval(interval);
-            // Clean up after a delay
+            // Don't clear the file immediately on disconnect to allow for reconnection
             setTimeout(async () => {
                 try {
                     const results = loadResults();
@@ -770,7 +757,7 @@ app.post('/api/hex-results', async (req, res) => {
             timestamp: new Date().toISOString(),
             data: results.data
         }));
-
+        
         res.json({ success: true });
     } catch (error) {
         console.error('Error saving hex results:', error);

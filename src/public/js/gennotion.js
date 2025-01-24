@@ -211,7 +211,7 @@ function listenForResults() {
                     
                 if (data.type === 'progress') {
                     // Set total records from server response
-                    if (data.totalRecords && totalExpectedRecords === 0) {
+                    if (data.totalRecords) {
                         totalExpectedRecords = data.totalRecords;
                         console.log('Total records set from server:', totalExpectedRecords);
                     }
@@ -264,29 +264,35 @@ function listenForResults() {
                         totalChunks
                     );
 
-                    // Only process results when we have all the data and haven't processed it yet
-                    if (!isProcessingResults && 
-                        (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords)) {
-                        isProcessingResults = true;
-                        console.log('Processing complete:', {
-                            totalRecordsReceived: accumulatedData.dataframe_2.length,
-                            expectedRecords: totalExpectedRecords,
-                            chunks: `${currentChunk}/${totalChunks}`
+                    // Only process results when we have all the data
+                    if (accumulatedData.dataframe_2.length >= totalExpectedRecords || data.isLastChunk) {
+                        if (!isProcessingResults) {
+                            isProcessingResults = true;
+                            console.log('Processing complete dataset:', {
+                                totalRecordsReceived: accumulatedData.dataframe_2.length,
+                                expectedRecords: totalExpectedRecords,
+                                chunks: `${currentChunk}/${totalChunks}`
+                            });
+                            
+                            clearTimeout(connectionTimeout);
+                            displayResults({
+                                data: {
+                                    dataframe_2: accumulatedData.dataframe_2,
+                                    dataframe_3: accumulatedData.dataframe_3
+                                },
+                                metadata: {
+                                    status: 'success',
+                                    timestamp: new Date().toISOString()
+                                },
+                                success: true
+                            });
+                            eventSource.close();
+                        }
+                    } else {
+                        console.log('Waiting for more data...', {
+                            received: accumulatedData.dataframe_2.length,
+                            expected: totalExpectedRecords
                         });
-                        
-                        clearTimeout(connectionTimeout);
-                        displayResults({
-                            data: {
-                                dataframe_2: accumulatedData.dataframe_2,
-                                dataframe_3: accumulatedData.dataframe_3
-                            },
-                            metadata: {
-                                status: 'success',
-                                timestamp: new Date().toISOString()
-                            },
-                            success: true
-                        });
-                        eventSource.close();
                     }
                 }
             } catch (error) {
@@ -342,20 +348,16 @@ function displayResults(response) {
 
         // Get the actual records count from the response
         const receivedRecords = response.data.dataframe_2.length;
-        console.log('Received records for display:', {
+        console.log('Processing complete dataset for display:', {
             receivedRecords,
-            totalExpected: totalExpectedRecords || receivedRecords,
+            totalExpected: totalExpectedRecords,
             hasDataframe3: !!response.data.dataframe_3
         });
 
-        // If totalExpectedRecords is not set, use the received records count
-        if (totalExpectedRecords === 0) {
-            totalExpectedRecords = receivedRecords;
-        }
-
-        // If we haven't received all records yet, don't display results
+        // Validate we have all expected records
         if (receivedRecords < totalExpectedRecords) {
-            console.log('Waiting for more records before displaying results...');
+            console.warn(`Incomplete dataset received: ${receivedRecords} of ${totalExpectedRecords} records`);
+            showStatus('Waiting for complete dataset...');
             return;
         }
 
@@ -379,7 +381,12 @@ function displayResults(response) {
         container.className = 'w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden';
         resultsContent.appendChild(container);
         
-        // Create graph visualization with the new data structure
+        console.log('Creating visualization with complete dataset:', {
+            totalRecords: receivedRecords,
+            hasDataframe3: !!response.data.dataframe_3
+        });
+        
+        // Create graph visualization with the complete dataset
         createGraphVisualization(response.data);
         
         showStatus('Analysis complete');

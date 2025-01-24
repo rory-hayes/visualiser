@@ -831,59 +831,55 @@ function initializeGraph(data, container) {
             .append('svg')
             .attr('width', width)
             .attr('height', height)
-            .attr('viewBox', [0, 0, width, height]);
+            .attr('viewBox', [0, 0, width, height])
+            .style('background-color', '#f8fafc'); // Light background
 
         // Add zoom behavior with wider scale range
         const g = svg.append('g');
         const zoom = d3.zoom()
-            .scaleExtent([0.02, 4]) // Further reduced minimum scale
+            .scaleExtent([0.01, 4]) // Further reduced minimum scale
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        // Group nodes by their creation time (if available) or depth
-        const timeGroups = new Map();
+        // Create a timeline container div that sits below the graph
+        const timelineDiv = document.createElement('div');
+        timelineDiv.className = 'timeline-wrapper absolute bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm shadow-lg';
+        timelineDiv.style.height = '100px';
+        container.appendChild(timelineDiv);
+
+        // Pre-calculate node positions based on temporal or hierarchical layout
+        const depthGroups = new Map();
         nodes.forEach(node => {
-            const timeKey = node.createdTime ? 
-                node.createdTime.toISOString().split('T')[0] : 
-                `depth-${node.depth || 0}`;
-            
-            if (!timeGroups.has(timeKey)) {
-                timeGroups.set(timeKey, []);
+            const depth = node.depth || 0;
+            if (!depthGroups.has(depth)) {
+                depthGroups.set(depth, []);
             }
-            timeGroups.get(timeKey).push(node);
+            depthGroups.get(depth).push(node);
         });
 
-        // Sort time groups chronologically
-        const sortedTimeKeys = Array.from(timeGroups.keys()).sort();
-        
-        // Assign initial x positions based on temporal order
-        sortedTimeKeys.forEach((timeKey, index) => {
-            const xPos = (index + 1) * (width / (sortedTimeKeys.length + 1));
-            timeGroups.get(timeKey).forEach(node => {
-                node.x = xPos + (Math.random() - 0.5) * 100; // Add some random offset
-                node.y = height/2 + (Math.random() - 0.5) * height/2;
+        // Assign initial positions based on depth
+        const maxDepth = Math.max(...depthGroups.keys());
+        depthGroups.forEach((groupNodes, depth) => {
+            const xPos = (depth + 1) * (width / (maxDepth + 2));
+            groupNodes.forEach((node, i) => {
+                node.x = xPos + (Math.random() - 0.5) * 50; // Reduced random spread
+                node.y = height/2 + (Math.random() - 0.5) * height/3; // Reduced vertical spread
             });
         });
 
-        // Create the force simulation with temporal layout
+        // Create the force simulation with gentler forces
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(250)) // Increased distance between nodes
+                .distance(100)) // Reduced distance for tighter clustering
             .force('charge', d3.forceManyBody()
-                .strength(-200)
-                .distanceMax(500))
-            .force('collision', d3.forceCollide().radius(60)) // Increased collision radius
-            .force('x', d3.forceX().x(d => {
-                const timeKey = d.createdTime ? 
-                    d.createdTime.toISOString().split('T')[0] : 
-                    `depth-${d.depth || 0}`;
-                const index = sortedTimeKeys.indexOf(timeKey);
-                return (index + 1) * (width / (sortedTimeKeys.length + 1));
-            }).strength(0.2))
+                .strength(-100) // Reduced repulsion
+                .distanceMax(300))
+            .force('collision', d3.forceCollide().radius(30))
+            .force('x', d3.forceX().x(d => (d.depth || 0 + 1) * (width / (maxDepth + 2))).strength(0.3))
             .force('y', d3.forceY(height / 2).strength(0.1))
-            .alphaDecay(0.01) // Slower decay for better settling
-            .velocityDecay(0.4); // Increased velocity decay for stability
+            .alphaDecay(0.02) // Slower decay for smoother settling
+            .velocityDecay(0.5); // Higher velocity decay for less chaotic movement
 
         // Add links with varying strength based on relationship type
         const link = g.append('g')
@@ -891,40 +887,44 @@ function initializeGraph(data, container) {
             .selectAll('line')
             .data(links)
             .join('line')
-            .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6)
+            .attr('stroke', '#cbd5e1') // Lighter stroke color
+            .attr('stroke-opacity', 0.4)
             .attr('stroke-width', d => d.value || 1);
 
-        // Add nodes
+        // Add nodes with transition
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
-            .attr('r', 8)
+            .attr('r', 6) // Slightly smaller nodes
             .attr('fill', d => colorScale(d.type))
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1.5)
             .call(drag(simulation));
 
-        // Add labels with better positioning
+        // Add labels with better positioning and fade-in
         const labels = g.append('g')
             .attr('class', 'labels')
             .selectAll('text')
             .data(nodes)
             .join('text')
-            .attr('dx', 12)
-            .attr('dy', 4)
+            .attr('dx', 8)
+            .attr('dy', 3)
             .text(d => d.title?.substring(0, 20))
-            .style('font-size', '10px')
-            .style('fill', '#666');
+            .style('font-size', '8px')
+            .style('fill', '#64748b')
+            .style('opacity', 0)
+            .transition()
+            .duration(1000)
+            .style('opacity', 0.7);
 
         // Initialize timeline if we have dates
         if (nodes.some(n => n.createdTime)) {
-            // Add padding at the bottom for timeline
-            container.style.paddingBottom = '120px'; // Increased padding
-            initializeTimeline(container, nodes, node, link, svg);
+            initializeTimeline(timelineDiv, nodes, node, link, svg);
         }
 
-        // Update positions on each tick
+        // Smooth animation for initial layout
         simulation.on('tick', () => {
             link
                 .attr('x1', d => d.source.x)
@@ -941,87 +941,21 @@ function initializeGraph(data, container) {
                 .attr('y', d => d.y);
         });
 
-        // Add tooltips
-        const tooltip = d3.select(container)
-            .append('div')
-            .attr('class', 'tooltip')
-            .style('opacity', 0)
-            .style('position', 'absolute')
-            .style('pointer-events', 'none')
-            .style('background-color', 'white')
-            .style('padding', '10px')
-            .style('border-radius', '5px')
-            .style('box-shadow', '0 2px 4px rgba(0,0,0,0.1)')
-            .style('max-width', '300px')
-            .style('z-index', '1000');
-
-        node.on('mouseover', (event, d) => {
-            // Fix node position during hover
-            d.fx = d.x;
-            d.fy = d.y;
-            
-            // Show tooltip
-            tooltip.transition()
-                .duration(200)
-                .style('opacity', .9);
-                
-            tooltip.html(`
-                <div class="p-2">
-                    <strong class="block text-lg mb-1">${d.title}</strong>
-                    <span class="block text-sm text-gray-500">Type: ${d.type}</span>
-                    ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
-                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
-                </div>
-            `)
-            .style('left', (event.pageX + 10) + 'px')
-            .style('top', (event.pageY - 10) + 'px');
-
-            // Highlight connected nodes
-            const connectedNodes = new Set();
-            links.forEach(l => {
-                if (l.source.id === d.id) connectedNodes.add(l.target.id);
-                if (l.target.id === d.id) connectedNodes.add(l.source.id);
-            });
-
-            node.style('opacity', n => connectedNodes.has(n.id) || n.id === d.id ? 1 : 0.1);
-            link.style('opacity', l => 
-                l.source.id === d.id || l.target.id === d.id ? 1 : 0.1
-            );
-        })
-        .on('mouseout', (event, d) => {
-            // Release fixed position
-            d.fx = null;
-            d.fy = null;
-            
-            // Hide tooltip
-            tooltip.transition()
-                .duration(500)
-                .style('opacity', 0);
-
-            // Reset node visibility
-            node.style('opacity', 1);
-            link.style('opacity', 0.6);
-        });
-
-        // Store data for resize handling
-        container._graphData = {
-            nodes,
-            links,
-            width,
-            height
-        };
-
         // Initial zoom to fit with further reduced scale
         const bounds = g.node().getBBox();
-        const scale = 0.1 / Math.max(bounds.width / width, bounds.height / height); // Further reduced initial scale
+        const scale = 0.05 / Math.max(bounds.width / width, bounds.height / height);
         const translate = [
             (width - scale * bounds.width) / 2 - scale * bounds.x,
             (height - scale * bounds.height) / 2 - scale * bounds.y
         ];
-        svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
-        // Start simulation with lower alpha
-        simulation.alpha(0.2).restart(); // Reduced initial alpha for gentler start
+        // Smooth transition to initial view
+        svg.transition()
+            .duration(1000)
+            .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
+
+        // Start simulation with very low alpha for gentle start
+        simulation.alpha(0.1).restart();
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);

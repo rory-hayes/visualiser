@@ -8,6 +8,7 @@ import { InsightsPanel } from './components/InsightsPanel.js';
 import { EventManager } from './gennotion/core/EventManager.js';
 import { DataProcessor } from './gennotion/core/DataProcessor.js';
 import { UIManager } from './gennotion/core/UIManager.js';
+import { GraphVisualizer } from './gennotion/visualization/Graph.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     const isLandingPage = window.location.pathname === '/';
@@ -90,6 +91,7 @@ class GenNotion {
         this.uiManager = new UIManager();
         this.generateBtn = document.getElementById('generateBtn');
         this.workspaceIdsInput = document.getElementById('workspaceIds');
+        this.graphVisualizer = null;
         
         this.initialize();
     }
@@ -257,8 +259,19 @@ class GenNotion {
             this.uiManager.showResults();
             this.uiManager.clearResults();
             
-            // TODO: Add metrics display and graph visualization
-            // These will be implemented in separate visualization modules
+            // Create graph container
+            const container = this.uiManager.createGraphContainer();
+            
+            // Initialize and render graph
+            this.graphVisualizer = new GraphVisualizer(container);
+            this.graphVisualizer.initialize(response);
+            
+            // Add window resize handler
+            window.addEventListener('resize', () => {
+                if (this.graphVisualizer) {
+                    this.graphVisualizer.resize();
+                }
+            });
             
             this.uiManager.showStatus('Analysis complete');
         } catch (error) {

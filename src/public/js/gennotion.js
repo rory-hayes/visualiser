@@ -14,6 +14,9 @@ const resultsContent = document.getElementById('resultsContent');
 // Event Source for receiving results
 let eventSource = null;
 
+// Move totalExpectedRecords to file scope
+let totalExpectedRecords = 0;
+
 // Event Listeners
 generateBtn.addEventListener('click', handleGenerateReport);
 
@@ -122,7 +125,6 @@ function listenForResults() {
         dataframe_3: null
     };
     let lastProcessedChunk = 0;
-    let totalExpectedRecords = 0;
     let connectionTimeout = null;
     let isProcessingResults = false;
     
@@ -338,13 +340,18 @@ function displayResults(response) {
             throw new Error('Invalid response format');
         }
 
-        // Validate we have all the expected records
+        // Get the actual records count from the response
         const receivedRecords = response.data.dataframe_2.length;
         console.log('Received records for display:', {
             receivedRecords,
-            totalExpected: totalExpectedRecords,
+            totalExpected: totalExpectedRecords || receivedRecords,
             hasDataframe3: !!response.data.dataframe_3
         });
+
+        // If totalExpectedRecords is not set, use the received records count
+        if (totalExpectedRecords === 0) {
+            totalExpectedRecords = receivedRecords;
+        }
 
         // If we haven't received all records yet, don't display results
         if (receivedRecords < totalExpectedRecords) {
@@ -391,11 +398,7 @@ function createGraphVisualization(graphData) {
         }
 
         const totalRecords = graphData.dataframe_2.length;
-        console.log('Creating visualization with data:', {
-            hasDataframe2: true,
-            recordCount: totalRecords,
-            sampleRecord: graphData.dataframe_2[0]
-        });
+        console.log('Starting visualization with total records:', totalRecords);
 
         const container = document.getElementById('graph-container');
         if (!container) {
@@ -406,35 +409,9 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Transform data in chunks to avoid blocking UI
-        console.log('Starting data transformation for all records:', totalRecords);
-        const CHUNK_SIZE = 1000;
-        const chunks = [];
-        
-        for (let i = 0; i < totalRecords; i += CHUNK_SIZE) {
-            chunks.push(graphData.dataframe_2.slice(i, Math.min(i + CHUNK_SIZE, totalRecords)));
-        }
-
-        let transformedData = {
-            nodes: [],
-            links: []
-        };
-
-        console.log(`Processing ${chunks.length} chunks of data...`);
-
-        // Process each chunk
-        chunks.forEach((chunk, index) => {
-            const chunkResult = transformDataForGraph(chunk);
-            transformedData.nodes = transformedData.nodes.concat(chunkResult.nodes);
-            transformedData.links = transformedData.links.concat(chunkResult.links);
-            
-            console.log(`Processed chunk ${index + 1}/${chunks.length}:`, {
-                nodesInChunk: chunkResult.nodes.length,
-                linksInChunk: chunkResult.links.length,
-                totalNodesProcessed: transformedData.nodes.length,
-                totalLinksProcessed: transformedData.links.length
-            });
-        });
+        // Transform all data at once
+        console.log('Starting data transformation for all records');
+        const transformedData = transformDataForGraph(graphData.dataframe_2);
 
         if (!transformedData.nodes.length) {
             console.warn('No nodes to visualize');
@@ -449,7 +426,7 @@ function createGraphVisualization(graphData) {
             nodeTypes: [...new Set(transformedData.nodes.map(n => n.type))]
         });
 
-        // Initialize the graph with the complete transformed data
+        // Initialize the graph with all transformed data
         initializeGraph(transformedData, container);
 
     } catch (error) {
@@ -470,8 +447,7 @@ function transformDataForGraph(data) {
         }
 
         console.log('Starting graph data transformation:', {
-            totalRecords: data.length,
-            sampleRecord: data[0]
+            totalRecords: data.length
         });
 
         // Initialize data structures
@@ -479,117 +455,101 @@ function transformDataForGraph(data) {
         const links = new Set();
         const nodeMap = new Map();
         const depthMap = new Map();
-        let processedCount = 0;
-
-        // Process nodes in smaller chunks to avoid UI blocking
-        const CHUNK_SIZE = 250; // Smaller chunks for smoother processing
-        const totalChunks = Math.ceil(data.length / CHUNK_SIZE);
 
         // First pass: Create all nodes
-        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-            const chunk = data.slice(i, i + CHUNK_SIZE);
-            processedCount += chunk.length;
-            
-            chunk.forEach(item => {
-                if (!item.ID) return;
+        console.log('Creating nodes...');
+        data.forEach((item, index) => {
+            if (!item.ID) return;
 
-                const depth = parseInt(item.DEPTH) || 0;
-                if (!depthMap.has(depth)) {
-                    depthMap.set(depth, new Set());
-                }
-                depthMap.get(depth).add(item.ID);
+            const depth = parseInt(item.DEPTH) || 0;
+            if (!depthMap.has(depth)) {
+                depthMap.set(depth, new Set());
+            }
+            depthMap.get(depth).add(item.ID);
 
-                if (!nodeMap.has(item.ID)) {
-                    let type = item.TYPE?.toLowerCase() || 'page';
-                    type = type.replace(/_page$/, '')
-                             .replace(/^page_/, '')
-                             .replace(/^collection_view_/, 'view_');
+            if (!nodeMap.has(item.ID)) {
+                let type = item.TYPE?.toLowerCase() || 'page';
+                type = type.replace(/_page$/, '')
+                         .replace(/^page_/, '')
+                         .replace(/^collection_view_/, 'view_');
 
-                    const node = {
-                        id: item.ID,
-                        title: type,
-                        type: type,
-                        depth: depth,
-                        parentId: item.PARENT_ID,
-                        spaceId: item.SPACE_ID,
-                        parentPageId: item.PARENT_PAGE_ID,
-                        ancestors: [],
-                        CREATED_TIME: item.CREATED_TIME
-                    };
+                const node = {
+                    id: item.ID,
+                    title: type,
+                    type: type,
+                    depth: depth,
+                    parentId: item.PARENT_ID,
+                    spaceId: item.SPACE_ID,
+                    parentPageId: item.PARENT_PAGE_ID,
+                    ancestors: [],
+                    CREATED_TIME: item.CREATED_TIME
+                };
 
-                    try {
-                        if (item.ANCESTORS) {
-                            const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
-                            node.ancestors = JSON.parse(cleanedAncestors);
-                        }
-                    } catch (error) {
-                        console.warn('Error parsing ancestors for node:', item.ID);
-                        node.ancestors = [];
+                try {
+                    if (item.ANCESTORS) {
+                        const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
+                        node.ancestors = JSON.parse(cleanedAncestors);
                     }
-
-                    nodes.push(node);
-                    nodeMap.set(item.ID, node);
+                } catch (error) {
+                    console.warn('Error parsing ancestors for node:', item.ID);
+                    node.ancestors = [];
                 }
-            });
 
-            // Log progress for first pass
-            const progress = Math.round((processedCount / data.length) * 100);
-            console.log(`Node creation progress: ${processedCount}/${data.length} (${progress}%)`);
-        }
+                nodes.push(node);
+                nodeMap.set(item.ID, node);
+            }
 
-        // Reset for second pass
-        processedCount = 0;
+            if (index % 10000 === 0) {
+                console.log(`Processed ${index + 1}/${data.length} nodes`);
+            }
+        });
 
         // Second pass: Create all links
-        for (let i = 0; i < nodes.length; i += CHUNK_SIZE) {
-            const chunk = nodes.slice(i, i + CHUNK_SIZE);
-            processedCount += chunk.length;
+        console.log('Creating links...');
+        nodes.forEach((node, index) => {
+            // Direct parent-child relationship
+            if (node.parentId && nodeMap.has(node.parentId)) {
+                links.add(JSON.stringify({
+                    source: node.parentId,
+                    target: node.id,
+                    type: 'parent-child',
+                    value: 3
+                }));
+            }
 
-            chunk.forEach(node => {
-                // Direct parent-child relationship
-                if (node.parentId && nodeMap.has(node.parentId)) {
-                    links.add(JSON.stringify({
-                        source: node.parentId,
-                        target: node.id,
-                        type: 'parent-child',
-                        value: 3
-                    }));
-                }
-
-                // Process ancestors
-                if (Array.isArray(node.ancestors)) {
-                    for (let i = 0; i < node.ancestors.length - 1; i++) {
-                        const currentAncestor = node.ancestors[i];
-                        const parentAncestor = node.ancestors[i + 1];
-                        
-                        if (nodeMap.has(currentAncestor) && nodeMap.has(parentAncestor)) {
-                            links.add(JSON.stringify({
-                                source: parentAncestor,
-                                target: currentAncestor,
-                                type: 'ancestor-chain',
-                                value: 2
-                            }));
-                        }
+            // Process ancestors
+            if (Array.isArray(node.ancestors)) {
+                for (let i = 0; i < node.ancestors.length - 1; i++) {
+                    const currentAncestor = node.ancestors[i];
+                    const parentAncestor = node.ancestors[i + 1];
+                    
+                    if (nodeMap.has(currentAncestor) && nodeMap.has(parentAncestor)) {
+                        links.add(JSON.stringify({
+                            source: parentAncestor,
+                            target: currentAncestor,
+                            type: 'ancestor-chain',
+                            value: 2
+                        }));
                     }
                 }
+            }
 
-                // Connect to parent page if different from direct parent
-                if (node.parentPageId && 
-                    nodeMap.has(node.parentPageId) && 
-                    node.parentPageId !== node.parentId) {
-                    links.add(JSON.stringify({
-                        source: node.parentPageId,
-                        target: node.id,
-                        type: 'page-hierarchy',
-                        value: 1
-                    }));
-                }
-            });
+            // Connect to parent page if different from direct parent
+            if (node.parentPageId && 
+                nodeMap.has(node.parentPageId) && 
+                node.parentPageId !== node.parentId) {
+                links.add(JSON.stringify({
+                    source: node.parentPageId,
+                    target: node.id,
+                    type: 'page-hierarchy',
+                    value: 1
+                }));
+            }
 
-            // Log progress for second pass
-            const progress = Math.round((processedCount / nodes.length) * 100);
-            console.log(`Link creation progress: ${processedCount}/${nodes.length} (${progress}%)`);
-        }
+            if (index % 10000 === 0) {
+                console.log(`Processed ${index + 1}/${nodes.length} links`);
+            }
+        });
 
         // Convert links to array and resolve references
         const processedLinks = Array.from(links).map(linkStr => {

@@ -331,10 +331,32 @@ function displayResults(response) {
         const metrics = calculateMetrics(response.data.dataframe_2, response.data.dataframe_3);
         updateMetricsDisplay(metrics);
         
-        // Create or ensure graph container exists
+        // Create graph container
         let container = document.createElement('div');
         container.id = 'graph-container';
         container.className = 'w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden';
+        
+        // Add graph controls
+        container.innerHTML = `
+            <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
+                <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                </button>
+                <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
+                    </svg>
+                </button>
+                <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                </button>
+            </div>
+        `;
+        
         resultsContent.appendChild(container);
         
         // Create graph visualization with the new data structure
@@ -615,40 +637,7 @@ function formatResults(graphData, insightsData) {
 
             <div class="mt-6">
                 <h3 class="font-semibold mb-3">Workspace Visualization</h3>
-                <div id="graph-container" class="w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden">
-                    <!-- Graph Controls -->
-                    <div class="graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2">
-                        <button class="graph-control-button hover:bg-gray-100" id="zoomIn" title="Zoom In">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                            </svg>
-                        </button>
-                        <button class="graph-control-button hover:bg-gray-100" id="zoomOut" title="Zoom Out">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/>
-                            </svg>
-                        </button>
-                        <button class="graph-control-button hover:bg-gray-100" id="resetZoom" title="Reset View">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <!-- Timeline Container -->
-                    <div class="timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4">
-                        <div class="flex justify-between mb-2">
-                            <span class="text-sm font-medium text-gray-600" id="timelineStart"></span>
-                            <span class="text-sm font-medium text-gray-600" id="timelineEnd"></span>
-                        </div>
-                        <div class="timeline-slider relative h-2 bg-gray-200 rounded-full cursor-pointer" id="timelineSlider">
-                            <div class="timeline-progress absolute h-full bg-blue-500 rounded-full" id="timelineProgress"></div>
-                            <div class="timeline-handle absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-500 rounded-full -ml-2 cursor-grab active:cursor-grabbing" id="timelineHandle">
-                                <div class="timeline-tooltip absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-800 text-white text-xs rounded whitespace-nowrap" id="timelineTooltip"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <!-- Graph container will be created by createGraphVisualization -->
             </div>
         </div>
     `;
@@ -1044,6 +1033,12 @@ function initializeTimeline(container, nodes, node, link, svg) {
             End timestamp: ${endDate.getTime()}
         `);
 
+        // Remove existing timeline if present
+        const existingTimeline = container.querySelector('.timeline-container');
+        if (existingTimeline) {
+            existingTimeline.remove();
+        }
+
         // Add timeline slider
         const timelineContainer = document.createElement('div');
         timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
@@ -1054,14 +1049,18 @@ function initializeTimeline(container, nodes, node, link, svg) {
                 <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
                 <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
             </div>
-            <input type="range" 
-                min="${startDate?.getTime() || 0}" 
-                max="${endDate?.getTime() || 100}" 
-                value="${endDate?.getTime() || 100}" 
-                step="86400000"
-                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                id="timelineSlider">
+            <div class="relative w-full">
+                <input type="range" 
+                    min="${startDate?.getTime() || 0}" 
+                    max="${endDate?.getTime() || 100}" 
+                    value="${endDate?.getTime() || 100}" 
+                    step="86400000"
+                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    id="timelineSlider">
+                <div class="timeline-progress absolute left-0 top-0 h-2 bg-blue-500 rounded-lg pointer-events-none" style="width: 100%"></div>
+            </div>
         `;
+        
         container.appendChild(timelineContainer);
 
         // Timeline slider functionality
@@ -1083,6 +1082,20 @@ function initializeTimeline(container, nodes, node, link, svg) {
             const currentTime = new Date(parseInt(event.target.value));
             // Set to end of selected day
             currentTime.setHours(23, 59, 59, 999);
+            
+            // Update progress bar width
+            const progress = ((currentTime.getTime() - startDate.getTime()) / (endDate.getTime() - startDate.getTime())) * 100;
+            const progressBar = timelineContainer.querySelector('.timeline-progress');
+            if (progressBar) {
+                progressBar.style.width = `${progress}%`;
+            }
+            
+            // Update current date display
+            const currentDateDisplay = timelineContainer.querySelector('#currentDate');
+            if (currentDateDisplay) {
+                currentDateDisplay.textContent = currentTime.toLocaleDateString();
+            }
+            
             console.log('Timeline slider moved:', {
                 date: currentTime.toLocaleDateString(),
                 timestamp: currentTime.getTime()

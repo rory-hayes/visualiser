@@ -211,7 +211,8 @@ function listenForResults() {
             const data = JSON.parse(event.data);
                 
             if (data.type === 'progress') {
-                totalExpectedRecords = data.totalRecords || 121000; // Set default if not provided
+                // Get total records from server or use dataframe size
+                totalExpectedRecords = data.totalRecords || 121722; // Set to actual dataframe size
                 showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
                 showProgress(data.recordsProcessed, totalExpectedRecords, data.currentChunk, data.totalChunks);
                 return;
@@ -224,6 +225,7 @@ function listenForResults() {
 
             const newRecords = data.data.data.dataframe_2;
             const currentChunk = data.currentChunk;
+            const totalChunks = data.totalChunks || Math.ceil(totalExpectedRecords / 250); // 250 records per chunk
 
             // Only process new chunks
             if (currentChunk > lastProcessedChunk) {
@@ -239,24 +241,26 @@ function listenForResults() {
                 
                 console.log('Received chunk:', {
                     currentChunk,
-                    totalChunks: data.totalChunks,
+                    totalChunks,
                     newRecordsCount: newRecords.length,
                     accumulatedRecords: accumulatedData.dataframe_2.length,
-                    totalExpectedRecords
+                    totalExpectedRecords,
+                    isLastChunk: data.isLastChunk
                 });
 
                 showProgress(
                     accumulatedData.dataframe_2.length, 
                     totalExpectedRecords,
                     currentChunk,
-                    data.totalChunks
+                    totalChunks
                 );
 
-                // If this is the last chunk or we've received all expected records
+                // Process results only when we have all the data
                 if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
                     console.log('Processing complete:', {
                         totalRecordsReceived: accumulatedData.dataframe_2.length,
-                        expectedRecords: totalExpectedRecords
+                        expectedRecords: totalExpectedRecords,
+                        chunks: `${currentChunk}/${totalChunks}`
                     });
                     
                     clearTimeout(connectionTimeout);
@@ -419,15 +423,17 @@ function transformDataForGraph(data) {
         });
 
         // Process nodes in chunks to avoid blocking the UI
-        const CHUNK_SIZE = 1000;
+        const CHUNK_SIZE = 500; // Reduced chunk size for smoother processing
         const nodes = [];
         const links = new Set();
         const nodeMap = new Map();
         const depthMap = new Map();
+        let processedCount = 0;
 
         // Process nodes in chunks
         for (let i = 0; i < data.length; i += CHUNK_SIZE) {
             const chunk = data.slice(i, i + CHUNK_SIZE);
+            processedCount += chunk.length;
             
             // First pass for chunk: Create nodes
             chunk.forEach(item => {
@@ -518,7 +524,7 @@ function transformDataForGraph(data) {
             });
 
             // Log progress
-            console.log(`Processed chunk ${i/CHUNK_SIZE + 1}/${Math.ceil(data.length/CHUNK_SIZE)}`);
+            console.log(`Processed ${processedCount}/${data.length} records (${Math.round(processedCount/data.length*100)}%)`);
         }
 
         // Convert links to array and resolve references

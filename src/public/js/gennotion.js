@@ -836,26 +836,56 @@ function initializeGraph(data, container) {
         // Add zoom behavior with wider scale range
         const g = svg.append('g');
         const zoom = d3.zoom()
-            .scaleExtent([0.05, 4]) // Reduced minimum scale to allow more zoom out
+            .scaleExtent([0.02, 4]) // Further reduced minimum scale
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        // Create the force simulation with gentler forces and more spread
+        // Group nodes by their creation time (if available) or depth
+        const timeGroups = new Map();
+        nodes.forEach(node => {
+            const timeKey = node.createdTime ? 
+                node.createdTime.toISOString().split('T')[0] : 
+                `depth-${node.depth || 0}`;
+            
+            if (!timeGroups.has(timeKey)) {
+                timeGroups.set(timeKey, []);
+            }
+            timeGroups.get(timeKey).push(node);
+        });
+
+        // Sort time groups chronologically
+        const sortedTimeKeys = Array.from(timeGroups.keys()).sort();
+        
+        // Assign initial x positions based on temporal order
+        sortedTimeKeys.forEach((timeKey, index) => {
+            const xPos = (index + 1) * (width / (sortedTimeKeys.length + 1));
+            timeGroups.get(timeKey).forEach(node => {
+                node.x = xPos + (Math.random() - 0.5) * 100; // Add some random offset
+                node.y = height/2 + (Math.random() - 0.5) * height/2;
+            });
+        });
+
+        // Create the force simulation with temporal layout
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(200)) // Increased distance between nodes
+                .distance(250)) // Increased distance between nodes
             .force('charge', d3.forceManyBody()
-                .strength(-150) // Reduced repulsion force
-                .distanceMax(400)) // Increased maximum distance
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(50)) // Increased collision radius
-            .force('x', d3.forceX(width / 2).strength(0.03)) // Reduced x force
-            .force('y', d3.forceY(height / 2).strength(0.03)) // Reduced y force
-            .alphaDecay(0.02)
-            .velocityDecay(0.3);
+                .strength(-200)
+                .distanceMax(500))
+            .force('collision', d3.forceCollide().radius(60)) // Increased collision radius
+            .force('x', d3.forceX().x(d => {
+                const timeKey = d.createdTime ? 
+                    d.createdTime.toISOString().split('T')[0] : 
+                    `depth-${d.depth || 0}`;
+                const index = sortedTimeKeys.indexOf(timeKey);
+                return (index + 1) * (width / (sortedTimeKeys.length + 1));
+            }).strength(0.2))
+            .force('y', d3.forceY(height / 2).strength(0.1))
+            .alphaDecay(0.01) // Slower decay for better settling
+            .velocityDecay(0.4); // Increased velocity decay for stability
 
-        // Add links
+        // Add links with varying strength based on relationship type
         const link = g.append('g')
             .attr('class', 'links')
             .selectAll('line')
@@ -875,7 +905,7 @@ function initializeGraph(data, container) {
             .attr('fill', d => colorScale(d.type))
             .call(drag(simulation));
 
-        // Add labels
+        // Add labels with better positioning
         const labels = g.append('g')
             .attr('class', 'labels')
             .selectAll('text')
@@ -889,8 +919,8 @@ function initializeGraph(data, container) {
 
         // Initialize timeline if we have dates
         if (nodes.some(n => n.createdTime)) {
-            // Ensure container has enough height for timeline
-            container.style.paddingBottom = '80px';
+            // Add padding at the bottom for timeline
+            container.style.paddingBottom = '120px'; // Increased padding
             initializeTimeline(container, nodes, node, link, svg);
         }
 
@@ -981,9 +1011,9 @@ function initializeGraph(data, container) {
             height
         };
 
-        // Initial zoom to fit with reduced scale
+        // Initial zoom to fit with further reduced scale
         const bounds = g.node().getBBox();
-        const scale = 0.2 / Math.max(bounds.width / width, bounds.height / height); // Further reduced initial scale
+        const scale = 0.1 / Math.max(bounds.width / width, bounds.height / height); // Further reduced initial scale
         const translate = [
             (width - scale * bounds.width) / 2 - scale * bounds.x,
             (height - scale * bounds.height) / 2 - scale * bounds.y
@@ -991,7 +1021,7 @@ function initializeGraph(data, container) {
         svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
         // Start simulation with lower alpha
-        simulation.alpha(0.3).restart(); // Reduced initial alpha for gentler start
+        simulation.alpha(0.2).restart(); // Reduced initial alpha for gentler start
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);
@@ -1025,14 +1055,11 @@ function initializeTimeline(container, nodes, node, link, svg) {
         endDate.setHours(23, 59, 59, 999);  // End of day
 
         // Log date range information
-        console.log(`
-            Timeline Initialization:
+        console.log(`Timeline Initialization:
             Total nodes: ${nodes.length}
             Nodes with valid dates: ${validDates.length}
             Nodes without dates: ${nodes.length - validDates.length}
             Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
-            Start timestamp: ${startDate.getTime()}
-            End timestamp: ${endDate.getTime()}
         `);
 
         // Remove existing timeline if present
@@ -1041,9 +1068,11 @@ function initializeTimeline(container, nodes, node, link, svg) {
             existingTimeline.remove();
         }
 
-        // Add timeline slider
+        // Create timeline container with absolute positioning
         const timelineContainer = document.createElement('div');
-        timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
+        timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-50 bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-4';
+        timelineContainer.style.maxWidth = 'calc(100% - 2rem)';
+        timelineContainer.style.margin = '0 auto';
         
         timelineContainer.innerHTML = `
             <div class="flex justify-between items-center mb-2">
@@ -1063,6 +1092,7 @@ function initializeTimeline(container, nodes, node, link, svg) {
             </div>
         `;
         
+        // Append timeline to the container instead of document body
         container.appendChild(timelineContainer);
 
         // Timeline slider functionality
@@ -1074,10 +1104,6 @@ function initializeTimeline(container, nodes, node, link, svg) {
         
         // Set initial state to show all nodes
         const initialTime = new Date(endDate);
-        console.log('Setting initial timeline state:', {
-            date: initialTime.toLocaleDateString(),
-            timestamp: initialTime.getTime()
-        });
         updateNodesVisibility(initialTime, node, link, nodes);
 
         slider.addEventListener('input', (event) => {
@@ -1098,10 +1124,6 @@ function initializeTimeline(container, nodes, node, link, svg) {
                 currentDateDisplay.textContent = currentTime.toLocaleDateString();
             }
             
-            console.log('Timeline slider moved:', {
-                date: currentTime.toLocaleDateString(),
-                timestamp: currentTime.getTime()
-            });
             updateNodesVisibility(currentTime, node, link, nodes);
         });
 
@@ -1109,11 +1131,11 @@ function initializeTimeline(container, nodes, node, link, svg) {
         svg.on('click', (event) => {
             if (event.target.tagName === 'svg') {
                 const currentTime = new Date(parseInt(slider.value));
-                // Set to end of selected day
                 currentTime.setHours(23, 59, 59, 999);
                 updateNodesVisibility(currentTime, node, link, nodes);
             }
         });
+
     } catch (error) {
         console.error('Error in initializeTimeline:', error);
         console.error('Error details:', {

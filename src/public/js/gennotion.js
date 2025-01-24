@@ -210,16 +210,24 @@ function listenForResults() {
         eventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                console.log('Received event data:', data); // Debug log
                 
                 // Update total records and chunks from metadata
                 if (data.metadata) {
                     totalChunks = data.metadata.total_chunks || totalChunks;
                     totalRecords = data.metadata.total_records || totalRecords;
+                    console.log('Updated metadata:', { totalChunks, totalRecords }); // Debug log
                 }
 
-                if (!data.data?.dataframe_2) {
-                    console.warn('No dataframe_2 in received data');
+                // Handle case where data might be empty or missing
+                if (!data.data) {
+                    console.warn('No data field in received message');
                     return;
+                }
+
+                // Initialize dataframe_2 as empty array if not present
+                if (!data.data.dataframe_2) {
+                    data.data.dataframe_2 = [];
                 }
 
                 const newRecords = data.data.dataframe_2;
@@ -237,13 +245,14 @@ function listenForResults() {
                         accumulatedData.dataframe_3 = data.data.dataframe_3;
                     }
                     
-                    console.log('Received chunk:', {
+                    console.log('Processed chunk:', {
                         currentChunk,
                         totalChunks,
                         newRecordsCount: newRecords.length,
                         accumulatedRecords: accumulatedData.dataframe_2.length,
                         totalRecords,
-                        processedChunks: processedChunks.size
+                        processedChunks: processedChunks.size,
+                        hasDataframe3: !!accumulatedData.dataframe_3
                     });
 
                     showProgress(
@@ -259,7 +268,8 @@ function listenForResults() {
                         console.log('Processing complete dataset:', {
                             totalRecordsReceived: accumulatedData.dataframe_2.length,
                             expectedRecords: totalRecords,
-                            chunks: `${processedChunks.size}/${totalChunks}`
+                            chunks: `${processedChunks.size}/${totalChunks}`,
+                            hasDataframe3: !!accumulatedData.dataframe_3
                         });
                         
                         clearTimeout(connectionTimeout);
@@ -280,27 +290,57 @@ function listenForResults() {
                     }
                 }
             } catch (error) {
-                console.error('Error processing message:', error);
+                console.error('Error processing message:', error, 'Raw event data:', event.data);
                 showStatus(`Error processing data: ${error.message}`, false);
             }
         };
 
         eventSource.onerror = (error) => {
             console.error('EventSource error:', error);
-            console.log('EventSource readyState:', eventSource.readyState);
-                
+            console.log('EventSource readyState:', eventSource.readyState, 'URL:', eventSource.url);
+            
+            // Check if we have accumulated any data
+            const hasAccumulatedData = accumulatedData.dataframe_2.length > 0;
+            
             if (eventSource.readyState === EventSource.CLOSED) {
                 clearTimeout(connectionTimeout);
+                
+                // If we have accumulated data and this is a connection close, try to process what we have
+                if (hasAccumulatedData && processedChunks.size > 0) {
+                    console.log('Connection closed but processing accumulated data:', {
+                        recordsReceived: accumulatedData.dataframe_2.length,
+                        chunksProcessed: processedChunks.size
+                    });
+                    
+                    isProcessingResults = true;
+                    displayResults({
+                        data: {
+                            dataframe_2: accumulatedData.dataframe_2,
+                            dataframe_3: accumulatedData.dataframe_3
+                        },
+                        metadata: { partial: true },
+                        success: true
+                    });
+                    return;
+                }
+                
+                // Otherwise attempt to reconnect
                 if (retryCount < MAX_RETRIES) {
                     retryCount++;
-                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
+                    const backoffTime = Math.min(2000 * Math.pow(2, retryCount - 1), 30000); // Exponential backoff
+                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES} in ${backoffTime/1000}s...`, true);
+                    
                     setTimeout(() => {
+                        console.log(`Attempting reconnection ${retryCount}/${MAX_RETRIES}`);
                         eventSource.close();
                         connectEventSource();
-                    }, 2000 * retryCount);
+                    }, backoffTime);
                 } else {
                     showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
                 }
+            } else if (eventSource.readyState === EventSource.CONNECTING) {
+                console.log('EventSource is attempting to reconnect...');
+                showStatus('Reconnecting to server...', true);
             }
         };
 

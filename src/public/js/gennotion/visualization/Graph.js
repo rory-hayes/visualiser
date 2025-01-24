@@ -19,7 +19,14 @@ export class GraphVisualizer {
             chargeStrength: -1000,
             collisionRadius: 30,
             centerForceStrength: 0.3,
-            initialZoom: 0.6
+            initialZoom: 0.6,
+            chunkSize: 500,
+            maxVisibleNodes: 1000,
+            clusterThreshold: 50,
+            lodThresholds: {
+                labels: 0.5,
+                details: 0.3
+            }
         };
 
         // Color scale for different node types
@@ -27,12 +34,24 @@ export class GraphVisualizer {
             .domain(['page', 'collection_view_page', 'collection', 'database', 'table'])
             .range(['#4F46E5', '#10B981', '#EC4899', '#F59E0B', '#6366F1'])
             .unknown('#94A3B8');
+
+        // Add state tracking
+        this.state = {
+            processedNodes: 0,
+            currentChunk: 0,
+            isProcessing: false,
+            zoomLevel: 1
+        };
+
+        // Initialize quadtree for spatial indexing
+        this.quadtree = null;
     }
 
-    initialize(data) {
+    async initialize(data) {
         this.setupContainer();
-        this.processData(data);
+        await this.processDataInChunks(data);
         this.setupSimulation();
+        this.setupQuadtree();
         this.render();
         this.setupZoom();
         this.initialZoom();
@@ -56,56 +75,99 @@ export class GraphVisualizer {
         this.zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on('zoom', (event) => {
+                this.state.zoomLevel = event.transform.k;
                 this.g.attr('transform', event.transform);
+                
+                // Check if we need to switch rendering mode
+                if (this.shouldUpdateDetail(event.transform.k)) {
+                    this.render();
+                }
             });
 
         this.svg.call(this.zoom);
     }
 
-    processData(data) {
+    async processDataInChunks(data) {
         if (!data?.data?.dataframe_2) {
             console.error('Invalid data format');
             return;
         }
 
         const df2 = data.data.dataframe_2;
+        this.nodes = [];
+        this.links = [];
+        const nodeMap = new Map();
 
-        // Process nodes with proper date handling
-        this.nodes = df2.map(item => {
-            let createdTime = null;
-            if (item.CREATED_TIME) {
-                const timestamp = typeof item.CREATED_TIME === 'string' ? 
-                    parseInt(item.CREATED_TIME) : item.CREATED_TIME;
-                createdTime = new Date(timestamp);
+        // Process nodes in chunks
+        for (let i = 0; i < df2.length; i += this.config.chunkSize) {
+            await new Promise(resolve => setTimeout(resolve, 0)); // Yield to main thread
+            
+            const chunk = df2.slice(i, Math.min(i + this.config.chunkSize, df2.length));
+            
+            // Process chunk
+            chunk.forEach(item => {
+                const node = this.createNode(item);
+                this.nodes.push(node);
+                nodeMap.set(node.id, node);
+            });
+
+            this.state.processedNodes = this.nodes.length;
+            this.state.currentChunk++;
+
+            // If we have a progress callback, call it
+            if (this.onProgress) {
+                this.onProgress(this.state.processedNodes, df2.length);
+            }
+        }
+
+        // Create links after all nodes are processed
+        await this.createLinks(nodeMap);
+        
+        // Initialize clustering
+        this.initializeClusters();
+    }
+
+    createNode(item) {
+        let createdTime = null;
+        if (item.CREATED_TIME) {
+            const timestamp = typeof item.CREATED_TIME === 'string' ? 
+                parseInt(item.CREATED_TIME) : item.CREATED_TIME;
+            createdTime = new Date(timestamp);
+        }
+
+        return {
+            id: item.ID,
+            title: item.TEXT || 'Untitled',
+            type: item.TYPE || 'page',
+            createdTime,
+            parent: item.PARENT_ID,
+            depth: Number(item.DEPTH) || 0,
+            x: Math.random() * this.width,
+            y: Math.random() * this.height,
+            cluster: null
+        };
+    }
+
+    async createLinks(nodeMap) {
+        const tempLinks = [];
+        for (const node of this.nodes) {
+            if (node.parent && nodeMap.has(node.parent)) {
+                tempLinks.push({
+                    source: nodeMap.get(node.parent),
+                    target: node,
+                    value: 1
+                });
             }
 
-            return {
-                id: item.ID,
-                title: item.TEXT || 'Untitled',
-                type: item.TYPE || 'page',
-                createdTime,
-                parent: item.PARENT_ID,
-                depth: Number(item.DEPTH) || 0
-            };
-        });
-
-        // Create links
-        const nodeMap = new Map(this.nodes.map(n => [n.id, n]));
-        this.links = this.nodes
-            .filter(node => node.parent && nodeMap.has(node.parent))
-            .map(node => ({
-                source: nodeMap.get(node.parent),
-                target: node,
-                value: 1
-            }));
-
-        // Calculate graph metrics for layout optimization
-        const avgDegree = (2 * this.links.length) / this.nodes.length;
-        const graphDensity = (2 * this.links.length) / (this.nodes.length * (this.nodes.length - 1));
-
-        // Adjust force parameters based on graph metrics
-        this.config.linkDistance = Math.max(100, Math.min(200, 150 / Math.sqrt(graphDensity)));
-        this.config.chargeStrength = Math.min(-500, -1000 * Math.sqrt(avgDegree));
+            if (tempLinks.length >= this.config.chunkSize) {
+                await new Promise(resolve => setTimeout(resolve, 0)); // Yield to main thread
+                this.links.push(...tempLinks);
+                tempLinks.length = 0;
+            }
+        }
+        if (tempLinks.length > 0) {
+            this.links.push(...tempLinks);
+        }
     }
 
     setupSimulation() {
@@ -127,12 +189,95 @@ export class GraphVisualizer {
             .velocityDecay(0.3);
     }
 
+    setupQuadtree() {
+        this.quadtree = d3.quadtree()
+            .x(d => d.x)
+            .y(d => d.y)
+            .addAll(this.nodes);
+    }
+
+    initializeClusters() {
+        if (this.nodes.length <= this.config.maxVisibleNodes) return;
+
+        const clusters = new Map();
+        const gridSize = Math.sqrt(this.width * this.height / this.config.clusterThreshold);
+
+        this.nodes.forEach(node => {
+            const gridX = Math.floor(node.x / gridSize);
+            const gridY = Math.floor(node.y / gridSize);
+            const key = `${gridX},${gridY}`;
+
+            if (!clusters.has(key)) {
+                clusters.set(key, {
+                    x: (gridX + 0.5) * gridSize,
+                    y: (gridY + 0.5) * gridSize,
+                    nodes: []
+                });
+            }
+            clusters.get(key).nodes.push(node);
+            node.cluster = key;
+        });
+
+        this.clusters = clusters;
+    }
+
     render() {
+        // Clear previous elements
+        this.g.selectAll('*').remove();
+
+        // Determine if we should render clusters
+        const shouldCluster = this.state.zoomLevel < this.config.lodThresholds.details 
+            && this.nodes.length > this.config.maxVisibleNodes;
+
+        if (shouldCluster) {
+            this.renderClusters();
+        } else {
+            this.renderFullDetail();
+        }
+
+        // Update simulation
+        this.updateSimulation(shouldCluster);
+    }
+
+    renderClusters() {
+        const clusterData = Array.from(this.clusters.values())
+            .filter(cluster => cluster.nodes.length >= this.config.clusterThreshold);
+
+        // Render cluster nodes
+        const clusterNodes = this.g.append('g')
+            .attr('class', 'clusters')
+            .selectAll('circle')
+            .data(clusterData)
+            .join('circle')
+            .attr('r', d => Math.sqrt(d.nodes.length) * this.config.nodeRadius)
+            .attr('fill', '#ccc')
+            .attr('opacity', 0.8)
+            .call(this.drag(this.simulation));
+
+        // Add cluster labels
+        if (this.state.zoomLevel > this.config.lodThresholds.labels) {
+            this.g.append('g')
+                .attr('class', 'cluster-labels')
+                .selectAll('text')
+                .data(clusterData)
+                .join('text')
+                .attr('dx', 12)
+                .attr('dy', 4)
+                .text(d => `${d.nodes.length} nodes`)
+                .style('font-size', '10px')
+                .style('fill', '#666');
+        }
+    }
+
+    renderFullDetail() {
+        // Render visible nodes based on current viewport
+        const visibleNodes = this.getVisibleNodes();
+        
         // Create links
         const link = this.g.append('g')
             .attr('class', 'links')
             .selectAll('line')
-            .data(this.links)
+            .data(this.getVisibleLinks(visibleNodes))
             .join('line')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
@@ -142,51 +287,80 @@ export class GraphVisualizer {
         const node = this.g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
-            .data(this.nodes)
+            .data(visibleNodes)
             .join('circle')
             .attr('r', this.config.nodeRadius)
             .attr('fill', d => this.colorScale(d.type))
             .call(this.drag(this.simulation));
 
-        // Add labels with better positioning and collision detection
-        const labels = this.g.append('g')
-            .attr('class', 'labels')
-            .selectAll('text')
-            .data(this.nodes)
-            .join('text')
-            .attr('dx', 12)
-            .attr('dy', 4)
-            .text(d => d.title?.substring(0, 20))
-            .style('font-size', '10px')
-            .style('fill', '#666')
-            .each(function(d) {
-                const bbox = this.getBBox();
-                d.labelWidth = bbox.width;
-                d.labelHeight = bbox.height;
-            });
+        // Add labels if zoomed in enough
+        if (this.state.zoomLevel > this.config.lodThresholds.labels) {
+            const labels = this.g.append('g')
+                .attr('class', 'labels')
+                .selectAll('text')
+                .data(visibleNodes)
+                .join('text')
+                .attr('dx', 12)
+                .attr('dy', 4)
+                .text(d => d.title?.substring(0, 20))
+                .style('font-size', '10px')
+                .style('fill', '#666');
 
-        // Add tooltips
-        this.setupTooltips(node);
+            this.elements = { link, node, labels };
+        } else {
+            this.elements = { link, node };
+        }
 
-        // Update positions on each tick
-        this.simulation.on('tick', () => {
-            link
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
+        // Setup tooltips only if zoomed in enough
+        if (this.state.zoomLevel > this.config.lodThresholds.details) {
+            this.setupTooltips(node);
+        }
+    }
 
-            node
-                .attr('cx', d => d.x = Math.max(this.config.nodeRadius, Math.min(this.width - this.config.nodeRadius, d.x)))
-                .attr('cy', d => d.y = Math.max(this.config.nodeRadius, Math.min(this.height - this.config.nodeRadius, d.y)));
+    getVisibleNodes() {
+        const transform = d3.zoomTransform(this.svg.node());
+        const viewportX = -transform.x / transform.k;
+        const viewportY = -transform.y / transform.k;
+        const viewportWidth = this.width / transform.k;
+        const viewportHeight = this.height / transform.k;
 
-            labels
-                .attr('x', d => d.x)
-                .attr('y', d => d.y);
+        return this.quadtree.visit((node, x1, y1, x2, y2) => {
+            if (!node.length) {
+                do {
+                    const d = node.data;
+                    d.visible = (
+                        d.x >= viewportX - this.config.nodeRadius &&
+                        d.x < viewportX + viewportWidth + this.config.nodeRadius &&
+                        d.y >= viewportY - this.config.nodeRadius &&
+                        d.y < viewportY + viewportHeight + this.config.nodeRadius
+                    );
+                } while (node = node.next);
+            }
+            return x1 >= viewportX + viewportWidth ||
+                   x2 < viewportX ||
+                   y1 >= viewportY + viewportHeight ||
+                   y2 < viewportY;
         });
+    }
 
-        // Store references for external access
-        this.elements = { link, node, labels };
+    getVisibleLinks(visibleNodes) {
+        const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+        return this.links.filter(l => 
+            visibleNodeIds.has(l.source.id) && visibleNodeIds.has(l.target.id)
+        );
+    }
+
+    updateSimulation(clustered) {
+        const data = clustered ? Array.from(this.clusters.values()) : this.getVisibleNodes();
+        
+        this.simulation.nodes(data);
+        
+        if (!clustered) {
+            this.simulation.force('link')
+                .links(this.getVisibleLinks(data));
+        }
+
+        this.simulation.alpha(0.3).restart();
     }
 
     setupTooltips(node) {
@@ -225,31 +399,6 @@ export class GraphVisualizer {
         });
     }
 
-    setupZoom() {
-        // Add zoom controls
-        const controls = d3.select(this.container)
-            .append('div')
-            .attr('class', 'graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2');
-
-        controls.append('button')
-            .attr('class', 'graph-control-button hover:bg-gray-100')
-            .attr('title', 'Zoom In')
-            .html('<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>')
-            .on('click', () => this.zoomBy(1.2));
-
-        controls.append('button')
-            .attr('class', 'graph-control-button hover:bg-gray-100')
-            .attr('title', 'Zoom Out')
-            .html('<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>')
-            .on('click', () => this.zoomBy(0.8));
-
-        controls.append('button')
-            .attr('class', 'graph-control-button hover:bg-gray-100')
-            .attr('title', 'Reset View')
-            .html('<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>')
-            .on('click', () => this.resetZoom());
-    }
-
     initialZoom() {
         // Calculate the bounding box of the graph
         const bounds = this.g.node().getBBox();
@@ -275,14 +424,16 @@ export class GraphVisualizer {
             );
     }
 
-    zoomBy(factor) {
-        this.svg.transition()
-            .duration(300)
-            .call(this.zoom.scaleBy, factor);
-    }
-
-    resetZoom() {
-        this.initialZoom();
+    shouldUpdateDetail(newZoomLevel) {
+        const crossedLabelThreshold = 
+            (this.state.zoomLevel < this.config.lodThresholds.labels && newZoomLevel >= this.config.lodThresholds.labels) ||
+            (this.state.zoomLevel >= this.config.lodThresholds.labels && newZoomLevel < this.config.lodThresholds.labels);
+            
+        const crossedDetailThreshold =
+            (this.state.zoomLevel < this.config.lodThresholds.details && newZoomLevel >= this.config.lodThresholds.details) ||
+            (this.state.zoomLevel >= this.config.lodThresholds.details && newZoomLevel < this.config.lodThresholds.details);
+            
+        return crossedLabelThreshold || crossedDetailThreshold;
     }
 
     drag(simulation) {

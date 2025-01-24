@@ -122,7 +122,7 @@ function listenForResults() {
         dataframe_3: null
     };
     let lastProcessedChunk = 0;
-    let totalExpectedRecords = 0;
+    const totalExpectedRecords = 121722; // Set actual total records
     let connectionTimeout = null;
     
     function showProgress(current, total, chunk, totalChunks) {
@@ -139,31 +139,28 @@ function listenForResults() {
             progressElement.id = 'progress-container';
             progressElement.className = 'mt-4 bg-white rounded-lg shadow p-4';
             
-            // Try to append to status section first
             const statusElement = document.getElementById('status');
             if (statusElement) {
                 statusElement.appendChild(progressElement);
             } else {
-                // Fallback to status section if status element doesn't exist
                 statusSection?.appendChild(progressElement);
             }
         }
 
-        // Ensure we have valid numbers before formatting
+        // Always use totalExpectedRecords for the total
         const currentCount = typeof current === 'number' ? current : 0;
-        const totalCount = typeof total === 'number' ? total : 0;
         const currentChunk = typeof chunk === 'number' ? chunk : 0;
-        const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : 0;
+        const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : Math.ceil(totalExpectedRecords / 250);
 
         if (progressElement) {
-            const percentage = totalCount > 0 ? Math.round((currentCount / totalCount) * 100) : 0;
-            const chunkPercentage = totalChunksCount > 0 ? Math.round((currentChunk / totalChunksCount) * 100) : 0;
+            const percentage = Math.round((currentCount / totalExpectedRecords) * 100);
+            const chunkPercentage = Math.round((currentChunk / totalChunksCount) * 100);
             
             progressElement.innerHTML = `
                 <div class="space-y-4">
                     <div>
                         <div class="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Records: ${currentCount.toLocaleString()} / ${totalCount.toLocaleString()}</span>
+                            <span>Records: ${currentCount.toLocaleString()} / ${totalExpectedRecords.toLocaleString()}</span>
                             <span>${percentage}%</span>
                         </div>
                         <div class="bg-gray-200 rounded-full h-2.5 mb-2">
@@ -191,11 +188,10 @@ function listenForResults() {
         
         const eventSource = new EventSource('/api/hex-results/stream');
         
-        // Set connection timeout
         connectionTimeout = setTimeout(() => {
             if (eventSource.readyState !== EventSource.CLOSED) {
                 console.log('Connection timeout - closing EventSource');
-        eventSource.close();
+                eventSource.close();
                 showStatus('Connection timeout. Please try again.', false);
             }
         }, 300000); // 5 minutes timeout
@@ -206,95 +202,93 @@ function listenForResults() {
             showStatus('Connection established', true);
         };
 
-    eventSource.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
-                
-            if (data.type === 'progress') {
-                // Get total records from server or use dataframe size
-                totalExpectedRecords = data.totalRecords || 121722; // Set to actual dataframe size
-                showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
-                showProgress(data.recordsProcessed, totalExpectedRecords, data.currentChunk, data.totalChunks);
-                return;
-            }
-
-            if (!data.data?.data?.dataframe_2) {
-                console.warn('No dataframe_2 in received data');
-                return;
-            }
-
-            const newRecords = data.data.data.dataframe_2;
-            const currentChunk = data.currentChunk;
-            const totalChunks = data.totalChunks || Math.ceil(totalExpectedRecords / 250); // 250 records per chunk
-
-            // Only process new chunks
-            if (currentChunk > lastProcessedChunk) {
-                // Concatenate new records without any limit
-                accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
-                
-                // Store dataframe_3 if available and not already stored
-                if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
-                    accumulatedData.dataframe_3 = data.data.data.dataframe_3;
-                }
-                
-                lastProcessedChunk = currentChunk;
-                
-                console.log('Received chunk:', {
-                    currentChunk,
-                    totalChunks,
-                    newRecordsCount: newRecords.length,
-                    accumulatedRecords: accumulatedData.dataframe_2.length,
-                    totalExpectedRecords,
-                    isLastChunk: data.isLastChunk
-                });
-
-                showProgress(
-                    accumulatedData.dataframe_2.length, 
-                    totalExpectedRecords,
-                    currentChunk,
-                    totalChunks
-                );
-
-                // Process results only when we have all the data
-                if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
-                    console.log('Processing complete:', {
-                        totalRecordsReceived: accumulatedData.dataframe_2.length,
-                        expectedRecords: totalExpectedRecords,
-                        chunks: `${currentChunk}/${totalChunks}`
-                    });
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
                     
-                    clearTimeout(connectionTimeout);
-                    displayResults({
-                        data: {
-                            dataframe_2: accumulatedData.dataframe_2,
-                            dataframe_3: accumulatedData.dataframe_3
-                        },
-                        metadata: {
-                            status: 'success',
-                            timestamp: new Date().toISOString()
-                        },
-                        success: true
-                    });
-                    eventSource.close();
+                if (data.type === 'progress') {
+                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
+                    showProgress(data.recordsProcessed, totalExpectedRecords, data.currentChunk, data.totalChunks);
+                    return;
                 }
-            }
-        } catch (error) {
-            console.error('Error processing message:', error);
-            showStatus(`Error processing data: ${error.message}`, false);
-        }
-    };
 
-    eventSource.onerror = (error) => {
-        console.error('EventSource error:', error);
+                if (!data.data?.data?.dataframe_2) {
+                    console.warn('No dataframe_2 in received data');
+                    return;
+                }
+
+                const newRecords = data.data.data.dataframe_2;
+                const currentChunk = data.currentChunk;
+                const totalChunks = Math.ceil(totalExpectedRecords / 250); // 250 records per chunk
+
+                // Only process new chunks
+                if (currentChunk > lastProcessedChunk) {
+                    // Concatenate new records without any limit
+                    accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
+                    
+                    // Store dataframe_3 if available and not already stored
+                    if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
+                        accumulatedData.dataframe_3 = data.data.data.dataframe_3;
+                    }
+                    
+                    lastProcessedChunk = currentChunk;
+                    
+                    console.log('Received chunk:', {
+                        currentChunk,
+                        totalChunks,
+                        newRecordsCount: newRecords.length,
+                        accumulatedRecords: accumulatedData.dataframe_2.length,
+                        totalExpectedRecords,
+                        isLastChunk: data.isLastChunk
+                    });
+
+                    showProgress(
+                        accumulatedData.dataframe_2.length, 
+                        totalExpectedRecords,
+                        currentChunk,
+                        totalChunks
+                    );
+
+                    // Process results only when we have all the data
+                    if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
+                        console.log('Processing complete:', {
+                            totalRecordsReceived: accumulatedData.dataframe_2.length,
+                            expectedRecords: totalExpectedRecords,
+                            chunks: `${currentChunk}/${totalChunks}`
+                        });
+                        
+                        clearTimeout(connectionTimeout);
+                        displayResults({
+                            data: {
+                                dataframe_2: accumulatedData.dataframe_2,
+                                dataframe_3: accumulatedData.dataframe_3
+                            },
+                            metadata: {
+                                status: 'success',
+                                timestamp: new Date().toISOString()
+                            },
+                            success: true
+                        });
+                        eventSource.close();
+                    }
+                }
+            } catch (error) {
+                console.error('Error processing message:', error);
+                showStatus(`Error processing data: ${error.message}`, false);
+            }
+        };
+
+        eventSource.onerror = (error) => {
+            console.error('EventSource error:', error);
             console.log('EventSource readyState:', eventSource.readyState);
-            
+                
             if (eventSource.readyState === EventSource.CLOSED) {
                 clearTimeout(connectionTimeout);
                 if (retryCount < MAX_RETRIES) {
                     retryCount++;
                     showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
                     setTimeout(() => {
-        eventSource.close();
+                        eventSource.close();
                         connectEventSource();
                     }, 2000 * retryCount);
                 } else {
@@ -1113,14 +1107,14 @@ function showStatus(message, showSpinner = false) {
     const statusSpinner = document.getElementById('statusSpinner');
     
     if (statusSection && statusText) {
-    statusSection.classList.remove('hidden');
-    statusText.textContent = message;
-    
+        statusSection.classList.remove('hidden');
+        statusText.textContent = message;
+        
         if (statusSpinner) {
-    if (showSpinner) {
-        statusSpinner.classList.remove('hidden');
-    } else {
-        statusSpinner.classList.add('hidden');
+            if (showSpinner) {
+                statusSpinner.classList.remove('hidden');
+            } else {
+                statusSpinner.classList.add('hidden');
             }
         }
     } else {

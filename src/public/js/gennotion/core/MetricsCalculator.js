@@ -10,9 +10,17 @@ export class MetricsCalculator {
     }
 
     calculateAllMetrics(dataframe_2, dataframe_3) {
-        console.log('Calculating metrics with:', {
-            df2_length: dataframe_2?.length,
-            df3_available: !!dataframe_3
+        // Debug log the full structure
+        console.log('Data received:', {
+            dataframe_2: {
+                length: dataframe_2?.length,
+                sample: dataframe_2?.[0],
+                keys: dataframe_2?.[0] ? Object.keys(dataframe_2[0]) : []
+            },
+            dataframe_3: {
+                keys: dataframe_3 ? Object.keys(dataframe_3) : [],
+                values: dataframe_3
+            }
         });
 
         const structureMetrics = this.calculateStructureMetrics(dataframe_2);
@@ -36,29 +44,54 @@ export class MetricsCalculator {
             return {};
         }
 
+        // Log sample of data being processed
+        console.log('Processing structure metrics for:', {
+            sampleNode: dataframe_2[0],
+            typeField: dataframe_2[0]?.type || dataframe_2[0]?.TYPE,
+            parentField: dataframe_2[0]?.parent_id || dataframe_2[0]?.PARENT_ID,
+            childField: dataframe_2[0]?.child_ids || dataframe_2[0]?.CHILD_IDS
+        });
+
         const depths = this.calculateDepths(dataframe_2);
         const total_pages = dataframe_2.length;
         const max_depth = Math.max(...depths);
         const avg_depth = depths.reduce((a, b) => a + b, 0) / depths.length;
         const deep_pages_count = depths.filter(d => d > this.DEEP_PAGE_THRESHOLD).length;
         
-        const root_pages = dataframe_2.filter(page => !page.parent_id).length;
-        const orphaned_blocks = dataframe_2.filter(page => !page.parent_id && !page.child_ids?.length).length;
+        // Adjust field names based on actual data structure
+        const root_pages = dataframe_2.filter(page => 
+            !(page.parent_id || page.PARENT_ID)
+        ).length;
         
-        const collections_count = dataframe_2.filter(page => page.type === 'collection').length;
-        const linked_database_count = dataframe_2.filter(page => page.type === 'linked_database').length;
-        const template_count = dataframe_2.filter(page => page.is_template).length;
+        const orphaned_blocks = dataframe_2.filter(page => 
+            !(page.parent_id || page.PARENT_ID) && 
+            !(page.child_ids?.length || page.CHILD_IDS?.length)
+        ).length;
         
+        const collections_count = dataframe_2.filter(page => 
+            (page.type || page.TYPE)?.toLowerCase()?.includes('collection')
+        ).length;
+        
+        const linked_database_count = dataframe_2.filter(page => 
+            (page.type || page.TYPE)?.toLowerCase()?.includes('linked_database')
+        ).length;
+        
+        const template_count = dataframe_2.filter(page => 
+            page.is_template || page.IS_TEMPLATE
+        ).length;
+
         // Calculate duplicate and bottleneck metrics
         const titleCounts = {};
         dataframe_2.forEach(page => {
-            titleCounts[page.title] = (titleCounts[page.title] || 0) + 1;
+            const title = page.title || page.TITLE || page.text || page.TEXT;
+            titleCounts[title] = (titleCounts[title] || 0) + 1;
         });
         
         const duplicate_count = Object.values(titleCounts).filter(count => count > 1).length;
-        const bottleneck_count = dataframe_2.filter(page => 
-            (page.child_ids?.length || 0) > this.BOTTLENECK_THRESHOLD
-        ).length;
+        const bottleneck_count = dataframe_2.filter(page => {
+            const childCount = (page.child_ids?.length || page.CHILD_IDS?.length || 0);
+            return childCount > this.BOTTLENECK_THRESHOLD;
+        }).length;
         
         // Calculate navigation metrics
         const percentage_unlinked = (orphaned_blocks / total_pages) * 100;
@@ -67,15 +100,6 @@ export class MetricsCalculator {
         
         const nav_depth_score = Math.max(0, 100 - (avg_depth * 10));
         const nav_complexity = (bottleneck_count * 5 + unfindable_pages * 3) / total_pages * 100;
-
-        console.log('Structure metrics calculated:', {
-            total_pages,
-            max_depth,
-            avg_depth,
-            deep_pages_count,
-            root_pages,
-            collections_count
-        });
 
         return {
             total_pages,
@@ -103,16 +127,20 @@ export class MetricsCalculator {
             return {};
         }
 
-        const total_num_members = dataframe_3.total_members || 0;
-        const total_num_guests = dataframe_3.total_guests || 0;
-        const total_num_teamspaces = dataframe_3.total_teamspaces || 0;
-        const total_num_integrations = dataframe_3.total_integrations || 0;
-        const total_num_bots = dataframe_3.total_bots || 0;
+        // Log the usage data structure
+        console.log('Processing usage metrics with:', dataframe_3);
+
+        // Handle both camelCase and snake_case field names
+        const total_num_members = dataframe_3.total_members || dataframe_3.totalMembers || 0;
+        const total_num_guests = dataframe_3.total_guests || dataframe_3.totalGuests || 0;
+        const total_num_teamspaces = dataframe_3.total_teamspaces || dataframe_3.totalTeamspaces || 0;
+        const total_num_integrations = dataframe_3.total_integrations || dataframe_3.totalIntegrations || 0;
+        const total_num_bots = dataframe_3.total_bots || dataframe_3.totalBots || 0;
 
         const average_teamspace_members = total_num_teamspaces ? 
             total_num_members / total_num_teamspaces : 0;
         
-        const automation_usage_rate = total_num_bots ? 
+        const automation_usage_rate = total_num_members ? 
             (total_num_bots / total_num_members) * 100 : 0;
         
         const current_integration_coverage = 
@@ -120,13 +148,6 @@ export class MetricsCalculator {
         
         const automation_efficiency_gain = 
             (automation_usage_rate * 0.1) + (current_integration_coverage * 0.15);
-
-        console.log('Usage metrics calculated:', {
-            total_num_members,
-            total_num_guests,
-            total_num_teamspaces,
-            automation_usage_rate
-        });
 
         return {
             total_num_members,
@@ -147,25 +168,31 @@ export class MetricsCalculator {
             return {};
         }
 
+        // Log the growth data structure
+        console.log('Processing growth metrics with:', {
+            current_month_members: dataframe_3.current_month_members || dataframe_3.currentMonthMembers,
+            previous_month_members: dataframe_3.previous_month_members || dataframe_3.previousMonthMembers,
+            current_month_blocks: dataframe_3.current_month_blocks || dataframe_3.currentMonthBlocks,
+            previous_month_blocks: dataframe_3.previous_month_blocks || dataframe_3.previousMonthBlocks
+        });
+
+        // Handle both camelCase and snake_case field names
+        const current_month_members = dataframe_3.current_month_members || dataframe_3.currentMonthMembers || 0;
+        const previous_month_members = dataframe_3.previous_month_members || dataframe_3.previousMonthMembers || 1; // Avoid division by zero
+        const current_month_blocks = dataframe_3.current_month_blocks || dataframe_3.currentMonthBlocks || 0;
+        const previous_month_blocks = dataframe_3.previous_month_blocks || dataframe_3.previousMonthBlocks || 1; // Avoid division by zero
+
         const monthly_member_growth_rate = 
-            ((dataframe_3.current_month_members - dataframe_3.previous_month_members) / 
-             dataframe_3.previous_month_members) * 100;
+            ((current_month_members - previous_month_members) / previous_month_members) * 100;
 
         const monthly_content_growth_rate = 
-            ((dataframe_3.current_month_blocks - dataframe_3.previous_month_blocks) / 
-             dataframe_3.previous_month_blocks) * 100;
+            ((current_month_blocks - previous_month_blocks) / previous_month_blocks) * 100;
 
         const growth_capacity = 
             (monthly_member_growth_rate * 0.6) + (monthly_content_growth_rate * 0.4);
 
         const expected_members_in_next_year = 
-            dataframe_3.current_month_members * Math.pow(1 + (monthly_member_growth_rate/100), 12);
-
-        console.log('Growth metrics calculated:', {
-            monthly_member_growth_rate,
-            monthly_content_growth_rate,
-            growth_capacity
-        });
+            current_month_members * Math.pow(1 + (monthly_member_growth_rate/100), 12);
 
         return {
             monthly_member_growth_rate,

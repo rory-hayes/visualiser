@@ -210,62 +210,72 @@ function listenForResults() {
         try {
             const data = JSON.parse(event.data);
                 
-                if (data.type === 'progress') {
-                    totalExpectedRecords = data.totalRecords;
-                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
-                    showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
+            if (data.type === 'progress') {
+                totalExpectedRecords = data.totalRecords;
+                showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
+                showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
                 return;
             }
 
-                if (!data.data?.data?.dataframe_2) {
-                    return;
+            if (!data.data?.data?.dataframe_2) {
+                return;
+            }
+
+            const newRecords = data.data.data.dataframe_2;
+            const currentChunk = data.currentChunk;
+
+            // Only process new chunks
+            if (currentChunk > lastProcessedChunk) {
+                // Concatenate new records
+                accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
+                
+                // Store dataframe_3 if available and not already stored
+                if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
+                    accumulatedData.dataframe_3 = data.data.data.dataframe_3;
                 }
+                
+                lastProcessedChunk = currentChunk;
+                
+                console.log('Received chunk:', {
+                    currentChunk,
+                    totalChunks: data.totalChunks,
+                    newRecordsCount: newRecords.length,
+                    accumulatedRecords: accumulatedData.dataframe_2.length,
+                    totalExpectedRecords: totalExpectedRecords
+                });
 
-                const newRecords = data.data.data.dataframe_2;
-                const currentChunk = data.currentChunk;
+                showProgress(
+                    accumulatedData.dataframe_2.length, 
+                    totalExpectedRecords,
+                    currentChunk,
+                    data.totalChunks
+                );
 
-                // Only process new chunks
-                if (currentChunk > lastProcessedChunk) {
-                    accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
-                    if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
-                        accumulatedData.dataframe_3 = data.data.data.dataframe_3;
-                    }
-                    lastProcessedChunk = currentChunk;
-                    
-                    console.log('Received chunk:', {
-                        currentChunk,
-                        totalChunks: data.totalChunks,
-                        accumulatedRecords: accumulatedData.dataframe_2.length,
-                        totalRecords: data.totalRecords
+                // If this is the last chunk or we've received all expected records
+                if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
+                    console.log('Processing complete:', {
+                        totalRecordsReceived: accumulatedData.dataframe_2.length,
+                        expectedRecords: totalExpectedRecords
                     });
-
-                    showProgress(
-                        accumulatedData.dataframe_2.length, 
-                        data.totalRecords,
-                        currentChunk,
-                        data.totalChunks
-                    );
-
-                    // If this is the last chunk, process all data
-                    if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
-                        clearTimeout(connectionTimeout);
-                        displayResults({
-                            data: {
-                                dataframe_2: accumulatedData.dataframe_2,
-                                dataframe_3: accumulatedData.dataframe_3
-                            },
-                            metadata: {
-                                status: 'success',
-                                timestamp: new Date().toISOString()
-                            },
-                            success: true
-                        });
-                eventSource.close();
-                    }
+                    
+                    clearTimeout(connectionTimeout);
+                    displayResults({
+                        data: {
+                            dataframe_2: accumulatedData.dataframe_2,
+                            dataframe_3: accumulatedData.dataframe_3
+                        },
+                        metadata: {
+                            status: 'success',
+                            timestamp: new Date().toISOString()
+                        },
+                        success: true
+                    });
+                    eventSource.close();
+                }
             }
         } catch (error) {
-                console.error('Error processing message:', error);
-                showStatus(`Error processing data: ${error.message}`, false);
+            console.error('Error processing message:', error);
+            showStatus(`Error processing data: ${error.message}`, false);
         }
     };
 
@@ -405,128 +415,115 @@ function transformDataForGraph(data) {
             return { nodes: [], links: [] };
         }
 
-        console.log('Processing data for graph:', {
+        console.log('Starting graph data transformation:', {
             totalRecords: data.length,
-            sampleRecord: data[0],
-            maxDepth: Math.max(...data.map(item => parseInt(item.DEPTH) || 0))
+            sampleRecord: data[0]
         });
 
+        // Process nodes in chunks to avoid blocking the UI
+        const CHUNK_SIZE = 1000;
         const nodes = [];
-        const links = new Set(); // Use Set to avoid duplicate links
+        const links = new Set();
         const nodeMap = new Map();
-        const depthMap = new Map(); // Track nodes by depth
+        const depthMap = new Map();
 
-        // First pass: Create all nodes and organize by depth
-        data.forEach(item => {
-            if (!item.ID) {
-                console.warn('Item missing ID:', item);
-                return;
-            }
+        // Process nodes in chunks
+        for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+            const chunk = data.slice(i, i + CHUNK_SIZE);
+            
+            // First pass for chunk: Create nodes
+            chunk.forEach(item => {
+                if (!item.ID) return;
 
-            const depth = parseInt(item.DEPTH) || 0;
-            if (!depthMap.has(depth)) {
-                depthMap.set(depth, new Set());
-            }
-            depthMap.get(depth).add(item.ID);
-
-            // Create node if it doesn't exist
-            if (!nodeMap.has(item.ID)) {
-                // Clean up the type string to be more readable
-                let type = item.TYPE?.toLowerCase() || 'page';
-                // Remove any prefix/suffix and just keep the core type
-                type = type.replace(/_page$/, '')  // Remove _page suffix
-                         .replace(/^page_/, '')    // Remove page_ prefix
-                         .replace(/^collection_view_/, 'view_'); // Simplify collection_view to view
-
-                const node = {
-                    id: item.ID,
-                    title: type, // Just show the type as the title
-                    type: type,
-                    depth: depth,
-                    parentId: item.PARENT_ID,
-                    spaceId: item.SPACE_ID,
-                    parentPageId: item.PARENT_PAGE_ID,
-                    ancestors: []
-                };
-
-                // Parse ANCESTORS field
-                try {
-                    if (item.ANCESTORS) {
-                        const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
-                        node.ancestors = JSON.parse(cleanedAncestors);
-                    }
-                } catch (error) {
-                    console.warn('Error parsing ancestors for node:', item.ID, error);
-                    node.ancestors = [];
+                const depth = parseInt(item.DEPTH) || 0;
+                if (!depthMap.has(depth)) {
+                    depthMap.set(depth, new Set());
                 }
+                depthMap.get(depth).add(item.ID);
 
-                nodes.push(node);
-                nodeMap.set(item.ID, node);
-            }
-        });
+                if (!nodeMap.has(item.ID)) {
+                    let type = item.TYPE?.toLowerCase() || 'page';
+                    type = type.replace(/_page$/, '')
+                             .replace(/^page_/, '')
+                             .replace(/^collection_view_/, 'view_');
 
-        // Second pass: Create all hierarchical relationships
-        nodes.forEach(node => {
-            // 1. Direct parent-child relationship (strongest)
-            if (node.parentId && nodeMap.has(node.parentId)) {
-                links.add(JSON.stringify({
-                    source: node.parentId,
-                    target: node.id,
-                    type: 'parent-child',
-                    value: 3
-                }));
-            }
+                    const node = {
+                        id: item.ID,
+                        title: type,
+                        type: type,
+                        depth: depth,
+                        parentId: item.PARENT_ID,
+                        spaceId: item.SPACE_ID,
+                        parentPageId: item.PARENT_PAGE_ID,
+                        ancestors: [],
+                        CREATED_TIME: item.CREATED_TIME
+                    };
 
-            // 2. Process ancestors array to create full hierarchical path
-            if (Array.isArray(node.ancestors) && node.ancestors.length > 0) {
-                // Create links between each consecutive pair in the ancestors array
-                for (let i = 0; i < node.ancestors.length - 1; i++) {
-                    const currentAncestor = node.ancestors[i];
-                    const parentAncestor = node.ancestors[i + 1];
-                    
-                    if (nodeMap.has(currentAncestor) && nodeMap.has(parentAncestor)) {
-                        links.add(JSON.stringify({
-                            source: parentAncestor,
-                            target: currentAncestor,
-                            type: 'ancestor-chain',
-                            value: 2
-                        }));
+                    try {
+                        if (item.ANCESTORS) {
+                            const cleanedAncestors = item.ANCESTORS.replace(/\n/g, '').trim();
+                            node.ancestors = JSON.parse(cleanedAncestors);
+                        }
+                    } catch (error) {
+                        console.warn('Error parsing ancestors for node:', item.ID);
+                        node.ancestors = [];
                     }
-                }
-            }
 
-            // 3. Connect to parent page if different from direct parent
-            if (node.parentPageId && 
-                nodeMap.has(node.parentPageId) && 
-                node.parentPageId !== node.parentId) {
-                links.add(JSON.stringify({
-                    source: node.parentPageId,
-                    target: node.id,
-                    type: 'page-hierarchy',
-                    value: 1
-                }));
-            }
-
-            // 4. Connect nodes at same depth level that share a parent
-            const nodesAtSameDepth = Array.from(depthMap.get(node.depth) || []);
-            nodesAtSameDepth.forEach(otherId => {
-                if (otherId !== node.id) {
-                    const otherNode = nodeMap.get(otherId);
-                    if (otherNode && 
-                        otherNode.parentId === node.parentId && 
-                        node.parentId) {
-                        links.add(JSON.stringify({
-                            source: node.parentId,
-                            target: otherId,
-                            type: 'sibling',
-                            value: 1
-                        }));
-                    }
+                    nodes.push(node);
+                    nodeMap.set(item.ID, node);
                 }
             });
-        });
 
-        // Convert links back to array and resolve node references
+            // Second pass for chunk: Create links
+            chunk.forEach(item => {
+                const node = nodeMap.get(item.ID);
+                if (!node) return;
+
+                // Direct parent-child relationship
+                if (node.parentId && nodeMap.has(node.parentId)) {
+                    links.add(JSON.stringify({
+                        source: node.parentId,
+                        target: node.id,
+                        type: 'parent-child',
+                        value: 3
+                    }));
+                }
+
+                // Process ancestors
+                if (Array.isArray(node.ancestors)) {
+                    for (let i = 0; i < node.ancestors.length - 1; i++) {
+                        const currentAncestor = node.ancestors[i];
+                        const parentAncestor = node.ancestors[i + 1];
+                        
+                        if (nodeMap.has(currentAncestor) && nodeMap.has(parentAncestor)) {
+                            links.add(JSON.stringify({
+                                source: parentAncestor,
+                                target: currentAncestor,
+                                type: 'ancestor-chain',
+                                value: 2
+                            }));
+                        }
+                    }
+                }
+
+                // Connect to parent page if different from direct parent
+                if (node.parentPageId && 
+                    nodeMap.has(node.parentPageId) && 
+                    node.parentPageId !== node.parentId) {
+                    links.add(JSON.stringify({
+                        source: node.parentPageId,
+                        target: node.id,
+                        type: 'page-hierarchy',
+                        value: 1
+                    }));
+                }
+            });
+
+            // Log progress
+            console.log(`Processed chunk ${i/CHUNK_SIZE + 1}/${Math.ceil(data.length/CHUNK_SIZE)}`);
+        }
+
+        // Convert links to array and resolve references
         const processedLinks = Array.from(links).map(linkStr => {
             const link = JSON.parse(linkStr);
             const source = nodeMap.get(link.source);
@@ -543,13 +540,13 @@ function transformDataForGraph(data) {
             return null;
         }).filter(Boolean);
 
-        // Log detailed statistics
+        // Log statistics
         const depthStats = {};
         depthMap.forEach((nodes, depth) => {
             depthStats[depth] = nodes.size;
         });
 
-        console.log('Graph data transformed:', {
+        console.log('Graph transformation complete:', {
             originalRecords: data.length,
             nodes: nodes.length,
             links: processedLinks.length,

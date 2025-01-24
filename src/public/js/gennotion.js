@@ -833,27 +833,27 @@ function initializeGraph(data, container) {
             .attr('height', height)
             .attr('viewBox', [0, 0, width, height]);
 
-        // Add zoom behavior with reduced initial scale
+        // Add zoom behavior with wider scale range
         const g = svg.append('g');
         const zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
+            .scaleExtent([0.05, 4]) // Reduced minimum scale to allow more zoom out
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        // Create the force simulation with gentler forces
+        // Create the force simulation with gentler forces and more spread
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(150)) // Increased distance between nodes
+                .distance(200)) // Increased distance between nodes
             .force('charge', d3.forceManyBody()
-                .strength(-200) // Reduced repulsion force
-                .distanceMax(300))
+                .strength(-150) // Reduced repulsion force
+                .distanceMax(400)) // Increased maximum distance
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(40)) // Increased collision radius
-            .force('x', d3.forceX(width / 2).strength(0.05)) // Reduced x force
-            .force('y', d3.forceY(height / 2).strength(0.05)) // Reduced y force
-            .alphaDecay(0.02) // Slightly faster decay
-            .velocityDecay(0.3); // Increased velocity decay for less movement
+            .force('collision', d3.forceCollide().radius(50)) // Increased collision radius
+            .force('x', d3.forceX(width / 2).strength(0.03)) // Reduced x force
+            .force('y', d3.forceY(height / 2).strength(0.03)) // Reduced y force
+            .alphaDecay(0.02)
+            .velocityDecay(0.3);
 
         // Add links
         const link = g.append('g')
@@ -863,7 +863,7 @@ function initializeGraph(data, container) {
             .join('line')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', d => d.value || 1); // Use link value for width if available
+            .attr('stroke-width', d => d.value || 1);
 
         // Add nodes
         const node = g.append('g')
@@ -889,6 +889,8 @@ function initializeGraph(data, container) {
 
         // Initialize timeline if we have dates
         if (nodes.some(n => n.createdTime)) {
+            // Ensure container has enough height for timeline
+            container.style.paddingBottom = '80px';
             initializeTimeline(container, nodes, node, link, svg);
         }
 
@@ -981,7 +983,7 @@ function initializeGraph(data, container) {
 
         // Initial zoom to fit with reduced scale
         const bounds = g.node().getBBox();
-        const scale = 0.4 / Math.max(bounds.width / width, bounds.height / height); // Reduced initial scale
+        const scale = 0.2 / Math.max(bounds.width / width, bounds.height / height); // Further reduced initial scale
         const translate = [
             (width - scale * bounds.width) / 2 - scale * bounds.x,
             (height - scale * bounds.height) / 2 - scale * bounds.y
@@ -989,7 +991,7 @@ function initializeGraph(data, container) {
         svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
         // Start simulation with lower alpha
-        simulation.alpha(0.5).restart(); // Reduced initial alpha for gentler start
+        simulation.alpha(0.3).restart(); // Reduced initial alpha for gentler start
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);

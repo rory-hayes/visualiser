@@ -1,5 +1,4 @@
 import { MetricsCalculator } from './gennotion/core/MetricsCalculator.js';
-import { MetricsDisplay } from './gennotion/visualization/MetricsDisplay.js';
 
 // Constants
 const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
@@ -290,20 +289,65 @@ function displayResults(response) {
         );
 
         // Log detailed metrics for debugging
-        console.log('Detailed metrics:', metrics);
+        console.log('Detailed Workspace Metrics:', {
+            structure: {
+                total_pages: metrics.total_pages,
+                max_depth: metrics.max_depth,
+                avg_depth: metrics.avg_depth,
+                deep_pages_count: metrics.deep_pages_count,
+                root_pages: metrics.root_pages,
+                orphaned_blocks: metrics.orphaned_blocks,
+                collections_count: metrics.collections_count,
+                linked_database_count: metrics.linked_database_count,
+                template_count: metrics.template_count,
+                duplicate_count: metrics.duplicate_count,
+                bottleneck_count: metrics.bottleneck_count,
+                percentage_unlinked: metrics.percentage_unlinked,
+                scatter_index: metrics.scatter_index,
+                unfindable_pages: metrics.unfindable_pages,
+                nav_depth_score: metrics.nav_depth_score,
+                nav_complexity: metrics.nav_complexity
+            },
+            usage: {
+                total_num_members: metrics.total_num_members,
+                total_num_guests: metrics.total_num_guests,
+                total_num_teamspaces: metrics.total_num_teamspaces,
+                total_num_integrations: metrics.total_num_integrations,
+                total_num_bots: metrics.total_num_bots,
+                average_teamspace_members: metrics.average_teamspace_members,
+                automation_usage_rate: metrics.automation_usage_rate,
+                current_integration_coverage: metrics.current_integration_coverage,
+                automation_efficiency_gain: metrics.automation_efficiency_gain
+            },
+            growth: {
+                monthly_member_growth_rate: metrics.monthly_member_growth_rate,
+                monthly_content_growth_rate: metrics.monthly_content_growth_rate,
+                growth_capacity: metrics.growth_capacity,
+                expected_members_in_next_year: metrics.expected_members_in_next_year
+            },
+            organization: {
+                current_visibility_score: metrics.current_visibility_score,
+                current_collaboration_score: metrics.current_collaboration_score,
+                current_productivity_score: metrics.current_productivity_score,
+                current_organization_score: metrics.current_organization_score,
+                projected_organisation_score: metrics.projected_organisation_score,
+                success_improvement: metrics.success_improvement
+            },
+            roi: {
+                current_plan: metrics.current_plan,
+                enterprise_plan: metrics.enterprise_plan,
+                enterprise_plan_w_ai: metrics.enterprise_plan_w_ai,
+                '10_percent_increase': metrics['10_percent_increase'],
+                '20_percent_increase': metrics['20_percent_increase'],
+                '50_percent_increase': metrics['50_percent_increase'],
+                enterprise_plan_roi: metrics.enterprise_plan_roi,
+                enterprise_plan_w_ai_roi: metrics.enterprise_plan_w_ai_roi
+            }
+        });
 
         // Show results section
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = ''; // Clear previous results
-        
-        // Create metrics container
-        const metricsContainer = document.createElement('div');
-        metricsContainer.id = 'metrics-container';
-        resultsContent.appendChild(metricsContainer);
-        
-        // Display metrics using MetricsDisplay
-        const metricsDisplay = new MetricsDisplay('metrics-container');
-        metricsDisplay.displayMetrics(metrics);
         
         // Create single graph container
         const graphContainer = document.createElement('div');

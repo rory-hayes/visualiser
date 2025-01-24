@@ -124,7 +124,9 @@ function listenForResults() {
         dataframe_2: [],
         dataframe_3: null
     };
-    let lastProcessedChunk = 0;
+    let processedChunks = new Set();
+    let totalChunks = 0;
+    let totalRecords = 0;
     let connectionTimeout = null;
     let isProcessingResults = false;
     
@@ -153,17 +155,17 @@ function listenForResults() {
         // Use the actual total records for calculations
         const currentCount = typeof current === 'number' ? current : 0;
         const currentChunk = typeof chunk === 'number' ? chunk : 0;
-        const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : Math.ceil(totalExpectedRecords / 250);
+        const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : 0;
 
         if (progressElement) {
-            const percentage = totalExpectedRecords > 0 ? Math.round((currentCount / totalExpectedRecords) * 100) : 0;
+            const percentage = total > 0 ? Math.round((currentCount / total) * 100) : 0;
             const chunkPercentage = totalChunksCount > 0 ? Math.round((currentChunk / totalChunksCount) * 100) : 0;
             
             progressElement.innerHTML = `
                 <div class="space-y-4">
                     <div>
                         <div class="flex justify-between text-sm text-gray-600 mb-1">
-                            <span>Records: ${currentCount.toLocaleString()} / ${totalExpectedRecords.toLocaleString()}</span>
+                            <span>Records: ${currentCount.toLocaleString()} / ${total.toLocaleString()}</span>
                             <span>${percentage}%</span>
                         </div>
                         <div class="bg-gray-200 rounded-full h-2.5 mb-2">
@@ -208,90 +210,72 @@ function listenForResults() {
         eventSource.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                    
-                if (data.type === 'progress') {
-                    // Set total records from server response
-                    if (data.totalRecords) {
-                        totalExpectedRecords = data.totalRecords;
-                        console.log('Total records set from server:', totalExpectedRecords);
-                    }
-                    showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
-                    showProgress(data.recordsProcessed, totalExpectedRecords, data.currentChunk, data.totalChunks);
-                    return;
+                
+                // Update total records and chunks from metadata
+                if (data.metadata) {
+                    totalChunks = data.metadata.total_chunks || totalChunks;
+                    totalRecords = data.metadata.total_records || totalRecords;
                 }
 
-                if (!data.data?.data?.dataframe_2) {
+                if (!data.data?.dataframe_2) {
                     console.warn('No dataframe_2 in received data');
                     return;
                 }
 
-                const newRecords = data.data.data.dataframe_2;
-                const currentChunk = data.currentChunk;
-
-                // Set total records if not set yet
-                if (totalExpectedRecords === 0 && data.totalRecords) {
-                    totalExpectedRecords = data.totalRecords;
-                    console.log('Total records set from data:', totalExpectedRecords);
-                }
-
-                const totalChunks = Math.ceil(totalExpectedRecords / 250);
+                const newRecords = data.data.dataframe_2;
+                const currentChunk = data.metadata?.chunk || 0;
 
                 // Only process new chunks
-                if (currentChunk > lastProcessedChunk) {
+                if (!processedChunks.has(currentChunk)) {
+                    processedChunks.add(currentChunk);
+                    
                     // Concatenate new records
                     accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
                     
                     // Store dataframe_3 if available
-                    if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
-                        accumulatedData.dataframe_3 = data.data.data.dataframe_3;
+                    if (data.data.dataframe_3 && !accumulatedData.dataframe_3) {
+                        accumulatedData.dataframe_3 = data.data.dataframe_3;
                     }
-                    
-                    lastProcessedChunk = currentChunk;
                     
                     console.log('Received chunk:', {
                         currentChunk,
                         totalChunks,
                         newRecordsCount: newRecords.length,
                         accumulatedRecords: accumulatedData.dataframe_2.length,
-                        totalExpectedRecords,
-                        isLastChunk: data.isLastChunk
+                        totalRecords,
+                        processedChunks: processedChunks.size
                     });
 
                     showProgress(
                         accumulatedData.dataframe_2.length, 
-                        totalExpectedRecords,
-                        currentChunk,
+                        totalRecords,
+                        processedChunks.size,
                         totalChunks
                     );
 
-                    // Only process results when we have all the data
-                    if (accumulatedData.dataframe_2.length >= totalExpectedRecords || data.isLastChunk) {
-                        if (!isProcessingResults) {
-                            isProcessingResults = true;
-                            console.log('Processing complete dataset:', {
-                                totalRecordsReceived: accumulatedData.dataframe_2.length,
-                                expectedRecords: totalExpectedRecords,
-                                chunks: `${currentChunk}/${totalChunks}`
-                            });
-                            
-                            clearTimeout(connectionTimeout);
-                            displayResults({
-                                data: {
-                                    dataframe_2: accumulatedData.dataframe_2,
-                                    dataframe_3: accumulatedData.dataframe_3
-                                },
-                                metadata: {
-                                    status: 'success',
-                                    timestamp: new Date().toISOString()
-                                },
-                                success: true
-                            });
-                            eventSource.close();
-                        }
+                    // Check if all chunks received
+                    if (processedChunks.size === totalChunks && !isProcessingResults) {
+                        isProcessingResults = true;
+                        console.log('Processing complete dataset:', {
+                            totalRecordsReceived: accumulatedData.dataframe_2.length,
+                            expectedRecords: totalRecords,
+                            chunks: `${processedChunks.size}/${totalChunks}`
+                        });
+                        
+                        clearTimeout(connectionTimeout);
+                        displayResults({
+                            data: {
+                                dataframe_2: accumulatedData.dataframe_2,
+                                dataframe_3: accumulatedData.dataframe_3
+                            },
+                            metadata: data.metadata,
+                            success: true
+                        });
+                        eventSource.close();
                     } else {
-                        console.log('Waiting for more data...', {
-                            received: accumulatedData.dataframe_2.length,
-                            expected: totalExpectedRecords
+                        console.log('Waiting for more chunks...', {
+                            received: processedChunks.size,
+                            total: totalChunks
                         });
                     }
                 }

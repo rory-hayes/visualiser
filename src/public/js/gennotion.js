@@ -442,15 +442,10 @@ function transformDataForGraph(data) {
                     id: item.ID,
                     title: type, // Just show the type as the title
                     type: type,
-                    url: item.URL,
-                    createdTime: item.CREATED_TIME ? new Date(item.CREATED_TIME) : null,
-                    lastEditedTime: item.LAST_EDITED_TIME ? new Date(item.LAST_EDITED_TIME) : null,
                     depth: depth,
-                    hasChildren: item.HAS_CHILDREN === 'true' || item.HAS_CHILDREN === true,
-                    isCollection: type.includes('collection'),
-                    isDatabase: type.includes('database'),
                     parentId: item.PARENT_ID,
                     spaceId: item.SPACE_ID,
+                    parentPageId: item.PARENT_PAGE_ID,
                     ancestors: []
                 };
 
@@ -472,42 +467,63 @@ function transformDataForGraph(data) {
 
         // Second pass: Create all hierarchical relationships
         nodes.forEach(node => {
-            // 1. Direct parent-child relationships (stronger connection)
+            // 1. Direct parent-child relationship (strongest)
             if (node.parentId && nodeMap.has(node.parentId)) {
                 links.add(JSON.stringify({
                     source: node.parentId,
                     target: node.id,
                     type: 'parent-child',
-                    value: 3 // Stronger connection for direct parent-child
+                    value: 3
                 }));
             }
 
-            // 2. Ancestor relationships (showing full hierarchy)
-            if (Array.isArray(node.ancestors)) {
-                node.ancestors.forEach(ancestorId => {
-                    if (nodeMap.has(ancestorId) && ancestorId !== node.parentId) {
+            // 2. Process ancestors array to create full hierarchical path
+            if (Array.isArray(node.ancestors) && node.ancestors.length > 0) {
+                // Create links between each consecutive pair in the ancestors array
+                for (let i = 0; i < node.ancestors.length - 1; i++) {
+                    const currentAncestor = node.ancestors[i];
+                    const parentAncestor = node.ancestors[i + 1];
+                    
+                    if (nodeMap.has(currentAncestor) && nodeMap.has(parentAncestor)) {
                         links.add(JSON.stringify({
-                            source: ancestorId,
-                            target: node.id,
-                            type: 'ancestor',
-                            value: 1 // Weaker connection for ancestor relationships
+                            source: parentAncestor,
+                            target: currentAncestor,
+                            type: 'ancestor-chain',
+                            value: 2
                         }));
                     }
-                });
-            }
-
-            // 3. Collection/Database relationships
-            if (node.type?.includes('view')) {
-                const parentNode = nodeMap.get(node.parentId);
-                if (parentNode && (parentNode.isCollection || parentNode.isDatabase)) {
-                    links.add(JSON.stringify({
-                        source: node.parentId,
-                        target: node.id,
-                        type: 'collection-view',
-                        value: 2 // Medium strength for collection-view relationships
-                    }));
                 }
             }
+
+            // 3. Connect to parent page if different from direct parent
+            if (node.parentPageId && 
+                nodeMap.has(node.parentPageId) && 
+                node.parentPageId !== node.parentId) {
+                links.add(JSON.stringify({
+                    source: node.parentPageId,
+                    target: node.id,
+                    type: 'page-hierarchy',
+                    value: 1
+                }));
+            }
+
+            // 4. Connect nodes at same depth level that share a parent
+            const nodesAtSameDepth = Array.from(depthMap.get(node.depth) || []);
+            nodesAtSameDepth.forEach(otherId => {
+                if (otherId !== node.id) {
+                    const otherNode = nodeMap.get(otherId);
+                    if (otherNode && 
+                        otherNode.parentId === node.parentId && 
+                        node.parentId) {
+                        links.add(JSON.stringify({
+                            source: node.parentId,
+                            target: otherId,
+                            type: 'sibling',
+                            value: 1
+                        }));
+                    }
+                }
+            });
         });
 
         // Convert links back to array and resolve node references

@@ -122,8 +122,9 @@ function listenForResults() {
         dataframe_3: null
     };
     let lastProcessedChunk = 0;
-    const totalExpectedRecords = 121722; // Set actual total records
+    let totalExpectedRecords = 0;
     let connectionTimeout = null;
+    let isProcessingResults = false;
     
     function showProgress(current, total, chunk, totalChunks) {
         // First ensure status section is visible
@@ -147,14 +148,14 @@ function listenForResults() {
             }
         }
 
-        // Always use totalExpectedRecords for the total
+        // Use the actual total records for calculations
         const currentCount = typeof current === 'number' ? current : 0;
         const currentChunk = typeof chunk === 'number' ? chunk : 0;
         const totalChunksCount = typeof totalChunks === 'number' ? totalChunks : Math.ceil(totalExpectedRecords / 250);
 
         if (progressElement) {
-            const percentage = Math.round((currentCount / totalExpectedRecords) * 100);
-            const chunkPercentage = Math.round((currentChunk / totalChunksCount) * 100);
+            const percentage = totalExpectedRecords > 0 ? Math.round((currentCount / totalExpectedRecords) * 100) : 0;
+            const chunkPercentage = totalChunksCount > 0 ? Math.round((currentChunk / totalChunksCount) * 100) : 0;
             
             progressElement.innerHTML = `
                 <div class="space-y-4">
@@ -207,6 +208,11 @@ function listenForResults() {
                 const data = JSON.parse(event.data);
                     
                 if (data.type === 'progress') {
+                    // Set total records from server response
+                    if (data.totalRecords && totalExpectedRecords === 0) {
+                        totalExpectedRecords = data.totalRecords;
+                        console.log('Total records set from server:', totalExpectedRecords);
+                    }
                     showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
                     showProgress(data.recordsProcessed, totalExpectedRecords, data.currentChunk, data.totalChunks);
                     return;
@@ -219,14 +225,21 @@ function listenForResults() {
 
                 const newRecords = data.data.data.dataframe_2;
                 const currentChunk = data.currentChunk;
-                const totalChunks = Math.ceil(totalExpectedRecords / 250); // 250 records per chunk
+
+                // Set total records if not set yet
+                if (totalExpectedRecords === 0 && data.totalRecords) {
+                    totalExpectedRecords = data.totalRecords;
+                    console.log('Total records set from data:', totalExpectedRecords);
+                }
+
+                const totalChunks = Math.ceil(totalExpectedRecords / 250);
 
                 // Only process new chunks
                 if (currentChunk > lastProcessedChunk) {
-                    // Concatenate new records without any limit
+                    // Concatenate new records
                     accumulatedData.dataframe_2 = accumulatedData.dataframe_2.concat(newRecords);
                     
-                    // Store dataframe_3 if available and not already stored
+                    // Store dataframe_3 if available
                     if (data.data.data.dataframe_3 && !accumulatedData.dataframe_3) {
                         accumulatedData.dataframe_3 = data.data.data.dataframe_3;
                     }
@@ -249,8 +262,10 @@ function listenForResults() {
                         totalChunks
                     );
 
-                    // Process results only when we have all the data
-                    if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
+                    // Only process results when we have all the data and haven't processed it yet
+                    if (!isProcessingResults && 
+                        (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords)) {
+                        isProcessingResults = true;
                         console.log('Processing complete:', {
                             totalRecordsReceived: accumulatedData.dataframe_2.length,
                             expectedRecords: totalExpectedRecords,
@@ -323,6 +338,20 @@ function displayResults(response) {
             throw new Error('Invalid response format');
         }
 
+        // Validate we have all the expected records
+        const receivedRecords = response.data.dataframe_2.length;
+        console.log('Received records for display:', {
+            receivedRecords,
+            totalExpected: totalExpectedRecords,
+            hasDataframe3: !!response.data.dataframe_3
+        });
+
+        // If we haven't received all records yet, don't display results
+        if (receivedRecords < totalExpectedRecords) {
+            console.log('Waiting for more records before displaying results...');
+            return;
+        }
+
         // Show results section
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = ''; // Clear previous results
@@ -377,9 +406,35 @@ function createGraphVisualization(graphData) {
         // Clear previous graph
         container.innerHTML = '';
 
-        // Transform all data without any limits
+        // Transform data in chunks to avoid blocking UI
         console.log('Starting data transformation for all records:', totalRecords);
-        const transformedData = transformDataForGraph(graphData.dataframe_2);
+        const CHUNK_SIZE = 1000;
+        const chunks = [];
+        
+        for (let i = 0; i < totalRecords; i += CHUNK_SIZE) {
+            chunks.push(graphData.dataframe_2.slice(i, Math.min(i + CHUNK_SIZE, totalRecords)));
+        }
+
+        let transformedData = {
+            nodes: [],
+            links: []
+        };
+
+        console.log(`Processing ${chunks.length} chunks of data...`);
+
+        // Process each chunk
+        chunks.forEach((chunk, index) => {
+            const chunkResult = transformDataForGraph(chunk);
+            transformedData.nodes = transformedData.nodes.concat(chunkResult.nodes);
+            transformedData.links = transformedData.links.concat(chunkResult.links);
+            
+            console.log(`Processed chunk ${index + 1}/${chunks.length}:`, {
+                nodesInChunk: chunkResult.nodes.length,
+                linksInChunk: chunkResult.links.length,
+                totalNodesProcessed: transformedData.nodes.length,
+                totalLinksProcessed: transformedData.links.length
+            });
+        });
 
         if (!transformedData.nodes.length) {
             console.warn('No nodes to visualize');

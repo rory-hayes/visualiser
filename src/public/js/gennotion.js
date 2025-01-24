@@ -469,10 +469,8 @@ function transformDataForGraph(data) {
             return { nodes: [], links: [] };
         }
 
-        const totalExpectedRecords = 121722; // Use the actual total records
         console.log('Starting graph data transformation:', {
-            receivedRecords: data.length,
-            totalExpectedRecords,
+            totalRecords: data.length,
             sampleRecord: data[0]
         });
 
@@ -485,7 +483,7 @@ function transformDataForGraph(data) {
 
         // Process nodes in smaller chunks to avoid UI blocking
         const CHUNK_SIZE = 250; // Smaller chunks for smoother processing
-        const totalChunks = Math.ceil(totalExpectedRecords / CHUNK_SIZE);
+        const totalChunks = Math.ceil(data.length / CHUNK_SIZE);
 
         // First pass: Create all nodes
         for (let i = 0; i < data.length; i += CHUNK_SIZE) {
@@ -534,9 +532,9 @@ function transformDataForGraph(data) {
                 }
             });
 
-            // Log progress for first pass using totalExpectedRecords
-            const progress = Math.round((processedCount / totalExpectedRecords) * 100);
-            console.log(`Node creation progress: ${processedCount}/${totalExpectedRecords} (${progress}%)`);
+            // Log progress for first pass
+            const progress = Math.round((processedCount / data.length) * 100);
+            console.log(`Node creation progress: ${processedCount}/${data.length} (${progress}%)`);
         }
 
         // Reset for second pass
@@ -588,9 +586,9 @@ function transformDataForGraph(data) {
                 }
             });
 
-            // Log progress for second pass using totalExpectedRecords
-            const progress = Math.round((processedCount / totalExpectedRecords) * 100);
-            console.log(`Link creation progress: ${processedCount}/${totalExpectedRecords} (${progress}%)`);
+            // Log progress for second pass
+            const progress = Math.round((processedCount / nodes.length) * 100);
+            console.log(`Link creation progress: ${processedCount}/${nodes.length} (${progress}%)`);
         }
 
         // Convert links to array and resolve references
@@ -617,8 +615,7 @@ function transformDataForGraph(data) {
         });
 
         console.log('Graph transformation complete:', {
-            receivedRecords: data.length,
-            totalExpectedRecords,
+            originalRecords: data.length,
             nodes: nodes.length,
             links: processedLinks.length,
             nodesByDepth: depthStats,

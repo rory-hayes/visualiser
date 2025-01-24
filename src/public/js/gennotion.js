@@ -124,32 +124,28 @@ function listenForResults() {
     let lastProcessedChunk = 0;
     let totalExpectedRecords = 0;
     let connectionTimeout = null;
+    let isProcessingComplete = false;
+    let reconnectDelay = 1000; // Start with 1 second delay
     
     function showProgress(current, total, chunk, totalChunks) {
-        // First ensure status section is visible
         const statusSection = document.getElementById('statusSection');
         if (statusSection) {
             statusSection.classList.remove('hidden');
         }
 
-        // Get or create progress container
         let progressElement = document.getElementById('progress-container');
         if (!progressElement) {
             progressElement = document.createElement('div');
             progressElement.id = 'progress-container';
             progressElement.className = 'mt-4 bg-white rounded-lg shadow p-4';
-            
-            // Try to append to status section first
             const statusElement = document.getElementById('status');
             if (statusElement) {
                 statusElement.appendChild(progressElement);
             } else {
-                // Fallback to status section if status element doesn't exist
                 statusSection?.appendChild(progressElement);
             }
         }
 
-        // Ensure we have valid numbers before formatting
         const currentCount = typeof current === 'number' ? current : 0;
         const totalCount = typeof total === 'number' ? total : 0;
         const currentChunk = typeof chunk === 'number' ? chunk : 0;
@@ -186,36 +182,59 @@ function listenForResults() {
         }
     }
 
+    function handleConnectionError(eventSource, error) {
+        console.error('EventSource error:', error);
+        console.log('EventSource readyState:', eventSource.readyState);
+        
+        if (eventSource.readyState === EventSource.CLOSED) {
+            clearTimeout(connectionTimeout);
+            
+            if (!isProcessingComplete && retryCount < MAX_RETRIES) {
+                retryCount++;
+                showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
+                
+                // Exponential backoff for reconnection
+                reconnectDelay *= 2;
+                setTimeout(() => {
+                    eventSource.close();
+                    connectEventSource();
+                }, reconnectDelay);
+            } else if (!isProcessingComplete) {
+                showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
+            }
+        }
+    }
+
     function connectEventSource() {
         showStatus('Connecting to event stream...');
         
         const eventSource = new EventSource('/api/hex-results/stream');
         
-        // Set connection timeout
         connectionTimeout = setTimeout(() => {
             if (eventSource.readyState !== EventSource.CLOSED) {
                 console.log('Connection timeout - closing EventSource');
-        eventSource.close();
+                eventSource.close();
                 showStatus('Connection timeout. Please try again.', false);
             }
         }, 300000); // 5 minutes timeout
-        
+
         eventSource.onopen = () => {
             console.log('EventSource connection opened');
             retryCount = 0;
+            reconnectDelay = 1000; // Reset delay on successful connection
             showStatus('Connection established', true);
         };
 
-    eventSource.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
+        eventSource.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
                 
                 if (data.type === 'progress') {
                     totalExpectedRecords = data.totalRecords;
                     showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
                     showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
-                return;
-            }
+                    return;
+                }
 
                 if (!data.data?.data?.dataframe_2) {
                     return;
@@ -248,6 +267,7 @@ function listenForResults() {
 
                     // If this is the last chunk, process all data
                     if (data.isLastChunk || accumulatedData.dataframe_2.length >= totalExpectedRecords) {
+                        isProcessingComplete = true;
                         clearTimeout(connectionTimeout);
                         displayResults({
                             data: {
@@ -260,33 +280,16 @@ function listenForResults() {
                             },
                             success: true
                         });
-                eventSource.close();
+                        eventSource.close();
                     }
-            }
-        } catch (error) {
+                }
+            } catch (error) {
                 console.error('Error processing message:', error);
                 showStatus(`Error processing data: ${error.message}`, false);
-        }
-    };
-
-    eventSource.onerror = (error) => {
-        console.error('EventSource error:', error);
-            console.log('EventSource readyState:', eventSource.readyState);
-            
-            if (eventSource.readyState === EventSource.CLOSED) {
-                clearTimeout(connectionTimeout);
-                if (retryCount < MAX_RETRIES) {
-                    retryCount++;
-                    showStatus(`Connection lost. Retry attempt ${retryCount}/${MAX_RETRIES}...`, true);
-                    setTimeout(() => {
-        eventSource.close();
-                        connectEventSource();
-                    }, 2000 * retryCount);
-                } else {
-                    showStatus('Failed to maintain connection after multiple attempts. Please try again.', false);
-                }
             }
         };
+
+        eventSource.onerror = (error) => handleConnectionError(eventSource, error);
 
         return eventSource;
     }

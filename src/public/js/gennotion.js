@@ -719,6 +719,108 @@ function debounce(func, wait) {
 }
 
 // Timeline slider functionality
+function initializeTimeline(container, nodes, node, link, svg) {
+    try {
+        // Validate inputs
+        if (!container || !nodes || !node || !link || !svg) {
+            console.error('Missing required parameters for timeline initialization');
+            return;
+        }
+
+        // Find valid date range from CREATED_TIME field
+        const validDates = nodes
+            .map(n => n.CREATED_TIME ? new Date(n.CREATED_TIME) : null)
+            .filter(Boolean);
+        
+        if (validDates.length === 0) {
+            console.warn('No valid dates found in nodes');
+            return;
+        }
+
+        // Set start date to beginning of day and end date to end of day
+        const startDate = new Date(Math.min(...validDates));
+        startDate.setHours(0, 0, 0, 0);  // Start of day
+
+        const endDate = new Date(Math.max(...validDates));
+        endDate.setHours(23, 59, 59, 999);  // End of day
+
+        // Log date range information
+        console.log(`
+            Timeline Initialization:
+            Total nodes: ${nodes.length}
+            Nodes with valid dates: ${validDates.length}
+            Nodes without dates: ${nodes.length - validDates.length}
+            Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
+            Start timestamp: ${startDate.getTime()}
+            End timestamp: ${endDate.getTime()}
+        `);
+
+        // Create timeline container if it doesn't exist
+        let timelineContainer = container.querySelector('.timeline-container');
+        if (!timelineContainer) {
+            timelineContainer = document.createElement('div');
+            timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
+            container.appendChild(timelineContainer);
+        }
+        
+        timelineContainer.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-sm font-medium text-gray-600">${startDate.toLocaleDateString()}</span>
+                <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
+                <span class="text-sm font-medium text-gray-600">${endDate.toLocaleDateString()}</span>
+            </div>
+            <div class="relative">
+                <input type="range" 
+                    min="${startDate.getTime()}" 
+                    max="${endDate.getTime()}" 
+                    value="${endDate.getTime()}" 
+                    step="86400000"
+                    class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                    id="timelineSlider">
+            </div>
+        `;
+
+        // Timeline slider functionality
+        const slider = timelineContainer.querySelector('#timelineSlider');
+        if (!slider) {
+            console.error('Failed to find timeline slider element');
+            return;
+        }
+        
+        // Set initial state to show all nodes
+        const initialTime = new Date(endDate);
+        updateNodesVisibility(initialTime, node, link, nodes);
+
+        // Update visibility on slider change
+        slider.addEventListener('input', (event) => {
+            const currentTime = new Date(parseInt(event.target.value));
+            currentTime.setHours(23, 59, 59, 999);
+            updateNodesVisibility(currentTime, node, link, nodes);
+        });
+
+        // Reset visibility when clicking outside nodes
+        svg.on('click', (event) => {
+            if (event.target.tagName === 'svg') {
+                const currentTime = new Date(parseInt(slider.value));
+                currentTime.setHours(23, 59, 59, 999);
+                updateNodesVisibility(currentTime, node, link, nodes);
+            }
+        });
+
+        // Make sure the timeline container is visible
+        timelineContainer.style.display = 'block';
+        timelineContainer.style.opacity = '1';
+
+    } catch (error) {
+        console.error('Error in initializeTimeline:', error);
+        console.error('Error details:', {
+            error: error.message,
+            stack: error.stack
+        });
+    }
+}
+
+// Update the updateNodesVisibility function to work with CREATED_TIME
 function updateNodesVisibility(currentTime, node, link, nodes) {
     try {
         const currentDateDisplay = document.getElementById('currentDate');
@@ -730,21 +832,15 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
         let visibleCount = 0;
         let noDateCount = 0;
 
-        // Debug log before update
-        console.log('Updating visibility for date:', currentTime.toLocaleDateString(), {
-            totalNodes: nodes.length,
-            currentTimestamp: currentTime.getTime()
-        });
-
-        // Update visibility based on creation time
+        // Update visibility based on CREATED_TIME
         node.style('opacity', d => {
-            if (!d.createdTime) {
+            if (!d.CREATED_TIME) {
                 noDateCount++;
                 return 1; // Show nodes without dates
             }
 
-            // Compare timestamps and ensure proper visibility
-            const isVisible = d.createdTime.getTime() <= currentTime.getTime();
+            const nodeDate = new Date(d.CREATED_TIME);
+            const isVisible = nodeDate.getTime() <= currentTime.getTime();
             if (isVisible) {
                 visibleCount++;
                 return 1;
@@ -752,36 +848,28 @@ function updateNodesVisibility(currentTime, node, link, nodes) {
             return 0.1;
         });
         
-        // Update links visibility only between visible nodes
+        // Update links visibility
         link.style('opacity', d => {
-            const sourceVisible = !d.source.createdTime || d.source.createdTime.getTime() <= currentTime.getTime();
-            const targetVisible = !d.target.createdTime || d.target.createdTime.getTime() <= currentTime.getTime();
+            const sourceDate = d.source.CREATED_TIME ? new Date(d.source.CREATED_TIME) : null;
+            const targetDate = d.target.CREATED_TIME ? new Date(d.target.CREATED_TIME) : null;
+            
+            const sourceVisible = !sourceDate || sourceDate.getTime() <= currentTime.getTime();
+            const targetVisible = !targetDate || targetDate.getTime() <= currentTime.getTime();
+            
             return sourceVisible && targetVisible ? 0.6 : 0.1;
         });
 
         console.log(`
-            Date Range Info:
+            Visibility Update:
             Current Time: ${currentTime.toLocaleDateString()}
-            Current Timestamp: ${currentTime.getTime()}
             Visible nodes: ${visibleCount}
             Nodes without dates: ${noDateCount}
             Total nodes: ${nodes.length}
         `);
 
-        // Verify visibility counts match expectations
-        const expectedVisible = nodes.filter(n => !n.createdTime || n.createdTime.getTime() <= currentTime.getTime()).length;
-        if (visibleCount + noDateCount !== expectedVisible) {
-            console.warn('Visibility count mismatch:', {
-                counted: visibleCount + noDateCount,
-                expected: expectedVisible,
-                difference: expectedVisible - (visibleCount + noDateCount)
-            });
-        }
-
     } catch (error) {
         console.error('Error in updateNodesVisibility:', error);
         console.error('Current Time:', currentTime);
-        console.error('Node sample:', node.data()[0]);
     }
 }
 
@@ -1004,104 +1092,6 @@ function initializeGraph(data, container) {
         if (container) {
             container.innerHTML = '<div class="p-4 text-red-500">Error initializing graph visualization</div>';
         }
-    }
-}
-
-function initializeTimeline(container, nodes, node, link, svg) {
-    try {
-        // Validate inputs
-        if (!container || !nodes || !node || !link || !svg) {
-            console.error('Missing required parameters for timeline initialization');
-            return;
-        }
-
-        // Find valid date range
-        const validDates = nodes.map(n => n.createdTime).filter(Boolean);
-        
-        if (validDates.length === 0) {
-            console.warn('No valid dates found in nodes');
-            return;
-        }
-
-        // Set start date to beginning of day and end date to end of day
-        const startDate = new Date(Math.min(...validDates));
-        startDate.setHours(0, 0, 0, 0);  // Start of day
-
-        const endDate = new Date(Math.max(...validDates));
-        endDate.setHours(23, 59, 59, 999);  // End of day
-
-        // Log date range information
-        console.log(`
-            Timeline Initialization:
-            Total nodes: ${nodes.length}
-            Nodes with valid dates: ${validDates.length}
-            Nodes without dates: ${nodes.length - validDates.length}
-            Date range: ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}
-            Start timestamp: ${startDate.getTime()}
-            End timestamp: ${endDate.getTime()}
-        `);
-
-        // Add timeline slider
-        const timelineContainer = document.createElement('div');
-        timelineContainer.className = 'timeline-container absolute bottom-4 left-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-4';
-        
-        timelineContainer.innerHTML = `
-            <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-medium text-gray-600">${startDate?.toLocaleDateString() || 'N/A'}</span>
-                <span id="currentDate" class="text-sm font-medium text-indigo-600"></span>
-                <span class="text-sm font-medium text-gray-600">${endDate?.toLocaleDateString() || 'N/A'}</span>
-            </div>
-            <input type="range" 
-                min="${startDate?.getTime() || 0}" 
-                max="${endDate?.getTime() || 100}" 
-                value="${endDate?.getTime() || 100}" 
-                step="86400000"
-                class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                id="timelineSlider">
-        `;
-        container.appendChild(timelineContainer);
-
-        // Timeline slider functionality
-        const slider = document.getElementById('timelineSlider');
-        if (!slider) {
-            console.error('Failed to find timeline slider element');
-            return;
-        }
-        
-        // Set initial state to show all nodes
-        const initialTime = new Date(endDate);
-        console.log('Setting initial timeline state:', {
-            date: initialTime.toLocaleDateString(),
-            timestamp: initialTime.getTime()
-        });
-        updateNodesVisibility(initialTime, node, link, nodes);
-
-        slider.addEventListener('input', (event) => {
-            const currentTime = new Date(parseInt(event.target.value));
-            // Set to end of selected day
-            currentTime.setHours(23, 59, 59, 999);
-            console.log('Timeline slider moved:', {
-                date: currentTime.toLocaleDateString(),
-                timestamp: currentTime.getTime()
-            });
-            updateNodesVisibility(currentTime, node, link, nodes);
-        });
-
-        // Reset visibility when clicking outside nodes
-        svg.on('click', (event) => {
-            if (event.target.tagName === 'svg') {
-                const currentTime = new Date(parseInt(slider.value));
-                // Set to end of selected day
-                currentTime.setHours(23, 59, 59, 999);
-                updateNodesVisibility(currentTime, node, link, nodes);
-            }
-        });
-    } catch (error) {
-        console.error('Error in initializeTimeline:', error);
-        console.error('Error details:', {
-            error: error.message,
-            stack: error.stack
-        });
     }
 }
 

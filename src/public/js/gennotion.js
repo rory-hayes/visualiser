@@ -830,9 +830,10 @@ function initializeGraph(data, container) {
         // Clear any existing graph
         container.innerHTML = '';
 
-        // Initialize the visualization
+        // Initialize the visualization with larger dimensions for more space
         const width = container.clientWidth || 800;
         const height = container.clientHeight || 600;
+        const baseRadius = Math.min(width, height) / 50; // Dynamic node size based on container
 
         // Create SVG with zoom support
         const svg = d3.select(container)
@@ -841,27 +842,27 @@ function initializeGraph(data, container) {
             .attr('height', height)
             .attr('viewBox', [0, 0, width, height]);
 
-        // Add zoom behavior
+        // Add zoom behavior with adjusted scale range
         const g = svg.append('g');
         const zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on('zoom', (event) => g.attr('transform', event.transform));
         svg.call(zoom);
 
-        // Create the force simulation
+        // Create the force simulation with gentler forces
         const simulation = d3.forceSimulation(nodes)
             .force('link', d3.forceLink(links)
                 .id(d => d.id)
-                .distance(100))
+                .distance(d => 100 + (d.value || 1) * 20)) // Longer distances for stronger relationships
             .force('charge', d3.forceManyBody()
-                .strength(-500)
-                .distanceMax(500))
+                .strength(d => -300 - nodes.length * 0.5) // Adjust repulsion based on node count
+                .distanceMax(width / 2))
             .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30))
-            .force('x', d3.forceX(width / 2).strength(0.1))
-            .force('y', d3.forceY(height / 2).strength(0.1))
-            .alphaDecay(0.01)
-            .velocityDecay(0.2);
+            .force('collision', d3.forceCollide().radius(baseRadius * 2))
+            .force('x', d3.forceX(width / 2).strength(0.05))
+            .force('y', d3.forceY(height / 2).strength(0.05))
+            .alphaDecay(0.02) // Slower decay for more stable settling
+            .velocityDecay(0.3); // Higher decay for less chaotic movement
 
         // Add links
         const link = g.append('g')
@@ -871,33 +872,33 @@ function initializeGraph(data, container) {
             .join('line')
             .attr('stroke', '#999')
             .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 2);
+            .attr('stroke-width', d => Math.sqrt(d.value || 1));
 
-        // Add nodes
+        // Add nodes with adjusted size
         const node = g.append('g')
             .attr('class', 'nodes')
             .selectAll('circle')
             .data(nodes)
             .join('circle')
-            .attr('r', 8)
+            .attr('r', baseRadius)
             .attr('fill', d => colorScale(d.type))
             .call(drag(simulation));
 
-        // Add labels
+        // Add labels with adjusted positioning
         const labels = g.append('g')
             .attr('class', 'labels')
             .selectAll('text')
             .data(nodes)
             .join('text')
-            .attr('dx', 12)
+            .attr('dx', baseRadius + 4)
             .attr('dy', 4)
-            .text(d => d.title?.substring(0, 20))
+            .text(d => d.title)
             .style('font-size', '10px')
             .style('fill', '#666');
 
         // Initialize timeline if we have dates
         if (nodes.some(n => n.createdTime)) {
-        initializeTimeline(container, nodes, node, link, svg);
+            initializeTimeline(container, nodes, node, link, svg);
         }
 
         // Update positions on each tick
@@ -931,12 +932,11 @@ function initializeGraph(data, container) {
             .style('max-width', '300px')
             .style('z-index', '1000');
 
+        // Add hover effects
         node.on('mouseover', (event, d) => {
-            // Fix node position during hover
             d.fx = d.x;
             d.fy = d.y;
             
-            // Show tooltip
             tooltip.transition()
                 .duration(200)
                 .style('opacity', .9);
@@ -946,7 +946,6 @@ function initializeGraph(data, container) {
                     <strong class="block text-lg mb-1">${d.title}</strong>
                     <span class="block text-sm text-gray-500">Type: ${d.type}</span>
                     ${d.createdTime ? `<span class="block text-sm text-gray-500">Created: ${d.createdTime.toLocaleDateString()}</span>` : ''}
-                    ${d.url ? `<a href="${d.url}" target="_blank" class="block mt-2 text-blue-500 hover:text-blue-700">Open in Notion</a>` : ''}
                 </div>
             `)
             .style('left', (event.pageX + 10) + 'px')
@@ -965,16 +964,13 @@ function initializeGraph(data, container) {
             );
         })
         .on('mouseout', (event, d) => {
-            // Release fixed position
             d.fx = null;
             d.fy = null;
             
-            // Hide tooltip
             tooltip.transition()
                 .duration(500)
                 .style('opacity', 0);
 
-            // Reset node visibility
             node.style('opacity', 1);
             link.style('opacity', 0.6);
         });
@@ -987,17 +983,21 @@ function initializeGraph(data, container) {
             height
         };
 
-        // Initial zoom to fit
+        // Calculate initial zoom to fit with more padding
         const bounds = g.node().getBBox();
-        const scale = 0.8 / Math.max(bounds.width / width, bounds.height / height);
+        const scale = 0.4 / Math.max(bounds.width / width, bounds.height / height); // Reduced scale for more zoom-out
         const translate = [
             (width - scale * bounds.width) / 2 - scale * bounds.x,
             (height - scale * bounds.height) / 2 - scale * bounds.y
         ];
-        svg.call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
 
-        // Start simulation with higher alpha
-        simulation.alpha(1).restart();
+        // Apply initial transform with a transition
+        svg.transition()
+            .duration(750)
+            .call(zoom.transform, d3.zoomIdentity.translate(...translate).scale(scale));
+
+        // Start simulation with lower alpha
+        simulation.alpha(0.5).restart();
 
     } catch (error) {
         console.error('Error in initializeGraph:', error);

@@ -1,3 +1,6 @@
+import { MetricsCalculator } from './gennotion/core/MetricsCalculator.js';
+import { MetricsDisplay } from './gennotion/visualization/MetricsDisplay.js';
+
 // Constants
 const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
 const HEX_API_URL = 'https://app.hex.tech/api/v1';
@@ -279,19 +282,28 @@ function displayResults(response) {
             throw new Error('Invalid response format');
         }
 
+        // Calculate detailed metrics
+        const metricsCalculator = new MetricsCalculator();
+        const metrics = metricsCalculator.calculateAllMetrics(
+            response.data.dataframe_2,
+            response.data.dataframe_3
+        );
+
+        // Log detailed metrics for debugging
+        console.log('Detailed metrics:', metrics);
+
         // Show results section
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = ''; // Clear previous results
         
-        // Add metrics container
+        // Create metrics container
         const metricsContainer = document.createElement('div');
-        metricsContainer.className = 'bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6';
-        metricsContainer.innerHTML = formatResults(response.data.dataframe_2, response.data.dataframe_3);
+        metricsContainer.id = 'metrics-container';
         resultsContent.appendChild(metricsContainer);
         
-        // Calculate metrics
-        const metrics = calculateMetrics(response.data.dataframe_2, response.data.dataframe_3);
-        updateMetricsDisplay(metrics);
+        // Display metrics using MetricsDisplay
+        const metricsDisplay = new MetricsDisplay('metrics-container');
+        metricsDisplay.displayMetrics(metrics);
         
         // Create single graph container
         const graphContainer = document.createElement('div');

@@ -211,9 +211,9 @@ function listenForResults() {
             const data = JSON.parse(event.data);
                 
             if (data.type === 'progress') {
-                totalExpectedRecords = data.totalRecords;
+                totalExpectedRecords = data.totalRecords || 121000; // Set default if not provided
                 showStatus(`Processing chunk ${data.currentChunk} of ${data.totalChunks}`, true);
-                showProgress(data.recordsProcessed, data.totalRecords, data.currentChunk, data.totalChunks);
+                showProgress(data.recordsProcessed, totalExpectedRecords, data.currentChunk, data.totalChunks);
                 return;
             }
 
@@ -242,7 +242,7 @@ function listenForResults() {
                     totalChunks: data.totalChunks,
                     newRecordsCount: newRecords.length,
                     accumulatedRecords: accumulatedData.dataframe_2.length,
-                    totalExpectedRecords: totalExpectedRecords
+                    totalExpectedRecords
                 });
 
                 showProgress(
@@ -379,22 +379,22 @@ function createGraphVisualization(graphData) {
         container.innerHTML = '';
 
         // Transform data for visualization
-        const { nodes, links } = transformDataForGraph(graphData.dataframe_2);
+        const transformedData = transformDataForGraph(graphData.dataframe_2);
 
-        if (nodes.length === 0) {
+        if (transformedData.nodes.length === 0) {
             console.warn('No nodes to visualize');
             container.innerHTML = '<div class="p-4 text-gray-500">No data available for visualization</div>';
             return;
         }
 
         console.log('Visualization data prepared:', {
-            nodes: nodes.length,
-            links: links.length,
-            nodeTypes: [...new Set(nodes.map(n => n.type))]
+            nodes: transformedData.nodes.length,
+            links: transformedData.links.length,
+            nodeTypes: [...new Set(transformedData.nodes.map(n => n.type))]
         });
 
         // Initialize the graph with the transformed data
-        initializeGraph(graphData, container);
+        initializeGraph(transformedData, container);
 
     } catch (error) {
         console.error('Error creating graph visualization:', error);

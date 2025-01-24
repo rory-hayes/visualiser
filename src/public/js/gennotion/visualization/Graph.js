@@ -2,9 +2,22 @@ import * as d3 from 'https://cdn.jsdelivr.net/npm/d3@7/+esm';
 
 export class GraphVisualizer {
     constructor(container) {
-        this.container = container;
-        this.width = container.clientWidth;
-        this.height = container.clientHeight;
+        // Ensure we're using the correct container
+        this.container = typeof container === 'string' ? 
+            document.getElementById(container) : container;
+            
+        if (!this.container) {
+            throw new Error('Graph container not found');
+        }
+
+        // Clear any existing content and ensure proper ID
+        this.container.innerHTML = '';
+        this.container.id = 'graph-container';
+        this.container.className = 'w-full h-[800px] min-h-[800px] lg:h-[1000px] relative bg-gray-50 rounded-lg overflow-hidden';
+
+        // Initialize dimensions
+        this.width = this.container.clientWidth;
+        this.height = this.container.clientHeight;
         this.simulation = null;
         this.svg = null;
         this.g = null;
@@ -58,10 +71,10 @@ export class GraphVisualizer {
     }
 
     setupContainer() {
-        // Clear any existing content
+        // Don't create a new container, just clear the existing one
         this.container.innerHTML = '';
 
-        // Create SVG
+        // Create SVG within the existing container
         this.svg = d3.select(this.container)
             .append('svg')
             .attr('width', this.width)
@@ -85,6 +98,30 @@ export class GraphVisualizer {
             });
 
         this.svg.call(this.zoom);
+
+        // Add graph controls container
+        const controls = d3.select(this.container)
+            .append('div')
+            .attr('class', 'graph-controls absolute top-4 right-4 z-10 bg-white/80 backdrop-blur-sm rounded-lg shadow-lg p-2 flex gap-2');
+
+        // Add zoom controls
+        controls.append('button')
+            .attr('class', 'graph-control-button hover:bg-gray-100')
+            .attr('title', 'Zoom In')
+            .html('<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>')
+            .on('click', () => this.zoomBy(1.2));
+
+        controls.append('button')
+            .attr('class', 'graph-control-button hover:bg-gray-100')
+            .attr('title', 'Zoom Out')
+            .html('<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>')
+            .on('click', () => this.zoomBy(0.8));
+
+        controls.append('button')
+            .attr('class', 'graph-control-button hover:bg-gray-100')
+            .attr('title', 'Reset View')
+            .html('<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>')
+            .on('click', () => this.resetZoom());
     }
 
     async processDataInChunks(data) {
@@ -491,5 +528,15 @@ export class GraphVisualizer {
         this.simulation
             .force('center', d3.forceCenter(this.width / 2, this.height / 2))
             .restart();
+    }
+
+    zoomBy(factor) {
+        this.svg.transition()
+            .duration(300)
+            .call(this.zoom.scaleBy, factor);
+    }
+
+    resetZoom() {
+        this.initialZoom();
     }
 } 

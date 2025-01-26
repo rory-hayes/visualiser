@@ -206,8 +206,9 @@ function loadResults() {
     }
 }
 
-let graphCache = null; // Cache to store graph data temporarily
-const hexResultsStore = new Map(); // Rename the store to avoid conflict
+// Initialize storage variables
+let graphCache = null;
+let hexResults = null; // Initialize hexResults at the top level
 
 // Get the directory name properly in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -611,137 +612,6 @@ async function callHexAPI(workspaceId, projectId) {
     }
 }
 
-// Add endpoint for streaming Hex results
-app.get('/api/hex-results/stream', (req, res) => {
-    try {
-        // Set SSE headers with a longer timeout
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-            'Keep-Alive': 'timeout=120'
-        });
-
-        // Track processing state
-        let processingState = {
-            lastProcessedIndex: 0,
-            totalRecordsSent: 0,
-            isProcessing: false
-        };
-
-        // Send initial connection message
-        res.write('data: {"type":"connected"}\n\n');
-
-        // Function to check for results
-        const checkResults = async () => {
-            if (processingState.isProcessing) {
-                return; // Skip if already processing
-            }
-
-            try {
-                processingState.isProcessing = true;
-                const results = loadResults();
-                
-                if (!results?.data?.dataframe_2) {
-                    processingState.isProcessing = false;
-                    return;
-                }
-
-                const totalRecords = results.data.dataframe_2.length;
-                const CHUNK_SIZE = 500;
-                const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
-
-                // Only send progress if we haven't started or if we're resuming
-                if (processingState.lastProcessedIndex === 0) {
-                    res.write(`data: {"type":"progress","message":"Starting data processing...","totalRecords":${totalRecords},"totalChunks":${totalChunks}}\n\n`);
-                }
-
-                // Process remaining data in chunks
-                for (let i = processingState.lastProcessedIndex; i < totalRecords; i += CHUNK_SIZE) {
-                    const chunk = results.data.dataframe_2.slice(i, Math.min(i + CHUNK_SIZE, totalRecords));
-                    const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
-                    
-                    // Send progress update
-                    res.write(`data: {"type":"progress","message":"Processing records ${i + 1} to ${Math.min(i + CHUNK_SIZE, totalRecords)}","currentChunk":${chunkNum},"totalChunks":${totalChunks},"recordsProcessed":${i + chunk.length},"totalRecords":${totalRecords}}\n\n`);
-                    
-                    const chunkData = {
-                        success: true,
-                        data: {
-                            timestamp: results.timestamp,
-                            data: {
-                                dataframe_2: chunk,
-                                dataframe_3: i + CHUNK_SIZE >= totalRecords ? results.data.dataframe_3 : null
-                            }
-                        },
-                        totalChunks,
-                        currentChunk: chunkNum,
-                        totalRecords,
-                        recordsProcessed: i + chunk.length,
-                        isLastChunk: i + CHUNK_SIZE >= totalRecords
-                    };
-
-                    try {
-                        const chunkString = JSON.stringify(chunkData);
-                        res.write(`data: ${chunkString}\n\n`);
-                        
-                        // Update processing state
-                        processingState.lastProcessedIndex = i + CHUNK_SIZE;
-                        processingState.totalRecordsSent += chunk.length;
-
-                        // Add small delay between chunks to prevent overwhelming the client
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                    } catch (stringifyError) {
-                        console.error('Error sending chunk:', stringifyError);
-                        res.write(`data: {"type":"error","message":"Error processing chunk ${chunkNum}"}\n\n`);
-                    }
-
-                    // Clear chunk data
-                    chunk.length = 0;
-                }
-
-                // Check if we've processed everything
-                if (processingState.totalRecordsSent >= totalRecords) {
-                    res.write(`data: {"type":"complete","message":"Processing complete","totalRecords":${totalRecords}}\n\n`);
-                    await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
-                    res.end();
-                    return;
-                }
-
-                processingState.isProcessing = false;
-            } catch (error) {
-                console.error('Error in checkResults:', error);
-                res.write(`data: {"type":"error","message":"Error processing results: ${error.message}"}\n\n`);
-                processingState.isProcessing = false;
-            }
-        };
-
-        // Check for results more frequently
-        const interval = setInterval(async () => {
-            await checkResults();
-        }, 1000);
-
-        // Handle client disconnect
-        req.on('close', () => {
-            clearInterval(interval);
-            // Don't clear the file immediately on disconnect to allow for reconnection
-            setTimeout(async () => {
-                try {
-                    const results = loadResults();
-                    if (results?.data?.dataframe_2?.length === processingState.totalRecordsSent) {
-                        await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
-                    }
-                } catch (error) {
-                    console.error('Error cleaning up after disconnect:', error);
-                }
-            }, 5000);
-        });
-
-    } catch (error) {
-        console.error('Error in hex-results stream:', error);
-        res.status(500).end();
-    }
-});
-
 // Add endpoint to receive Hex results
 app.post('/api/hex-results', async (req, res) => {
     try {
@@ -752,14 +622,23 @@ app.post('/api/hex-results', async (req, res) => {
             return res.status(400).json({ error: 'Unsuccessful response from Hex' });
         }
 
-        console.log('Successfully loaded results:', {
-            fileSize: JSON.stringify(data).length,
-            recordCount: data.dataframe_2.length,
-            hasDataframe3: !!data.dataframe_3,
-            workspaceId
+        console.log('Processing Hex results:', {
+            workspaceId,
+            hasDataframe2: !!data?.dataframe_2,
+            dataframe2Length: data?.dataframe_2?.length,
+            hasDataframe3: !!data?.dataframe_3
         });
 
-        // Store the data for streaming
+        // Save results to storage
+        await saveResults({
+            timestamp: new Date().toISOString(),
+            data: {
+                dataframe_2: data.dataframe_2,
+                dataframe_3: data.dataframe_3
+            }
+        });
+
+        // Update hexResults for streaming
         hexResults = {
             workspaceId,
             dataframe_2: data.dataframe_2,
@@ -767,17 +646,108 @@ app.post('/api/hex-results', async (req, res) => {
         };
 
         // Attempt report generation
-        try {
-            const reportGenerator = new NotionReportGenerator();
-            await reportGenerator.generateAndUploadReport(workspaceId, data.dataframe_2, data.dataframe_3);
-        } catch (reportError) {
-            console.error('Error generating report:', reportError);
+        if (workspaceId && data.dataframe_2 && data.dataframe_3) {
+            try {
+                console.log('Importing NotionReportGenerator...');
+                const { NotionReportGenerator } = await import('./public/js/gennotion/core/NotionReportGenerator.js');
+                
+                console.log('Creating NotionReportGenerator instance...');
+                const reportGenerator = new NotionReportGenerator();
+                
+                console.log('Generating and uploading report...');
+                await reportGenerator.generateAndUploadReport(workspaceId, data.dataframe_2, data.dataframe_3);
+                console.log('Report generation and upload completed successfully');
+            } catch (reportError) {
+                console.error('Error generating report:', {
+                    message: reportError.message,
+                    stack: reportError.stack
+                });
+            }
+        } else {
+            console.log('Skipping report generation:', {
+                hasWorkspaceId: !!workspaceId,
+                hasDataframe2: !!data?.dataframe_2,
+                hasDataframe3: !!data?.dataframe_3
+            });
         }
 
         res.json({ success: true });
     } catch (error) {
         console.error('Error processing Hex results:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Update the streaming endpoint to use hexResults
+app.get('/api/hex-results/stream', (req, res) => {
+    try {
+        // Set SSE headers
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
+        });
+
+        // Send initial connection message
+        res.write('data: {"type":"connected"}\n\n');
+
+        // Function to send data chunks
+        const sendDataChunks = async () => {
+            try {
+                const results = hexResults || loadResults();
+                if (!results?.data?.dataframe_2) {
+                    return;
+                }
+
+                const CHUNK_SIZE = 500;
+                const data = results.data.dataframe_2;
+                const totalRecords = data.length;
+                const totalChunks = Math.ceil(totalRecords / CHUNK_SIZE);
+
+                for (let i = 0; i < totalRecords; i += CHUNK_SIZE) {
+                    const chunk = data.slice(i, Math.min(i + CHUNK_SIZE, totalRecords));
+                    const currentChunk = Math.floor(i / CHUNK_SIZE) + 1;
+
+                    const chunkData = {
+                        currentChunk,
+                        totalChunks,
+                        accumulatedRecords: Math.min(i + CHUNK_SIZE, totalRecords),
+                        totalRecords
+                    };
+
+                    res.write(`data: ${JSON.stringify(chunkData)}\n\n`);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // Send final chunk with dataframe_3
+                if (results.data.dataframe_3) {
+                    const finalData = {
+                        type: 'complete',
+                        dataframe_2: data,
+                        dataframe_3: results.data.dataframe_3
+                    };
+                    res.write(`data: ${JSON.stringify(finalData)}\n\n`);
+                }
+
+                res.end();
+            } catch (error) {
+                console.error('Error sending data chunks:', error);
+                res.write(`data: {"type":"error","message":"${error.message}"}\n\n`);
+                res.end();
+            }
+        };
+
+        // Start sending data
+        sendDataChunks();
+
+        // Handle client disconnect
+        req.on('close', () => {
+            console.log('Client disconnected from SSE');
+        });
+
+    } catch (error) {
+        console.error('Error in hex-results stream:', error);
+        res.status(500).end();
     }
 });
 

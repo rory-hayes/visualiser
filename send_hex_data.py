@@ -49,7 +49,7 @@ def send_api_request(dataframe_2, dataframe_3, workspace_id):
         logging.info(f"Metadata: {data_payload['metadata']}")
 
         # Send request with workspaceId as query parameter
-        api_url = f"{API_URL}?workspaceId={workspace_id}"
+        api_url = f"{API_URL}?workspaceId={workspace_id.strip()}"  # Ensure workspace_id is clean
         logging.info(f"Sending data to API at {api_url}...")
         headers = {"Content-Type": "application/json"}
         response = session.post(api_url, headers=headers, json=data_payload)

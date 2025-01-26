@@ -7,15 +7,21 @@ export class NotionReportGenerator {
     constructor() {
         this.metricsCalculator = new MetricsCalculator();
         this.pdfGenerator = new PDFGenerator(
-            path.join(process.cwd(), 'src/public/convertToDocs/markdown/Notion Enterprise, the why 182efdeead058091a021f98ed0898fbe.md'),
-            path.join(process.cwd(), 'src/public/convertToDocs/markdown/Notion Enterprise, the why 182efdeead058091a021f98ed0898fbe')
+            path.join(process.cwd(), 'src', 'public', 'convertToDocs', 'markdown', 'Notion Enterprise, the why 182efdeead058091a021f98ed0898fbe.md'),
+            path.join(process.cwd(), 'src', 'public', 'convertToDocs', 'markdown', 'Notion Enterprise, the why 182efdeead058091a021f98ed0898fbe')
         );
         
-        // Initialize Notion client
-        this.notion = new Client({ 
-            auth: "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" 
-        });
-        this.databaseId = "18730aa1-c7a9-80ca-b4ca-000c9fbcdad0";
+        // Initialize Notion client with error logging
+        try {
+            this.notion = new Client({ 
+                auth: "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" 
+            });
+            this.databaseId = "18730aa1-c7a9-80ca-b4ca-000c9fbcdad0";
+            console.log('Notion client initialized successfully');
+        } catch (error) {
+            console.error('Error initializing Notion client:', error);
+            throw error;
+        }
     }
 
     async generateReport(dataframe_2, dataframe_3) {
@@ -41,9 +47,10 @@ export class NotionReportGenerator {
 
     async uploadToNotion(workspaceId, pdfBuffer, metrics) {
         try {
-            console.log('Uploading to Notion database...');
+            console.log('Starting Notion upload process for workspace:', workspaceId);
 
             // First, upload the PDF file to Notion
+            console.log('Uploading PDF file to Notion...');
             const pdfUploadResponse = await this.notion.files.create({
                 file: {
                     name: `Workspace Analysis - ${workspaceId}.pdf`,
@@ -51,9 +58,11 @@ export class NotionReportGenerator {
                     content: pdfBuffer
                 }
             });
+            console.log('PDF upload successful:', pdfUploadResponse);
 
             // Create the database entry with the workspace ID and PDF link
-            const response = await this.notion.pages.create({
+            console.log('Creating database entry...');
+            const pageProperties = {
                 parent: { database_id: this.databaseId },
                 properties: {
                     Name: {
@@ -91,17 +100,28 @@ export class NotionReportGenerator {
                         ]
                     }
                 },
-            });
+            };
+            console.log('Database entry properties prepared:', pageProperties);
 
-            console.log('Successfully uploaded to Notion:', response);
+            const response = await this.notion.pages.create(pageProperties);
+            console.log('Successfully created Notion page:', response);
+
             return {
                 success: true,
                 message: 'Report generated and uploaded successfully',
-                notionPageId: response.id
+                notionPageId: response.id,
+                pdfUrl: pdfUploadResponse.url
             };
 
         } catch (error) {
-            console.error('Error uploading to Notion:', error);
+            console.error('Detailed error in Notion upload:', {
+                error: error.message,
+                stack: error.stack,
+                name: error.name,
+                code: error.code,
+                status: error.status,
+                response: error.response
+            });
             throw error;
         }
     }

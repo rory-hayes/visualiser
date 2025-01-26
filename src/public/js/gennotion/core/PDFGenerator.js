@@ -41,27 +41,53 @@ export class PDFGenerator {
         marked.setOptions({
             gfm: true,
             breaks: true,
-            headerIds: true
+            headerIds: true,
+            async: true  // Enable async rendering
         });
 
         // Custom renderer to handle local images
         const renderer = new marked.Renderer();
         const originalImageRenderer = renderer.image.bind(renderer);
         
-        renderer.image = (href, title, text) => {
-            if (href.startsWith('./') || href.startsWith('../')) {
-                // Convert relative paths to absolute data URLs
-                const imagePath = path.join(this.imageFolderPath, href);
-                const imageData = fs.readFileSync(imagePath);
-                const base64Image = imageData.toString('base64');
-                const mimeType = this.getMimeType(href);
-                href = `data:${mimeType};base64,${base64Image}`;
+        renderer.image = async (href, title, text) => {
+            try {
+                console.log('Processing image:', href);
+                
+                // Handle Notion-style paths
+                if (href.includes(path.basename(this.imageFolderPath))) {
+                    // Extract the filename from the Notion-style path
+                    const filename = href.split('/').pop();
+                    const imagePath = path.join(this.imageFolderPath, filename);
+                    console.log('Looking for image at:', imagePath);
+                    
+                    try {
+                        const imageData = await fs.readFile(imagePath);
+                        const base64Image = imageData.toString('base64');
+                        const mimeType = this.getMimeType(filename);
+                        href = `data:${mimeType};base64,${base64Image}`;
+                        console.log('Successfully converted image to base64');
+                    } catch (readError) {
+                        console.error('Error reading image:', readError);
+                        // Keep original href if file can't be read
+                    }
+                } else if (href.startsWith('./') || href.startsWith('../')) {
+                    // Handle relative paths
+                    const imagePath = path.join(this.imageFolderPath, href);
+                    const imageData = await fs.readFile(imagePath);
+                    const base64Image = imageData.toString('base64');
+                    const mimeType = this.getMimeType(href);
+                    href = `data:${mimeType};base64,${base64Image}`;
+                }
+                
+                return originalImageRenderer(href, title, text);
+            } catch (error) {
+                console.error('Error processing image:', error);
+                return originalImageRenderer(href, title, text);
             }
-            return originalImageRenderer(href, title, text);
         };
 
-        // Convert markdown to HTML
-        const htmlContent = marked(markdown, { renderer });
+        // Convert markdown to HTML with async support
+        const htmlContent = await marked(markdown, { renderer });
 
         // Wrap with proper HTML structure and styling
         return `

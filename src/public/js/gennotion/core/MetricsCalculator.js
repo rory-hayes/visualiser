@@ -7,9 +7,13 @@ export class MetricsCalculator {
         this.BOTTLENECK_THRESHOLD = 10;
         this.SCATTER_THRESHOLD = 0.3;
         this.UNFINDABLE_DEPTH = 4;
+
+        // Notion API configuration
+        this.NOTION_DATABASE_ID = "18730aa1-c7a9-8059-b53e-de31cde8bfc4";
+        this.NOTION_API_KEY = "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";
     }
 
-    calculateAllMetrics(dataframe_2, dataframe_3) {
+    async calculateAllMetrics(dataframe_2, dataframe_3) {
         // Log both the summary data and full dataset
         console.log('Data received:', {
             dataframe_2_length: dataframe_2?.length,
@@ -33,6 +37,11 @@ export class MetricsCalculator {
 
         // Log metrics with placeholders
         this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3);
+
+        // Create Notion page with workspace ID
+        if (dataframe_2?.[0]?.SPACE_ID) {
+            await this.createNotionEntry(dataframe_2[0].SPACE_ID, allMetrics);
+        }
 
         return allMetrics;
     }
@@ -505,5 +514,39 @@ export class MetricsCalculator {
         Object.entries(placeholderMetrics).forEach(([placeholder, value]) => {
             console.log(`${placeholder} -> ${value}`);
         });
+    }
+
+    async createNotionEntry(workspaceId, metrics) {
+        try {
+            const response = await fetch('https://api.notion.com/v1/pages', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.NOTION_API_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Notion-Version': '2022-06-28'
+                },
+                body: JSON.stringify({
+                    parent: { database_id: this.NOTION_DATABASE_ID },
+                    properties: {
+                        Name: {
+                            title: [
+                                {
+                                    text: {
+                                        content: workspaceId,
+                                    },
+                                },
+                            ],
+                        }
+                    }
+                })
+            });
+
+            const result = await response.json();
+            console.log("Success! Notion entry created:", result);
+            return result;
+        } catch (error) {
+            console.error("Error creating Notion entry:", error);
+            throw error;
+        }
     }
 } 

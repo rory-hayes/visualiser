@@ -518,20 +518,37 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
-            const response = await fetch('/api/notion/create-page', {
+            // First create the page
+            const pageResponse = await fetch('/api/notion/create-page', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     workspaceId,
-                    metrics
+                    metrics,
+                    templatePath: 'src/public/convertToDocs/markdown/Notion Enterprise, the why 182efdeead058091a021f98ed0898fbe.md'
                 })
             });
 
-            const result = await response.json();
-            console.log("Success! Notion entry created:", result);
-            return result;
+            const pageResult = await pageResponse.json();
+            console.log("Success! Notion entry created:", pageResult);
+
+            // Now attach the PDF
+            const pdfResponse = await fetch(`/api/notion/attach-pdf/${pageResult.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    metrics: this.formatMetricsForPDF(metrics)
+                })
+            });
+
+            const pdfResult = await pdfResponse.json();
+            console.log("Success! PDF attached:", pdfResult);
+
+            return { page: pageResult, pdf: pdfResult };
         } catch (error) {
             console.error("Error creating Notion entry:", error);
             throw error;

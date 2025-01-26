@@ -3,7 +3,7 @@ import json
 import logging
 import datetime
 
-def send_api_request(dataframe_2, dataframe_3, workspace_id):
+def send_api_request(dataframe_2, dataframe_3):
     try:
         # Validate DataFrames
         if not (validate_dataframe(dataframe_2, "dataframe_2") and 
@@ -30,9 +30,8 @@ def send_api_request(dataframe_2, dataframe_3, workspace_id):
         # Update metadata timestamp
         METADATA["timestamp"] = datetime.datetime.now().isoformat()
 
-        # Prepare data payload with dataframes and workspaceId
+        # Prepare data payload with dataframes
         data_payload = {
-            "workspaceId": workspace_id.strip(),  # Include workspaceId in the payload
             "data": {
                 "dataframe_2": json.loads(json_data_2),
                 "dataframe_3": metrics_dict
@@ -44,7 +43,6 @@ def send_api_request(dataframe_2, dataframe_3, workspace_id):
         # Log the payload data for debugging
         logging.info(f"Sending payload with {len(data_payload['data']['dataframe_2'])} records in dataframe_2")
         logging.info(f"Sending payload with {len(metrics_dict)} metrics in dataframe_3")
-        logging.info(f"Workspace ID: {data_payload['workspaceId']}")
         logging.info(f"First record samples:")
         logging.info(f"dataframe_2: {data_payload['data']['dataframe_2'][0] if data_payload['data']['dataframe_2'] else 'No data'}")
         logging.info(f"dataframe_3: {metrics_dict}")
@@ -75,15 +73,4 @@ def send_api_request(dataframe_2, dataframe_3, workspace_id):
     except requests.exceptions.RequestException as e:
         logging.error(f"Error during API call: {e}")
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
-
-# Main execution
-if __name__ == "__main__":
-    try:
-        # The dataframe_2 and workspace_id from SQL query will be available in Hex
-        logging.info("Starting script execution")
-        logging.info(f"DataFrame info:\n{dataframe_2.info()}")
-        print(dataframe_2)
-        send_api_request(dataframe_2, dataframe_3, _input_text)  # _input_text is the workspace_id from Hex
-    except Exception as e:
-        logging.error(f"Error: {e}") 
+        logging.error(f"Unexpected error: {e}") 

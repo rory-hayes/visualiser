@@ -14,6 +14,8 @@ import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { marked } from 'marked';
 import puppeteer from 'puppeteer';
+import { FormData } from 'formdata-node';
+import { Blob } from 'buffer';
 
 // Load environment variables from .env file
 dotenv.config();

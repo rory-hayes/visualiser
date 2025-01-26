@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@notionhq/client": "^2.2.15",
+    "formdata-node": "^6.0.3",
     "marked": "^15.0.6",
     "puppeteer": "^24.1.1"
   }

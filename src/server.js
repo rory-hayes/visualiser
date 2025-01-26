@@ -745,57 +745,39 @@ app.get('/api/hex-results/stream', (req, res) => {
 // Add endpoint to receive Hex results
 app.post('/api/hex-results', async (req, res) => {
     try {
-        const results = req.body;
-        console.log('Received raw request body:', {
-            hasData: !!results.data,
-            dataframe2Length: results.data?.dataframe_2?.length,
-            dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
+        const { workspaceId, data, metadata, success } = req.body;
+        
+        if (!success) {
+            console.error('Received unsuccessful response from Hex');
+            return res.status(400).json({ error: 'Unsuccessful response from Hex' });
+        }
+
+        console.log('Successfully loaded results:', {
+            fileSize: JSON.stringify(data).length,
+            recordCount: data.dataframe_2.length,
+            hasDataframe3: !!data.dataframe_3,
+            workspaceId
         });
 
-        // Save results to file
-        await fs.promises.writeFile(STORAGE_FILE, JSON.stringify({
-            timestamp: new Date().toISOString(),
-            data: results.data
-        }));
+        // Store the data for streaming
+        hexResults = {
+            workspaceId,
+            dataframe_2: data.dataframe_2,
+            dataframe_3: data.dataframe_3
+        };
 
-        // Generate and upload report to Notion
-        const workspaceId = req.query.workspaceId; // Get workspaceId from query params
-        console.log('Attempting report generation with workspaceId:', workspaceId);
-        
-        if (workspaceId && results.data?.dataframe_2 && results.data?.dataframe_3) {
-            try {
-                console.log('Importing NotionReportGenerator...');
-                const { NotionReportGenerator } = await import('./public/js/gennotion/core/NotionReportGenerator.js');
-                
-                console.log('Creating NotionReportGenerator instance...');
-                const reportGenerator = new NotionReportGenerator();
-                
-                console.log('Generating and uploading report...');
-                const reportResult = await reportGenerator.generateAndUploadReport(
-                    workspaceId,
-                    results.data.dataframe_2,
-                    results.data.dataframe_3
-                );
-                console.log('Report generation and upload result:', reportResult);
-            } catch (reportError) {
-                console.error('Detailed error in report generation:', {
-                    error: reportError.message,
-                    stack: reportError.stack,
-                    name: reportError.name
-                });
-            }
-        } else {
-            console.log('Skipping report generation:', {
-                hasWorkspaceId: !!workspaceId,
-                hasDataframe2: !!results.data?.dataframe_2,
-                hasDataframe3: !!results.data?.dataframe_3
-            });
+        // Attempt report generation
+        try {
+            const reportGenerator = new NotionReportGenerator();
+            await reportGenerator.generateAndUploadReport(workspaceId, data.dataframe_2, data.dataframe_3);
+        } catch (reportError) {
+            console.error('Error generating report:', reportError);
         }
-        
+
         res.json({ success: true });
     } catch (error) {
-        console.error('Error saving hex results:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error processing Hex results:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 

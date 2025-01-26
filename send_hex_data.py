@@ -30,8 +30,9 @@ def send_api_request(dataframe_2, dataframe_3, workspace_id):
         # Update metadata timestamp
         METADATA["timestamp"] = datetime.datetime.now().isoformat()
 
-        # Prepare data payload with dataframes
+        # Prepare data payload with dataframes and workspaceId
         data_payload = {
+            "workspaceId": workspace_id.strip(),  # Include workspaceId in the payload
             "data": {
                 "dataframe_2": json.loads(json_data_2),
                 "dataframe_3": metrics_dict
@@ -43,16 +44,16 @@ def send_api_request(dataframe_2, dataframe_3, workspace_id):
         # Log the payload data for debugging
         logging.info(f"Sending payload with {len(data_payload['data']['dataframe_2'])} records in dataframe_2")
         logging.info(f"Sending payload with {len(metrics_dict)} metrics in dataframe_3")
+        logging.info(f"Workspace ID: {data_payload['workspaceId']}")
         logging.info(f"First record samples:")
         logging.info(f"dataframe_2: {data_payload['data']['dataframe_2'][0] if data_payload['data']['dataframe_2'] else 'No data'}")
         logging.info(f"dataframe_3: {metrics_dict}")
         logging.info(f"Metadata: {data_payload['metadata']}")
 
-        # Send request with workspaceId as query parameter
-        api_url = f"{API_URL}?workspaceId={workspace_id.strip()}"  # Ensure workspace_id is clean
-        logging.info(f"Sending data to API at {api_url}...")
+        # Send request
+        logging.info(f"Sending data to API at {API_URL}...")
         headers = {"Content-Type": "application/json"}
-        response = session.post(api_url, headers=headers, json=data_payload)
+        response = session.post(API_URL, headers=headers, json=data_payload)
 
         # Log the response
         logging.info(f"Response status code: {response.status_code}")

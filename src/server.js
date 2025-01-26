@@ -757,6 +757,23 @@ app.post('/api/hex-results', async (req, res) => {
             timestamp: new Date().toISOString(),
             data: results.data
         }));
+
+        // Generate and upload report to Notion
+        const workspaceId = req.query.workspaceId; // Get workspaceId from query params
+        if (workspaceId && results.data?.dataframe_2 && results.data?.dataframe_3) {
+            try {
+                const { NotionReportGenerator } = await import('./public/js/gennotion/core/NotionReportGenerator.js');
+                const reportGenerator = new NotionReportGenerator();
+                const reportResult = await reportGenerator.generateAndUploadReport(
+                    workspaceId,
+                    results.data.dataframe_2,
+                    results.data.dataframe_3
+                );
+                console.log('Report generation and upload result:', reportResult);
+            } catch (reportError) {
+                console.error('Error generating/uploading report:', reportError);
+            }
+        }
         
         res.json({ success: true });
     } catch (error) {

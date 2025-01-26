@@ -3,7 +3,7 @@ import json
 import logging
 import datetime
 
-def send_api_request(dataframe_2, dataframe_3):
+def send_api_request(dataframe_2, dataframe_3, workspace_id):
     try:
         # Validate DataFrames
         if not (validate_dataframe(dataframe_2, "dataframe_2") and 
@@ -48,10 +48,11 @@ def send_api_request(dataframe_2, dataframe_3):
         logging.info(f"dataframe_3: {metrics_dict}")
         logging.info(f"Metadata: {data_payload['metadata']}")
 
-        # Send request
-        logging.info(f"Sending data to API at {API_URL}...")
+        # Send request with workspaceId as query parameter
+        api_url = f"{API_URL}?workspaceId={workspace_id}"
+        logging.info(f"Sending data to API at {api_url}...")
         headers = {"Content-Type": "application/json"}
-        response = session.post(API_URL, headers=headers, json=data_payload)
+        response = session.post(api_url, headers=headers, json=data_payload)
 
         # Log the response
         logging.info(f"Response status code: {response.status_code}")
@@ -73,4 +74,15 @@ def send_api_request(dataframe_2, dataframe_3):
     except requests.exceptions.RequestException as e:
         logging.error(f"Error during API call: {e}")
     except Exception as e:
-        logging.error(f"Unexpected error: {e}") 
+        logging.error(f"Unexpected error: {e}")
+
+# Main execution
+if __name__ == "__main__":
+    try:
+        # The dataframe_2 and workspace_id from SQL query will be available in Hex
+        logging.info("Starting script execution")
+        logging.info(f"DataFrame info:\n{dataframe_2.info()}")
+        print(dataframe_2)
+        send_api_request(dataframe_2, dataframe_3, _input_text)  # _input_text is the workspace_id from Hex
+    except Exception as e:
+        logging.error(f"Error: {e}") 

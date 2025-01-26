@@ -518,26 +518,14 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
-            const response = await fetch('https://api.notion.com/v1/pages', {
+            const response = await fetch('/api/notion/create-page', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.NOTION_API_KEY}`,
-                    'Content-Type': 'application/json',
-                    'Notion-Version': '2022-06-28'
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    parent: { database_id: this.NOTION_DATABASE_ID },
-                    properties: {
-                        Name: {
-                            title: [
-                                {
-                                    text: {
-                                        content: workspaceId,
-                                    },
-                                },
-                            ],
-                        }
-                    }
+                    workspaceId,
+                    metrics
                 })
             });
 

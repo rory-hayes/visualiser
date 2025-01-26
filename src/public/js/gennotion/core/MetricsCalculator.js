@@ -18,11 +18,11 @@ export class MetricsCalculator {
 
         const structureMetrics = this.calculateStructureMetrics(dataframe_2);
         const usageMetrics = this.calculateUsageMetrics(dataframe_3);
-        const growthMetrics = this.calculateGrowthMetrics(dataframe_3);
+        const growthMetrics = this.calculateGrowthMetrics(dataframe_3, dataframe_2);
         const organizationMetrics = this.calculateOrganizationMetrics(dataframe_3);
         const roiMetrics = this.calculateROIMetrics(dataframe_3);
 
-        return {
+        const allMetrics = {
             ...structureMetrics,
             ...usageMetrics,
             ...growthMetrics,
@@ -30,6 +30,11 @@ export class MetricsCalculator {
             ...roiMetrics,
             graphData: dataframe_2
         };
+
+        // Log metrics with placeholders
+        this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3);
+
+        return allMetrics;
     }
 
     calculateStructureMetrics(dataframe_2) {
@@ -155,19 +160,44 @@ export class MetricsCalculator {
         };
     }
 
-    calculateGrowthMetrics(dataframe_3) {
-        if (!dataframe_3) {
+    calculateGrowthMetrics(dataframe_3, dataframe_2) {
+        if (!dataframe_3 || !dataframe_2?.length) {
             console.warn('No growth data available');
             return {};
         }
 
-        // Since we don't have historical data, estimate growth based on current metrics
-        const total_members = dataframe_3.TOTAL_NUM_MEMBERS || 0;
-        const total_blocks = dataframe_3.NUM_BLOCKS || 0;
+        const now = Date.now();
+        const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+        const sixtyDaysAgo = now - (60 * 24 * 60 * 60 * 1000);
+        const ninetyDaysAgo = now - (90 * 24 * 60 * 60 * 1000);
+
+        // Count nodes created in different time periods
+        const nodesLast30Days = dataframe_2.filter(node => 
+            parseInt(node.CREATED_TIME) > thirtyDaysAgo
+        ).length;
+
+        const nodesLast60Days = dataframe_2.filter(node => 
+            parseInt(node.CREATED_TIME) > sixtyDaysAgo
+        ).length;
+
+        const nodesLast90Days = dataframe_2.filter(node => 
+            parseInt(node.CREATED_TIME) > ninetyDaysAgo
+        ).length;
+
+        // Calculate monthly growth rates
+        const monthly_content_growth_rate = (nodesLast30Days / dataframe_2.length) * 100;
         
-        // Estimate monthly growth rates based on current numbers
-        const monthly_member_growth_rate = 5; // Assume 5% monthly growth
-        const monthly_content_growth_rate = 8; // Assume 8% monthly growth
+        // Calculate 60-day vs 30-day growth trend
+        const growth_trend_60d = ((nodesLast60Days - nodesLast30Days) / nodesLast30Days) * 100;
+        
+        // Calculate 90-day vs 60-day growth trend
+        const growth_trend_90d = ((nodesLast90Days - nodesLast60Days) / nodesLast60Days) * 100;
+
+        // User metrics
+        const total_members = dataframe_3.TOTAL_NUM_MEMBERS || 0;
+        
+        // Estimate member growth based on content growth (assuming correlation)
+        const monthly_member_growth_rate = Math.min(monthly_content_growth_rate * 0.5, 10); // Cap at 10%
         
         const growth_capacity = 
             (monthly_member_growth_rate * 0.6) + (monthly_content_growth_rate * 0.4);
@@ -175,11 +205,24 @@ export class MetricsCalculator {
         const expected_members_in_next_year = 
             total_members * Math.pow(1 + (monthly_member_growth_rate/100), 12);
 
+        // Calculate daily creation averages
+        const avg_daily_creation_30d = nodesLast30Days / 30;
+        const avg_daily_creation_60d = nodesLast60Days / 60;
+        const avg_daily_creation_90d = nodesLast90Days / 90;
+
         return {
             monthly_member_growth_rate,
             monthly_content_growth_rate,
             growth_capacity,
-            expected_members_in_next_year
+            expected_members_in_next_year,
+            nodes_created_last_30_days: nodesLast30Days,
+            nodes_created_last_60_days: nodesLast60Days,
+            nodes_created_last_90_days: nodesLast90Days,
+            avg_daily_creation_30d,
+            avg_daily_creation_60d,
+            avg_daily_creation_90d,
+            growth_trend_60d,
+            growth_trend_90d
         };
     }
 
@@ -342,6 +385,14 @@ export class MetricsCalculator {
             CONTENT_GROWTH: this.formatPercentage(metrics.monthly_content_growth_rate),
             GROWTH_CAPACITY: this.formatPercentage(metrics.growth_capacity),
             PROJECTED_MEMBERS: this.formatNumber(metrics.expected_members_in_next_year),
+            NODES_30D: this.formatNumber(metrics.nodes_created_last_30_days),
+            NODES_60D: this.formatNumber(metrics.nodes_created_last_60_days),
+            NODES_90D: this.formatNumber(metrics.nodes_created_last_90_days),
+            AVG_DAILY_30D: this.formatDecimal(metrics.avg_daily_creation_30d),
+            AVG_DAILY_60D: this.formatDecimal(metrics.avg_daily_creation_60d),
+            AVG_DAILY_90D: this.formatDecimal(metrics.avg_daily_creation_90d),
+            GROWTH_TREND_60D: this.formatPercentage(metrics.growth_trend_60d),
+            GROWTH_TREND_90D: this.formatPercentage(metrics.growth_trend_90d),
 
             // Organization metrics
             VISIBILITY_SCORE: this.formatPercentage(metrics.current_visibility_score),
@@ -385,5 +436,74 @@ export class MetricsCalculator {
             minimumFractionDigits: 0,
             maximumFractionDigits: 0
         }).format(value);
+    }
+
+    logMetricsWithPlaceholders(metrics, dataframe_2, dataframe_3) {
+        const placeholderMetrics = {
+            '[[total_pages]]': metrics.total_pages,
+            '[[max_depth]]': metrics.max_depth,
+            '[[avg_depth]]': this.formatDecimal(metrics.avg_depth),
+            '[[deep_pages_count]]': metrics.deep_pages_count,
+            '[[root_pages]]': metrics.root_pages,
+            '[[orphaned_blocks]]': metrics.orphaned_blocks,
+            '[[percentage_unlinked]]': this.formatPercentage(metrics.percentage_unlinked),
+            '[[collections_count]]': metrics.collections_count,
+            '[[page_count]]': metrics.page_count,
+            '[[collection_views]]': dataframe_3.TOTAL_NUM_COLLECTION_VIEWS,
+            '[[nav_depth_score]]': this.formatDecimal(metrics.nav_depth_score),
+            '[[scatter_index]]': this.formatDecimal(metrics.scatter_index),
+            '[[bottleneck_count]]': metrics.bottleneck_count,
+            '[[duplicate_count]]': metrics.duplicate_count,
+            '[[unfindable_pages]]': metrics.unfindable_pages,
+            '[[nav_complexity]]': this.formatDecimal(metrics.nav_complexity),
+            
+            // Key Metrics Insights
+            '[[key_metrics_insight_1]]': this.formatPercentage(metrics.monthly_content_growth_rate),
+            '[[key_metrics_insight_2]]': this.formatPercentage(metrics.monthly_member_growth_rate),
+            '[[key_metrics_insight_3]]': this.formatDecimal(dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.TOTAL_NUM_MEMBERS),
+            '[[key_metrics_insight_4]]': dataframe_3.TOTAL_NUM_MEMBERS + dataframe_3.TOTAL_NUM_GUESTS,
+            '[[key_metrics_insight_5]]': this.formatDecimal(dataframe_3.TOTAL_NUM_MEMBERS / dataframe_3.TOTAL_NUM_TEAMSPACES),
+            '[[key_metrics_insight_6]]': this.formatDecimal(dataframe_3.NUM_ALIVE_PAGES / dataframe_3.TOTAL_NUM_MEMBERS),
+            '[[key_metrics_insight_7]]': this.formatPercentage((dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.NUM_BLOCKS) * 100),
+            '[[key_metrics_insight_8]]': this.formatPercentage((dataframe_3.NUM_ALIVE_COLLECTIONS / dataframe_3.NUM_COLLECTIONS) * 100),
+            '[[key_metrics_insight_9]]': this.formatDecimal(dataframe_3.NUM_BLOCKS / dataframe_3.TOTAL_NUM_TEAMSPACES),
+            '[[key_metrics_insight_10]]': dataframe_3.TOTAL_NUM_INTEGRATIONS,
+            '[[key_metrics_insight_11]]': dataframe_3.TOTAL_NUM_BOTS + dataframe_3.TOTAL_NUM_INTERNAL_BOTS + dataframe_3.TOTAL_NUM_PUBLIC_BOTS,
+            '[[key_metrics_insight_12]]': dataframe_3.TOTAL_NUM_LINK_PREVIEW_INTEGRATIONS + dataframe_3.TOTAL_NUM_PUBLIC_INTEGRATIONS,
+            '[[key_metrics_insight_13]]': this.formatPercentage((dataframe_3.NUM_ALIVE_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100),
+            '[[key_metrics_insight_14]]': this.formatPercentage((dataframe_3.TOTAL_NUM_PRIVATE_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100),
+            '[[key_metrics_insight_15]]': this.formatPercentage((dataframe_3.TOTAL_NUM_COLLECTION_VIEWS / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100),
+            '[[key_metrics_insight_16]]': this.formatPercentage((dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.NUM_BLOCKS) * 100),
+            '[[key_metrics_insight_17]]': this.formatDecimal(dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.TOTAL_NUM_MEMBERS),
+            '[[key_metrics_insight_18]]': this.formatPercentage(metrics.monthly_content_growth_rate),
+
+            // Growth Metrics
+            '[[growth_rate]]': this.formatPercentage(metrics.monthly_content_growth_rate),
+            '[[monthly_member_growth_rate]]': this.formatPercentage(metrics.monthly_member_growth_rate),
+            '[[monthly_content_growth_rate]]': this.formatPercentage(metrics.monthly_content_growth_rate),
+            '[[expected_members_in_next_year]]': this.formatNumber(metrics.expected_members_in_next_year),
+
+            // Organization Metrics
+            '[[current_visibility_score]]': this.formatPercentage(metrics.current_visibility_score),
+            '[[current_collaboration_score]]': this.formatPercentage(metrics.current_collaboration_score),
+            '[[current_productivity_score]]': this.formatPercentage(metrics.current_productivity_score),
+            '[[current_organization_score]]': this.formatPercentage(metrics.current_organization_score),
+            '[[projected_organisation_score]]': this.formatPercentage(metrics.current_organization_score * 1.3),
+
+            // ROI Metrics
+            '[[current_plan]]': this.formatCurrency(metrics.current_plan),
+            '[[enterprise_plan]]': this.formatCurrency(metrics.enterprise_plan),
+            '[[enterprise_plan_w_ai]]': this.formatCurrency(metrics.enterprise_plan_w_ai),
+            '[[10_percent_increase]]': this.formatCurrency(metrics['10_percent_increase']),
+            '[[20_percent_increase]]': this.formatCurrency(metrics['20_percent_increase']),
+            '[[50_percent_increase]]': this.formatCurrency(metrics['50_percent_increase']),
+            '[[enterprise_plan_roi]]': this.formatPercentage(metrics.enterprise_plan_roi),
+            '[[enterprise_plan_w_ai_roi]]': this.formatPercentage(metrics.enterprise_plan_w_ai_roi)
+        };
+
+        console.log('\nMetrics with Placeholders:');
+        Object.entries(placeholderMetrics).forEach(([placeholder, value]) => {
+            console.log(`${placeholder} -> ${value}`);
+        });
     }
 } 

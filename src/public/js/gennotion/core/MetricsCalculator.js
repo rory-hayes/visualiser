@@ -53,8 +53,8 @@ export class MetricsCalculator {
         }
 
         // Calculate depth-related metrics from all rows
-        const depths = dataframe_2.map(row => parseInt(row.DEPTH) || 0);
-        const pageDepths = dataframe_2.map(row => parseInt(row.PAGE_DEPTH) || 0);
+        const depths = dataframe_2.map(row => row.DEPTH || 0);
+        const pageDepths = dataframe_2.map(row => row.PAGE_DEPTH || 0);
         
         const max_depth = Math.max(...depths);
         const avg_depth = depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
@@ -62,21 +62,11 @@ export class MetricsCalculator {
         const max_page_depth = Math.max(...pageDepths);
         const avg_page_depth = pageDepths.reduce((sum, depth) => sum + depth, 0) / pageDepths.length;
 
-        // Calculate total pages - this should be the total count of rows that are pages
-        const total_pages = dataframe_2.filter(row => 
-            row.TYPE === 'page' || row.TYPE === 'collection_view_page'
-        ).length;
-
-        // Get alive pages count
-        const alive_pages = dataframe_2.filter(row => 
-            (row.TYPE === 'page' || row.TYPE === 'collection_view_page') && 
-            row.ALIVE === true
-        ).length;
-
-        // Calculate collections count
-        const collections_count = dataframe_2.filter(row => 
-            row.TYPE === 'collection_view' || row.TYPE === 'collection_view_page'
-        ).length;
+        // Get summary metrics from first row
+        const summaryData = dataframe_2[0];
+        const total_pages = summaryData.TOTAL_NUM_TOTAL_PAGES || 0;
+        const alive_pages = summaryData.TOTAL_NUM_ALIVE_TOTAL_PAGES || 0;
+        const collections_count = summaryData.NUM_ALIVE_COLLECTIONS || 0;
 
         // Calculate page type counts
         const page_count = dataframe_2.filter(row => row.TYPE === 'page').length;
@@ -94,12 +84,6 @@ export class MetricsCalculator {
             const hasNoChildren = !row.CHILD_IDS || JSON.parse(row.CHILD_IDS || '[]').length === 0;
             return hasNoParent && hasNoChildren;
         }).length;
-
-        // Calculate percentage unlinked - prevent division by zero
-        const percentage_unlinked = total_pages > 0 ? (orphaned_blocks / total_pages) * 100 : 0;
-
-        // Calculate scatter index - prevent division by zero
-        const scatter_index = total_pages > 0 ? root_pages / total_pages : 0;
 
         // Calculate duplicate pages (same title)
         const titleCounts = {};
@@ -119,12 +103,11 @@ export class MetricsCalculator {
 
         // Calculate derived metrics
         const deep_pages_count = depths.filter(depth => depth > this.DEEP_PAGE_THRESHOLD).length;
+        const percentage_unlinked = (orphaned_blocks / total_pages) * 100;
+        const scatter_index = root_pages / total_pages;
         const unfindable_pages = depths.filter(depth => depth > this.UNFINDABLE_DEPTH).length;
         const nav_depth_score = Math.max(0, 100 - (avg_depth * 10));
-        
-        // Calculate nav complexity with safeguards against NaN
-        const nav_complexity = total_pages > 0 ? 
-            ((bottleneck_count * 5 + unfindable_pages * 3) / total_pages) * 100 : 0;
+        const nav_complexity = (bottleneck_count * 5 + unfindable_pages * 3) / total_pages * 100;
 
         return {
             total_pages,

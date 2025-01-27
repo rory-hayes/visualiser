@@ -924,5 +924,145 @@ app.post('/api/notion/create-page', async (req, res) => {
     }
 });
 
+// Complete workspace analysis endpoint
+app.post('/api/analyze-workspace', async (req, res) => {
+    try {
+        const { workspaceId } = req.body;
+        
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'Workspace ID is required' });
+        }
+
+        // Step 1: Generate Hex report
+        console.log('Step 1: Generating Hex report...');
+        const hexResponse = await callHexAPI(workspaceId, "21c6c24a-60e8-487c-b03a-1f04dda4f918");
+        
+        if (!hexResponse.runId) {
+            throw new Error('Failed to get runId from Hex API');
+        }
+
+        // Step 2: Wait for and process results
+        console.log('Step 2: Processing results...');
+        const results = await waitForHexResults(hexResponse.runId);
+        
+        if (!results || !results.data) {
+            throw new Error('Failed to get results from Hex');
+        }
+
+        // Step 3: Calculate metrics
+        console.log('Step 3: Calculating metrics...');
+        const metricsCalculator = new MetricsCalculator();
+        const metrics = await metricsCalculator.calculateAllMetrics(
+            results.data.dataframe_2,
+            results.data.dataframe_3
+        );
+
+        // Step 4: Create Notion page
+        console.log('Step 4: Creating Notion page...');
+        const notionResponse = await createNotionPage(workspaceId, metrics);
+
+        // Return complete response
+        res.json({
+            success: true,
+            runId: hexResponse.runId,
+            metrics: metrics,
+            notionPageId: notionResponse.pageId
+        });
+
+    } catch (error) {
+        console.error('Error in analyze-workspace:', error);
+        res.status(500).json({ 
+            error: error.message || 'Failed to analyze workspace',
+            details: error.response?.data
+        });
+    }
+});
+
+async function waitForHexResults(runId, maxAttempts = 30) {
+    const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+        try {
+            const results = await loadResults();
+            if (results && results.data) {
+                return results;
+            }
+            
+            await delay(2000); // Wait 2 seconds between attempts
+            attempts++;
+            
+        } catch (error) {
+            console.error(`Attempt ${attempts + 1} failed:`, error);
+            if (attempts >= maxAttempts - 1) throw error;
+            await delay(2000);
+        }
+    }
+    
+    throw new Error('Timeout waiting for results');
+}
+
+async function createNotionPage(workspaceId, metrics) {
+    try {
+        const notion = new Client({
+            auth: process.env.NOTION_API_KEY
+        });
+
+        const response = await notion.pages.create({
+            parent: {
+                database_id: "18730aa1-c7a9-8059-b53e-de31cde8bfc4"
+            },
+            properties: {
+                Name: {
+                    title: [
+                        {
+                            text: {
+                                content: `Workspace Analysis - ${workspaceId}`
+                            }
+                        }
+                    ]
+                },
+                "Workspace ID": {
+                    rich_text: [
+                        {
+                            text: {
+                                content: workspaceId
+                            }
+                        }
+                    ]
+                },
+                "Total Pages": {
+                    number: metrics.total_pages || 0
+                },
+                "Active Pages": {
+                    number: metrics.num_alive_pages || 0
+                },
+                "Max Depth": {
+                    number: metrics.max_depth || 0
+                },
+                "Collections": {
+                    number: metrics.collections_count || 0
+                },
+                "Organization Score": {
+                    number: metrics.current_organization_score || 0
+                },
+                "Analysis Date": {
+                    date: {
+                        start: new Date().toISOString()
+                    }
+                }
+            }
+        });
+
+        return {
+            success: true,
+            pageId: response.id
+        };
+    } catch (error) {
+        console.error('Error creating Notion page:', error);
+        throw error;
+    }
+}
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

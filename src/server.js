@@ -11,11 +11,6 @@ import session from 'express-session';
 import axios from 'axios';
 import { AIInsightsService } from './services/aiService.js';
 import fs from 'fs';
-import fsPromises from 'fs/promises';
-import { marked } from 'marked';
-import puppeteer from 'puppeteer';
-import { FormData } from 'formdata-node';
-import { Blob } from 'buffer';
 
 // Load environment variables from .env file
 dotenv.config();
@@ -735,7 +730,7 @@ app.get('/api/hex-results/stream', (req, res) => {
                     if (results?.data?.dataframe_2?.length === processingState.totalRecordsSent) {
                         await fs.promises.writeFile(STORAGE_FILE, '{}', 'utf8');
                     }
-                } catch (error) {
+    } catch (error) {
                     console.error('Error cleaning up after disconnect:', error);
                 }
             }, 5000);
@@ -896,9 +891,8 @@ app.get('/api/health', (req, res) => {
 // Add Notion API endpoint
 app.post('/api/notion/create-page', async (req, res) => {
     try {
-        const { workspaceId, metrics, templatePath } = req.body;
+        const { workspaceId, metrics } = req.body;
         
-        // Create the page in Notion
         const response = await fetch('https://api.notion.com/v1/pages', {
             method: 'POST',
             headers: {
@@ -926,81 +920,6 @@ app.post('/api/notion/create-page', async (req, res) => {
         res.json(result);
     } catch (error) {
         console.error('Error creating Notion page:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-app.post('/api/notion/attach-pdf/:pageId', async (req, res) => {
-    try {
-        const { pageId } = req.params;
-        const { metrics } = req.body;
-
-        // Read the template file
-        const templatePath = 'src/public/convertToDocs/markdown/Notion Enterprise, the why 182efdeead058091a021f98ed0898fbe.md';
-        let template = await fsPromises.readFile(templatePath, 'utf-8');
-
-        // Replace placeholders with actual metrics
-        Object.entries(metrics).forEach(([key, value]) => {
-            const placeholder = `[[${key}]]`;
-            template = template.replace(new RegExp(placeholder, 'g'), value);
-        });
-
-        // Convert markdown to HTML
-        const html = marked(template);
-
-        // Generate PDF using puppeteer
-        const browser = await puppeteer.launch({ headless: 'new' });
-        const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: 'networkidle0' });
-        const pdfBuffer = await page.pdf({
-            format: 'A4',
-            margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' }
-        });
-        await browser.close();
-
-        // Upload PDF to Notion
-        const formData = new FormData();
-        formData.append('file', new Blob([pdfBuffer], { type: 'application/pdf' }));
-
-        const uploadResponse = await fetch('https://api.notion.com/v1/files', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer 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`,
-                'Notion-Version': '2022-06-28'
-            },
-            body: formData
-        });
-
-        const uploadResult = await uploadResponse.json();
-
-        // Update the page with the PDF
-        const updateResponse = await fetch(`https://api.notion.com/v1/pages/${pageId}`, {
-            method: 'PATCH',
-            headers: {
-                'Authorization': `Bearer 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`,
-                'Content-Type': 'application/json',
-                'Notion-Version': '2022-06-28'
-            },
-            body: JSON.stringify({
-                properties: {
-                    'Report PDF': {
-                        files: [
-                            {
-                                name: `Workspace Analysis - ${new Date().toISOString().split('T')[0]}.pdf`,
-                                type: 'file',
-                                file: uploadResult.url
-                            }
-                        ]
-                    }
-                }
-            })
-        });
-
-        const updateResult = await updateResponse.json();
-        res.json(updateResult);
-
-    } catch (error) {
-        console.error('Error attaching PDF:', error);
         res.status(500).json({ error: error.message });
     }
 });

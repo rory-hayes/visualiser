@@ -992,10 +992,17 @@ async function waitForHexResults(runId, maxAttempts = 30) {
     while (attempts < maxAttempts) {
         try {
             const results = await loadResults();
-            if (results && results.data) {
+            
+            // Check if we have valid data
+            if (results?.data?.dataframe_2?.length > 0 && results?.data?.dataframe_3) {
+                console.log('Valid results found:', {
+                    dataframe2Length: results.data.dataframe_2.length,
+                    hasDataframe3: !!results.data.dataframe_3
+                });
                 return results;
             }
             
+            console.log(`Attempt ${attempts + 1}: Waiting for valid results...`);
             await delay(2000); // Wait 2 seconds between attempts
             attempts++;
             
@@ -1006,7 +1013,7 @@ async function waitForHexResults(runId, maxAttempts = 30) {
         }
     }
     
-    throw new Error('Timeout waiting for results');
+    throw new Error('Timeout waiting for results with valid data');
 }
 
 async function createNotionPage(workspaceId, metrics) {

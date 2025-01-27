@@ -958,9 +958,15 @@ app.post('/api/analyze-workspace', async (req, res) => {
             results.data.dataframe_3
         );
 
-        // Step 4: Create Notion page
+        // Step 4: Create Notion page using our server-side function
         console.log('Step 4: Creating Notion page...');
-        const notionResponse = await createNotionPage(workspaceId, metrics);
+        const notionResponse = await createNotionPage(workspaceId, {
+            total_pages: metrics.total_pages || 0,
+            num_alive_pages: metrics.num_alive_pages || 0,
+            max_depth: metrics.max_depth || 0,
+            collections_count: metrics.collections_count || 0,
+            current_organization_score: metrics.current_organization_score || 0
+        });
 
         // Return complete response
         res.json({

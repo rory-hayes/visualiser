@@ -38,11 +38,6 @@ export class MetricsCalculator {
         // Log metrics with placeholders
         this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3);
 
-        // Create Notion page with workspace ID
-        if (dataframe_2?.[0]?.SPACE_ID) {
-            await this.createNotionEntry(dataframe_2[0].SPACE_ID, allMetrics);
-        }
-
         return allMetrics;
     }
 

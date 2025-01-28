@@ -87,7 +87,16 @@ function saveResults(results) {
                     );
                 }) : [],
                 dataframe_3: results.data?.dataframe_3 ? 
-                    JSON.parse(JSON.stringify(results.data.dataframe_3)) : null
+                    JSON.parse(JSON.stringify(results.data.dataframe_3)) : null,
+                dataframe_5: Array.isArray(results.data?.dataframe_5) ? results.data.dataframe_5.map(item => {
+                    // Clean each item to ensure it's JSON-safe
+                    return Object.fromEntries(
+                        Object.entries(item || {}).map(([key, value]) => [
+                            key,
+                            value === undefined ? null : value
+                        ])
+                    );
+                }) : []
             }
         };
 
@@ -118,8 +127,9 @@ function saveResults(results) {
 
         console.log('Successfully saved results:', {
             fileSize: stringified.length,
-            recordCount: safeResults.data.dataframe_2.length,
-            hasDataframe3: !!safeResults.data.dataframe_3
+            dataframe2Count: safeResults.data.dataframe_2.length,
+            hasDataframe3: !!safeResults.data.dataframe_3,
+            dataframe5Count: safeResults.data.dataframe_5.length
         });
 
         return true;
@@ -141,7 +151,14 @@ function loadResults() {
     try {
         if (!fs.existsSync(STORAGE_FILE)) {
             console.log('Storage file does not exist:', STORAGE_FILE);
-            return { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
+            return { 
+                timestamp: new Date().toISOString(), 
+                data: { 
+                    dataframe_2: [], 
+                    dataframe_3: null,
+                    dataframe_5: []
+                } 
+            };
         }
 
         // Read file content
@@ -149,7 +166,14 @@ function loadResults() {
         
         // Handle empty file case
         if (!fileContent || fileContent === '{}') {
-            return { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
+            return { 
+                timestamp: new Date().toISOString(), 
+                data: { 
+                    dataframe_2: [], 
+                    dataframe_3: null,
+                    dataframe_5: []
+                } 
+            };
         }
 
         // Attempt to parse with error recovery
@@ -173,7 +197,14 @@ function loadResults() {
             } catch (secondError) {
                 console.error('Failed to recover JSON:', secondError);
                 // Reset file with empty structure
-                const emptyData = { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
+                const emptyData = { 
+                    timestamp: new Date().toISOString(), 
+                    data: { 
+                        dataframe_2: [], 
+                        dataframe_3: null,
+                        dataframe_5: []
+                    } 
+                };
                 fs.writeFileSync(STORAGE_FILE, JSON.stringify(emptyData), 'utf8');
                 return emptyData;
             }
@@ -182,7 +213,14 @@ function loadResults() {
         // Validate structure
         if (!parsedData || typeof parsedData !== 'object') {
             console.error('Invalid data structure in file');
-            return { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
+            return { 
+                timestamp: new Date().toISOString(), 
+                data: { 
+                    dataframe_2: [], 
+                    dataframe_3: null,
+                    dataframe_5: []
+                } 
+            };
         }
 
         // Ensure required structure exists
@@ -190,20 +228,29 @@ function loadResults() {
             timestamp: parsedData.timestamp || new Date().toISOString(),
             data: {
                 dataframe_2: Array.isArray(parsedData.data?.dataframe_2) ? parsedData.data.dataframe_2 : [],
-                dataframe_3: parsedData.data?.dataframe_3 || null
+                dataframe_3: parsedData.data?.dataframe_3 || null,
+                dataframe_5: Array.isArray(parsedData.data?.dataframe_5) ? parsedData.data.dataframe_5 : []
             }
         };
 
         console.log('Successfully loaded results:', {
             fileSize: fileContent.length,
-            recordCount: validatedData.data.dataframe_2.length,
-            hasDataframe3: !!validatedData.data.dataframe_3
+            dataframe2Count: validatedData.data.dataframe_2.length,
+            hasDataframe3: !!validatedData.data.dataframe_3,
+            dataframe5Count: validatedData.data.dataframe_5.length
         });
 
         return validatedData;
     } catch (error) {
         console.error('Error loading results:', error);
-        return { timestamp: new Date().toISOString(), data: { dataframe_2: [], dataframe_3: null } };
+        return { 
+            timestamp: new Date().toISOString(), 
+            data: { 
+                dataframe_2: [], 
+                dataframe_3: null,
+                dataframe_5: []
+            } 
+        };
     }
 }
 

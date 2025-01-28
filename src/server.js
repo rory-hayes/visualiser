@@ -1019,7 +1019,7 @@ async function waitForHexResults(runId, maxAttempts = 30) {
 async function createNotionPage(workspaceId, metrics) {
     try {
         const notion = new Client({
-            auth: process.env.NOTION_API_KEY
+            auth: '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'
         });
 
         const response = await notion.pages.create({

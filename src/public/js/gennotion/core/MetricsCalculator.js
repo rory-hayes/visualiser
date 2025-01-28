@@ -983,6 +983,47 @@ export class MetricsCalculator {
         return (contentGrowth * 0.3 + qualityScore * 0.4 + organizationScore * 0.3);
     }
 
+    calculateContentGrowthRate(dataframe_2) {
+        const now = Date.now();
+        const thirtyDaysAgo = now - (30 * this.MILLISECONDS_PER_DAY);
+        const ninetyDaysAgo = now - (90 * this.MILLISECONDS_PER_DAY);
+
+        const last30DaysContent = dataframe_2.filter(row => 
+            parseInt(row.CREATED_TIME) > thirtyDaysAgo
+        ).length;
+
+        const last90DaysContent = dataframe_2.filter(row => 
+            parseInt(row.CREATED_TIME) > ninetyDaysAgo
+        ).length;
+
+        const monthlyRate = last30DaysContent;
+        const quarterlyRate = last90DaysContent / 3;
+
+        if (quarterlyRate === 0) return 0;
+        return ((monthlyRate - quarterlyRate) / quarterlyRate) * 100;
+    }
+
+    calculateQualityScore(dataframe_2, dataframe_3) {
+        const aliveRatio = dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.NUM_BLOCKS;
+        const structureScore = this.calculateStructureScore(
+            this.calculateAverageDepth(dataframe_2),
+            dataframe_2.filter(row => (row.DEPTH || 0) > this.DEEP_PAGE_THRESHOLD).length,
+            this.countOrphanedPages(dataframe_2),
+            dataframe_2.length
+        );
+        
+        return (aliveRatio * 50 + structureScore / 100 * 50);
+    }
+
+    calculateOrganizationScore(dataframe_2) {
+        const templateRatio = dataframe_2.filter(row => row.TYPE === 'template').length / dataframe_2.length;
+        const collectionRatio = dataframe_2.filter(row => row.TYPE === 'collection_view_page').length / dataframe_2.length;
+        const avgDepth = this.calculateAverageDepth(dataframe_2);
+        const depthScore = Math.max(0, 100 - (avgDepth * 10));
+
+        return (templateRatio * 30 + collectionRatio * 40 + depthScore * 0.3);
+    }
+
     calculateWorkspaceComplexity(dataframe_2, dataframe_3) {
         const depthComplexity = this.calculateDepthComplexity(dataframe_2);
         const navigationComplexity = this.calculateNavigationComplexity(dataframe_2);
@@ -994,6 +1035,26 @@ export class MetricsCalculator {
             navigation_complexity: navigationComplexity,
             content_complexity: contentComplexity
         };
+    }
+
+    calculateDepthComplexity(dataframe_2) {
+        const avgDepth = this.calculateAverageDepth(dataframe_2);
+        const maxDepth = Math.max(...dataframe_2.map(row => row.DEPTH || 0));
+        return Math.min(100, (avgDepth * 10 + maxDepth * 5));
+    }
+
+    calculateNavigationComplexity(dataframe_2) {
+        const orphanedRatio = this.countOrphanedPages(dataframe_2) / dataframe_2.length;
+        const deepPagesRatio = dataframe_2.filter(row => (row.DEPTH || 0) > this.DEEP_PAGE_THRESHOLD).length / dataframe_2.length;
+        return Math.min(100, (orphanedRatio * 50 + deepPagesRatio * 50) * 100);
+    }
+
+    calculateContentComplexity(dataframe_2, dataframe_3) {
+        const typeDistribution = this.getTypeDistribution(dataframe_2);
+        const typeCount = Object.keys(typeDistribution).length;
+        const collectionRatio = dataframe_3.NUM_COLLECTIONS / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        
+        return Math.min(100, (typeCount * 10 + collectionRatio * 50));
     }
 
     // Depth and Structure Analysis Methods

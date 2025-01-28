@@ -823,4 +823,115 @@ export class MetricsCalculator {
             throw error;
         }
     }
+
+    calculateAdvancedMetrics(dataframe_2, dataframe_3, dataframe_5) {
+        const evolutionMetrics = this.calculateEvolutionMetrics(dataframe_2, dataframe_3);
+        const collaborationPatterns = this.calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5);
+        const contentQualityMetrics = this.calculateContentQualityMetrics(dataframe_2, dataframe_3);
+        const usagePatterns = this.calculateAdvancedUsagePatterns(dataframe_2, dataframe_3, dataframe_5);
+        const predictiveMetrics = this.calculatePredictiveMetrics(dataframe_2, dataframe_3);
+
+        return {
+            ...evolutionMetrics,
+            ...collaborationPatterns,
+            ...contentQualityMetrics,
+            ...usagePatterns,
+            ...predictiveMetrics
+        };
+    }
+
+    calculateEvolutionMetrics(dataframe_2, dataframe_3) {
+        const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
+        const depthStats = this.calculateDepthStatistics(dataframe_2);
+        const contentDiversity = this.calculateContentDiversityScore(this.getTypeDistribution(dataframe_2));
+
+        return {
+            content_maturity_score: this.calculateContentMaturityScore(workspaceAge, depthStats, contentDiversity),
+            growth_sustainability_index: this.calculateGrowthSustainability(dataframe_2, dataframe_3),
+            workspace_complexity_score: this.calculateWorkspaceComplexity(dataframe_2, dataframe_3),
+            knowledge_structure_score: this.calculateKnowledgeStructure(dataframe_2, dataframe_3)
+        };
+    }
+
+    calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5) {
+        const teamspaceMetrics = this.analyzeTeamspacePatterns(dataframe_3);
+        const memberActivity = this.analyzeMemberActivity(dataframe_2, dataframe_3);
+        
+        return {
+            team_adoption_score: this.calculateTeamAdoptionScore(memberActivity, teamspaceMetrics),
+            collaboration_density: this.calculateCollaborationDensity(dataframe_3),
+            knowledge_sharing_index: this.calculateKnowledgeSharingIndex(dataframe_2, dataframe_3),
+            cross_team_collaboration_score: this.calculateCrossTeamCollaboration(dataframe_3),
+            team_content_distribution: this.analyzeTeamContentDistribution(dataframe_2, dataframe_3)
+        };
+    }
+
+    calculateContentQualityMetrics(dataframe_2, dataframe_3) {
+        const creationPatterns = this.analyzeCreationPatterns(dataframe_2);
+        const structureQuality = this.analyzeStructureQuality(dataframe_2);
+        const contentHealth = this.analyzeContentHealth(dataframe_2, dataframe_3);
+
+        return {
+            content_freshness_score: this.calculateContentFreshness(creationPatterns),
+            structure_quality_index: this.calculateStructureQualityIndex(structureQuality),
+            knowledge_base_health: this.calculateKnowledgeBaseHealth(contentHealth),
+            content_organization_score: this.calculateContentOrganization(dataframe_2, dataframe_3),
+            documentation_coverage: this.calculateDocumentationCoverage(dataframe_2, dataframe_3)
+        };
+    }
+
+    calculateAdvancedUsagePatterns(dataframe_2, dataframe_3, dataframe_5) {
+        return {
+            automation_effectiveness: this.calculateAutomationEffectiveness(dataframe_3),
+            integration_impact_score: this.calculateIntegrationImpact(dataframe_3),
+            feature_utilization_index: this.calculateFeatureUtilization(dataframe_2, dataframe_3),
+            advanced_features_adoption: this.calculateAdvancedFeaturesAdoption(dataframe_2),
+            workflow_optimization_score: this.calculateWorkflowOptimization(dataframe_3)
+        };
+    }
+
+    calculatePredictiveMetrics(dataframe_2, dataframe_3) {
+        const growthPatterns = this.analyzeGrowthPatterns(dataframe_2);
+        const usagePatterns = this.analyzeUsagePatterns(dataframe_2, dataframe_3);
+
+        return {
+            growth_trajectory: this.calculateGrowthTrajectory(growthPatterns),
+            scaling_readiness_score: this.calculateScalingReadiness(dataframe_2, dataframe_3),
+            bottleneck_prediction: this.predictBottlenecks(usagePatterns),
+            growth_potential_score: this.calculateGrowthPotential(dataframe_2, dataframe_3),
+            optimization_opportunities: this.identifyOptimizationOpportunities(dataframe_2, dataframe_3)
+        };
+    }
+
+    // Helper methods for new metrics
+    calculateContentMaturityScore(workspaceAge, depthStats, contentDiversity) {
+        const ageScore = Math.min(workspaceAge / 12, 1) * 100; // Cap at 12 months
+        const depthScore = 100 - (depthStats.avgDepth * 10); // Penalize excessive depth
+        const diversityScore = contentDiversity;
+
+        return (ageScore * 0.3 + depthScore * 0.3 + diversityScore * 0.4);
+    }
+
+    calculateGrowthSustainability(dataframe_2, dataframe_3) {
+        const contentGrowth = this.calculateContentGrowthRate(dataframe_2);
+        const qualityScore = this.calculateQualityScore(dataframe_2, dataframe_3);
+        const organizationScore = this.calculateOrganizationScore(dataframe_2);
+
+        return (contentGrowth * 0.3 + qualityScore * 0.4 + organizationScore * 0.3);
+    }
+
+    calculateWorkspaceComplexity(dataframe_2, dataframe_3) {
+        const depthComplexity = this.calculateDepthComplexity(dataframe_2);
+        const navigationComplexity = this.calculateNavigationComplexity(dataframe_2);
+        const contentComplexity = this.calculateContentComplexity(dataframe_2, dataframe_3);
+
+        return {
+            overall_complexity: (depthComplexity + navigationComplexity + contentComplexity) / 3,
+            depth_complexity: depthComplexity,
+            navigation_complexity: navigationComplexity,
+            content_complexity: contentComplexity
+        };
+    }
+
+    // ... Add implementation for other helper methods ...
 } 

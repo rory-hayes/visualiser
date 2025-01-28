@@ -1022,12 +1022,13 @@ async function createNotionPage(workspaceId, metrics) {
             auth: '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'
         });
 
+        // Create the page with basic title
         const response = await notion.pages.create({
             parent: {
                 database_id: "18730aa1-c7a9-8059-b53e-de31cde8bfc4"
             },
             properties: {
-                Name: {
+                title: {
                     title: [
                         {
                             text: {
@@ -1035,37 +1036,100 @@ async function createNotionPage(workspaceId, metrics) {
                             }
                         }
                     ]
+                }
+            },
+            children: [
+                {
+                    object: 'block',
+                    type: 'heading_1',
+                    heading_1: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Workspace Analysis Report' }
+                        }]
+                    }
                 },
-                "Workspace ID": {
-                    rich_text: [
-                        {
-                            text: {
-                                content: workspaceId
-                            }
-                        }
-                    ]
+                {
+                    object: 'block',
+                    type: 'paragraph',
+                    paragraph: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Workspace ID: ${workspaceId}` }
+                        }]
+                    }
                 },
-                "Total Pages": {
-                    number: metrics.total_pages || 0
+                {
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Key Metrics' }
+                        }]
+                    }
                 },
-                "Active Pages": {
-                    number: metrics.num_alive_pages || 0
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Total Pages: ${metrics.total_pages || 0}` }
+                        }]
+                    }
                 },
-                "Max Depth": {
-                    number: metrics.max_depth || 0
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Active Pages: ${metrics.num_alive_pages || 0}` }
+                        }]
+                    }
                 },
-                "Collections": {
-                    number: metrics.collections_count || 0
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Max Depth: ${metrics.max_depth || 0}` }
+                        }]
+                    }
                 },
-                "Organization Score": {
-                    number: metrics.current_organization_score || 0
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Collections: ${metrics.collections_count || 0}` }
+                        }]
+                    }
                 },
-                "Analysis Date": {
-                    date: {
-                        start: new Date().toISOString()
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Organization Score: ${metrics.current_organization_score || 0}%` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'paragraph',
+                    paragraph: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Analysis Date: ${new Date().toISOString()}` }
+                        }]
                     }
                 }
-            }
+            ]
         });
 
         return {

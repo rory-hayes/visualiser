@@ -7,6 +7,10 @@ export class MetricsCalculator {
         this.BOTTLENECK_THRESHOLD = 10;
         this.SCATTER_THRESHOLD = 0.3;
         this.UNFINDABLE_DEPTH = 4;
+        this.MIN_MONTHS_FOR_TRENDS = 3;
+        this.MIN_MONTHS_FOR_YOY = 12;
+        this.MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+        this.MILLISECONDS_PER_MONTH = 30 * this.MILLISECONDS_PER_DAY;
 
         // Notion API configuration
         this.NOTION_DATABASE_ID = "18730aa1-c7a9-8059-b53e-de31cde8bfc4";
@@ -21,21 +25,33 @@ export class MetricsCalculator {
             dataframe_5_length: dataframe_5?.length
         });
 
-        const structureMetrics = this.calculateStructureMetrics(dataframe_2);
-        const usageMetrics = this.calculateUsageMetrics(dataframe_3);
-        const growthMetrics = this.calculateGrowthMetrics(dataframe_3, dataframe_2);
-        const organizationMetrics = this.calculateOrganizationMetrics(dataframe_3);
-        const roiMetrics = this.calculateROIMetrics(dataframe_3);
+        // Calculate workspace age and validate data
+        const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
+        console.log('Workspace age (months):', workspaceAge);
+
+        const structureMetrics = this.calculateStructureMetrics(dataframe_2, dataframe_3);
+        const usageMetrics = this.calculateUsageMetrics(dataframe_3, dataframe_5);
+        const growthMetrics = this.calculateGrowthMetrics(dataframe_3, dataframe_2, dataframe_5);
+        const organizationMetrics = this.calculateOrganizationMetrics(dataframe_3, dataframe_5);
+        const roiMetrics = this.calculateROIMetrics(dataframe_3, dataframe_5);
         const engagementMetrics = this.calculateEngagementMetrics(dataframe_5);
+        const teamMetrics = this.calculateTeamMetrics(dataframe_3, dataframe_5);
+        const trendMetrics = this.calculateTrendMetrics(dataframe_2);
+        const collectionMetrics = this.calculateDetailedCollectionMetrics(dataframe_2, dataframe_3);
+        const contentMetrics = this.calculateContentMetrics(dataframe_2, dataframe_3);
 
         const allMetrics = {
+            workspace_age: workspaceAge,
             ...structureMetrics,
             ...usageMetrics,
             ...growthMetrics,
             ...organizationMetrics,
             ...roiMetrics,
             ...engagementMetrics,
-            graphData: dataframe_2
+            ...teamMetrics,
+            ...trendMetrics,
+            ...collectionMetrics,
+            ...contentMetrics
         };
 
         // Log metrics with placeholders
@@ -44,46 +60,88 @@ export class MetricsCalculator {
         return allMetrics;
     }
 
-    calculateStructureMetrics(dataframe_2) {
-        if (!dataframe_2?.length) {
-            console.warn('No data available for structure metrics');
-            return {};
-        }
-
-        // Calculate depth-related metrics from all rows
-        const depths = dataframe_2.map(row => row.DEPTH || 0);
-        const pageDepths = dataframe_2.map(row => row.PAGE_DEPTH || 0);
+    calculateWorkspaceAge(dataframe_2) {
+        if (!dataframe_2?.length) return 0;
         
-        const max_depth = Math.max(...depths);
-        const avg_depth = depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+        const creationTimes = dataframe_2.map(row => parseInt(row.CREATED_TIME));
+        const oldestTime = Math.min(...creationTimes);
+        const now = Date.now();
         
-        const max_page_depth = Math.max(...pageDepths);
-        const avg_page_depth = pageDepths.reduce((sum, depth) => sum + depth, 0) / pageDepths.length;
+        return Math.floor((now - oldestTime) / this.MILLISECONDS_PER_MONTH);
+    }
 
-        // Get summary metrics from first row
-        const summaryData = dataframe_2[0];
-        const total_pages = summaryData.TOTAL_NUM_TOTAL_PAGES || 0;
-        const alive_pages = summaryData.TOTAL_NUM_ALIVE_TOTAL_PAGES || 0;
-        const collections_count = summaryData.NUM_ALIVE_COLLECTIONS || 0;
+    calculateTrendMetrics(dataframe_2) {
+        if (!dataframe_2?.length) return {};
 
-        // Calculate page type counts
-        const page_count = dataframe_2.filter(row => row.TYPE === 'page').length;
-        const collection_view_count = dataframe_2.filter(row => row.TYPE === 'collection_view').length;
-        const collection_view_page_count = dataframe_2.filter(row => row.TYPE === 'collection_view_page').length;
+        const now = Date.now();
+        const creationTimes = dataframe_2.map(row => parseInt(row.CREATED_TIME));
+        const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
 
-        // Calculate root pages (pages with no parent or parent is workspace)
-        const root_pages = dataframe_2.filter(row => 
-            !row.PARENT_ID || row.PARENT_ID === row.SPACE_ID
-        ).length;
+        // Monthly buckets for content creation
+        const monthlyContent = {};
+        creationTimes.forEach(time => {
+            const monthKey = Math.floor((now - time) / this.MILLISECONDS_PER_MONTH);
+            monthlyContent[monthKey] = (monthlyContent[monthKey] || 0) + 1;
+        });
 
-        // Calculate orphaned pages (no parent and no children)
-        const orphaned_blocks = dataframe_2.filter(row => {
-            const hasNoParent = !row.PARENT_ID || row.PARENT_ID === row.SPACE_ID;
-            const hasNoChildren = !row.CHILD_IDS || JSON.parse(row.CHILD_IDS || '[]').length === 0;
-            return hasNoParent && hasNoChildren;
-        }).length;
+        // Calculate growth rates
+        const monthlyGrowthRates = [];
+        Object.keys(monthlyContent).sort().forEach((month, index, months) => {
+            if (index > 0) {
+                const currentMonth = monthlyContent[month];
+                const previousMonth = monthlyContent[months[index - 1]];
+                const growthRate = ((currentMonth - previousMonth) / previousMonth) * 100;
+                monthlyGrowthRates.push(growthRate);
+            }
+        });
 
-        // Calculate duplicate pages (same title)
+        // Recent periods analysis
+        const last30Days = creationTimes.filter(time => (now - time) <= 30 * this.MILLISECONDS_PER_DAY).length;
+        const last60Days = creationTimes.filter(time => (now - time) <= 60 * this.MILLISECONDS_PER_DAY).length;
+        const last90Days = creationTimes.filter(time => (now - time) <= 90 * this.MILLISECONDS_PER_DAY).length;
+
+        return {
+            monthly_growth_rates: monthlyGrowthRates,
+            blocks_created_last_month: monthlyContent[0] || 0,
+            blocks_created_last_year: workspaceAge >= 12 ? 
+                Object.values(monthlyContent).slice(0, 12).reduce((sum, count) => sum + count, 0) : 
+                "workspace currently too young",
+            content_growth_trend: monthlyGrowthRates.slice(-3),
+            growth_acceleration: this.calculateGrowthAcceleration(monthlyGrowthRates),
+            creation_velocity: this.calculateCreationVelocity(monthlyContent),
+            content_created_30d: last30Days,
+            content_created_60d: last60Days,
+            content_created_90d: last90Days,
+            avg_daily_creation_30d: last30Days / 30,
+            avg_daily_creation_60d: last60Days / 60,
+            avg_daily_creation_90d: last90Days / 90,
+            workspace_maturity: this.determineWorkspaceMaturity(workspaceAge, monthlyGrowthRates)
+        };
+    }
+
+    calculateDetailedCollectionMetrics(dataframe_2, dataframe_3) {
+        const collections = dataframe_2.filter(row => row.TYPE === 'collection');
+        const linkedCollections = collections.filter(row => row.PARENT_ID);
+        const avgItemsPerCollection = dataframe_3.NUM_BLOCKS / (dataframe_3.NUM_COLLECTIONS || 1);
+
+        return {
+            total_collections: dataframe_3.NUM_COLLECTIONS,
+            linked_database_count: linkedCollections.length,
+            standalone_database_count: collections.length - linkedCollections.length,
+            avg_items_per_collection: avgItemsPerCollection,
+            collection_usage_ratio: (dataframe_3.TOTAL_NUM_COLLECTION_VIEWS / dataframe_3.NUM_COLLECTIONS) || 0,
+            collection_health_score: this.calculateCollectionHealthScore(dataframe_3),
+            template_count: dataframe_2.filter(row => row.TYPE === 'template').length
+        };
+    }
+
+    calculateContentMetrics(dataframe_2, dataframe_3) {
+        const typeDistribution = {};
+        dataframe_2.forEach(row => {
+            const type = row.TYPE || 'unknown';
+            typeDistribution[type] = (typeDistribution[type] || 0) + 1;
+        });
+
         const titleCounts = {};
         dataframe_2.forEach(row => {
             const title = row.TEXT || '';
@@ -91,47 +149,217 @@ export class MetricsCalculator {
                 titleCounts[title] = (titleCounts[title] || 0) + 1;
             }
         });
-        const duplicate_count = Object.values(titleCounts).filter(count => count > 1).length;
 
-        // Calculate bottleneck pages (pages with many children)
-        const bottleneck_count = dataframe_2.filter(row => {
-            const childIds = JSON.parse(row.CHILD_IDS || '[]');
-            return childIds.length > this.BOTTLENECK_THRESHOLD;
-        }).length;
-
-        // Calculate derived metrics
-        const deep_pages_count = depths.filter(depth => depth > this.DEEP_PAGE_THRESHOLD).length;
-        const percentage_unlinked = (orphaned_blocks / total_pages) * 100;
-        const scatter_index = root_pages / total_pages;
-        const unfindable_pages = depths.filter(depth => depth > this.UNFINDABLE_DEPTH).length;
-        const nav_depth_score = Math.max(0, 100 - (avg_depth * 10));
-        const nav_complexity = (bottleneck_count * 5 + unfindable_pages * 3) / total_pages * 100;
+        const duplicateCount = Object.values(titleCounts).filter(count => count > 1).length;
 
         return {
-            total_pages,
-            max_depth,
-            avg_depth,
-            max_page_depth,
-            avg_page_depth,
-            deep_pages_count,
-            root_pages,
-            orphaned_blocks,
-            collections_count,
-            page_count,
-            collection_view_count,
-            collection_view_page_count,
-            duplicate_count,
-            bottleneck_count,
-            percentage_unlinked,
-            scatter_index,
-            unfindable_pages,
-            nav_depth_score,
-            nav_complexity
+            content_type_distribution: typeDistribution,
+            duplicate_content_rate: (duplicateCount / dataframe_2.length) * 100,
+            content_health_score: this.calculateContentHealthScore(dataframe_2, dataframe_3),
+            avg_content_per_type: Object.values(typeDistribution).reduce((a, b) => a + b, 0) / Object.keys(typeDistribution).length,
+            content_diversity_score: this.calculateContentDiversityScore(typeDistribution)
         };
     }
 
-    calculateUsageMetrics(dataframe_3) {
-        if (!dataframe_3) {
+    calculateGrowthAcceleration(monthlyGrowthRates) {
+        if (monthlyGrowthRates.length < 2) return 0;
+        
+        const recentRates = monthlyGrowthRates.slice(-2);
+        return recentRates[1] - recentRates[0];
+    }
+
+    calculateCreationVelocity(monthlyContent) {
+        const recentMonths = Object.values(monthlyContent).slice(0, 3);
+        return recentMonths.reduce((sum, count) => sum + count, 0) / recentMonths.length;
+    }
+
+    determineWorkspaceMaturity(workspaceAge, growthRates) {
+        if (workspaceAge < 3) return 'New';
+        if (workspaceAge < 6) return 'Growing';
+        if (workspaceAge < 12) return 'Established';
+        return 'Mature';
+    }
+
+    calculateCollectionHealthScore(dataframe_3) {
+        const aliveRatio = dataframe_3.NUM_ALIVE_COLLECTIONS / dataframe_3.NUM_COLLECTIONS;
+        const viewsRatio = dataframe_3.TOTAL_NUM_COLLECTION_VIEWS / (dataframe_3.NUM_COLLECTIONS * 2); // Assuming 2 views per collection is good
+        return (aliveRatio * 0.6 + Math.min(1, viewsRatio) * 0.4) * 100;
+    }
+
+    calculateContentHealthScore(dataframe_2, dataframe_3) {
+        const aliveRatio = dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.NUM_BLOCKS;
+        const depthScore = 1 - (this.calculateAverageDepth(dataframe_2) / 10); // Penalize deep nesting
+        const orphanedRatio = 1 - (this.countOrphanedBlocks(dataframe_2) / dataframe_2.length);
+        
+        return (aliveRatio * 0.4 + depthScore * 0.3 + orphanedRatio * 0.3) * 100;
+    }
+
+    calculateContentDiversityScore(typeDistribution) {
+        const total = Object.values(typeDistribution).reduce((sum, count) => sum + count, 0);
+        const typeRatios = Object.values(typeDistribution).map(count => count / total);
+        
+        // Calculate Shannon Diversity Index
+        return -typeRatios.reduce((sum, ratio) => sum + (ratio * Math.log(ratio)), 0) * 100;
+    }
+
+    calculateStructureMetrics(dataframe_2, dataframe_3) {
+        if (!dataframe_2?.length || !dataframe_3) {
+            console.warn('No data available for structure metrics');
+            return {};
+        }
+
+        // Process all nodes for accurate depth metrics
+        const depths = dataframe_2.map(row => row.DEPTH || 0);
+        const pageDepths = dataframe_2.map(row => row.PAGE_DEPTH || 0);
+        
+        // Calculate depth statistics
+        const max_depth = Math.max(...depths);
+        const avg_depth = depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+        const median_depth = this.calculateMedian(depths);
+        
+        // Page type analysis
+        const pageTypes = this.analyzePageTypes(dataframe_2);
+        
+        // Collection analysis
+        const collectionMetrics = this.analyzeCollections(dataframe_2, dataframe_3);
+        
+        // Navigation analysis
+        const navigationMetrics = this.analyzeNavigation(dataframe_2, dataframe_3);
+
+        return {
+            // Depth metrics
+            max_depth,
+            avg_depth,
+            median_depth,
+            depth_distribution: this.calculateDepthDistribution(depths),
+            
+            // Page metrics
+            total_pages: dataframe_3.TOTAL_NUM_TOTAL_PAGES,
+            alive_pages: dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES,
+            public_pages: dataframe_3.TOTAL_NUM_PUBLIC_PAGES,
+            private_pages: dataframe_3.TOTAL_NUM_PRIVATE_PAGES,
+            
+            // Page types
+            ...pageTypes,
+            
+            // Collection metrics
+            ...collectionMetrics,
+            
+            // Navigation metrics
+            ...navigationMetrics,
+            
+            // Health metrics
+            health_score: this.calculateHealthScore(dataframe_2, dataframe_3)
+        };
+    }
+
+    analyzePageTypes(dataframe_2) {
+        const typeCount = {};
+        dataframe_2.forEach(row => {
+            const type = row.TYPE || 'unknown';
+            typeCount[type] = (typeCount[type] || 0) + 1;
+        });
+
+        return {
+            page_types: typeCount,
+            page_type_distribution: Object.entries(typeCount).map(([type, count]) => ({
+                type,
+                count,
+                percentage: (count / dataframe_2.length) * 100
+            }))
+        };
+    }
+
+    analyzeCollections(dataframe_2, dataframe_3) {
+        return {
+            total_collections: dataframe_3.NUM_COLLECTIONS,
+            alive_collections: dataframe_3.NUM_ALIVE_COLLECTIONS,
+            collection_views: dataframe_3.TOTAL_NUM_COLLECTION_VIEWS,
+            collection_view_pages: dataframe_3.TOTAL_NUM_COLLECTION_VIEW_PAGES,
+            collection_health: (dataframe_3.NUM_ALIVE_COLLECTIONS / dataframe_3.NUM_COLLECTIONS) * 100
+        };
+    }
+
+    analyzeNavigation(dataframe_2, dataframe_3) {
+        const root_pages = dataframe_2.filter(row => 
+            !row.PARENT_ID || row.PARENT_ID === row.SPACE_ID
+        ).length;
+
+        const orphaned_pages = dataframe_2.filter(row => {
+            const hasNoParent = !row.PARENT_ID || row.PARENT_ID === row.SPACE_ID;
+            const hasNoChildren = !row.CHILD_IDS || JSON.parse(row.CHILD_IDS || '[]').length === 0;
+            return hasNoParent && hasNoChildren;
+        }).length;
+
+        return {
+            root_pages,
+            orphaned_pages,
+            navigation_score: Math.max(0, 100 - (orphaned_pages / dataframe_3.TOTAL_NUM_TOTAL_PAGES * 100))
+        };
+    }
+
+    calculateTeamMetrics(dataframe_3, dataframe_5) {
+        return {
+            total_members: dataframe_3.TOTAL_NUM_MEMBERS,
+            total_guests: dataframe_3.TOTAL_NUM_GUESTS,
+            member_growth: ((dataframe_3.TOTAL_NUM_MEMBERS - dataframe_5.NUM_MEMBERS) / dataframe_5.NUM_MEMBERS) * 100,
+            teamspaces: {
+                total: dataframe_3.TOTAL_NUM_TEAMSPACES,
+                open: dataframe_3.TOTAL_NUM_OPEN_TEAMSPACES,
+                closed: dataframe_3.TOTAL_NUM_CLOSED_TEAMSPACES,
+                private: dataframe_3.TOTAL_NUM_PRIVATE_TEAMSPACES
+            },
+            automation: {
+                total_bots: dataframe_3.TOTAL_NUM_BOTS,
+                internal_bots: dataframe_3.TOTAL_NUM_INTERNAL_BOTS,
+                public_bots: dataframe_3.TOTAL_NUM_PUBLIC_BOTS,
+                integrations: dataframe_3.TOTAL_NUM_INTEGRATIONS
+            },
+            team_efficiency_score: this.calculateTeamEfficiencyScore(dataframe_3)
+        };
+    }
+
+    calculateHealthScore(dataframe_2, dataframe_3) {
+        const aliveRatio = dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        const publicRatio = dataframe_3.TOTAL_NUM_PUBLIC_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        const collectionHealth = dataframe_3.NUM_ALIVE_COLLECTIONS / dataframe_3.NUM_COLLECTIONS;
+        
+        return (aliveRatio * 0.4 + publicRatio * 0.3 + collectionHealth * 0.3) * 100;
+    }
+
+    calculateTeamEfficiencyScore(dataframe_3) {
+        const automationRatio = (dataframe_3.TOTAL_NUM_BOTS + dataframe_3.TOTAL_NUM_INTEGRATIONS) / dataframe_3.TOTAL_NUM_MEMBERS;
+        const teamspaceUtilization = dataframe_3.TOTAL_NUM_MEMBERS / (dataframe_3.TOTAL_NUM_TEAMSPACES || 1);
+        
+        return Math.min(100, (automationRatio * 50) + (teamspaceUtilization / this.INDUSTRY_AVERAGE_TEAM_SIZE * 50));
+    }
+
+    calculateMedian(numbers) {
+        const sorted = numbers.slice().sort((a, b) => a - b);
+        const middle = Math.floor(sorted.length / 2);
+        
+        if (sorted.length % 2 === 0) {
+            return (sorted[middle - 1] + sorted[middle]) / 2;
+        }
+        
+        return sorted[middle];
+    }
+
+    calculateDepthDistribution(depths) {
+        const distribution = {};
+        depths.forEach(depth => {
+            distribution[depth] = (distribution[depth] || 0) + 1;
+        });
+        
+        return Object.entries(distribution).map(([depth, count]) => ({
+            depth: parseInt(depth),
+            count,
+            percentage: (count / depths.length) * 100
+        }));
+    }
+
+    calculateUsageMetrics(dataframe_3, dataframe_5) {
+        if (!dataframe_3 || !dataframe_5) {
             console.warn('No usage data available');
             return {};
         }
@@ -167,8 +395,8 @@ export class MetricsCalculator {
         };
     }
 
-    calculateGrowthMetrics(dataframe_3, dataframe_2) {
-        if (!dataframe_3 || !dataframe_2?.length) {
+    calculateGrowthMetrics(dataframe_3, dataframe_2, dataframe_5) {
+        if (!dataframe_3 || !dataframe_2?.length || !dataframe_5?.length) {
             console.warn('No growth data available');
             return {};
         }
@@ -233,8 +461,8 @@ export class MetricsCalculator {
         };
     }
 
-    calculateOrganizationMetrics(dataframe_3) {
-        if (!dataframe_3) {
+    calculateOrganizationMetrics(dataframe_3, dataframe_5) {
+        if (!dataframe_3 || !dataframe_5) {
             console.warn('No organization data available');
             return {};
         }
@@ -269,8 +497,8 @@ export class MetricsCalculator {
         };
     }
 
-    calculateROIMetrics(dataframe_3) {
-        if (!dataframe_3) {
+    calculateROIMetrics(dataframe_3, dataframe_5) {
+        if (!dataframe_3 || !dataframe_5) {
             console.warn('No ROI data available');
             return {};
         }

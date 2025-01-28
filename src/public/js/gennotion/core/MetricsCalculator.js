@@ -40,6 +40,13 @@ export class MetricsCalculator {
         const collectionMetrics = this.calculateDetailedCollectionMetrics(dataframe_2, dataframe_3);
         const contentMetrics = this.calculateContentMetrics(dataframe_2, dataframe_3);
 
+        // Calculate new advanced metrics
+        const evolutionMetrics = this.calculateEvolutionMetrics(dataframe_2, dataframe_3);
+        const collaborationPatterns = this.calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5);
+        const contentQualityMetrics = this.calculateContentQualityMetrics(dataframe_2, dataframe_3);
+        const usagePatterns = this.calculateAdvancedUsagePatterns(dataframe_2, dataframe_3, dataframe_5);
+        const predictiveMetrics = this.calculatePredictiveMetrics(dataframe_2, dataframe_3);
+
         const allMetrics = {
             workspace_age: workspaceAge,
             ...structureMetrics,
@@ -51,11 +58,23 @@ export class MetricsCalculator {
             ...teamMetrics,
             ...trendMetrics,
             ...collectionMetrics,
-            ...contentMetrics
+            ...contentMetrics,
+            ...evolutionMetrics,
+            ...collaborationPatterns,
+            ...contentQualityMetrics,
+            ...usagePatterns,
+            ...predictiveMetrics
         };
 
         // Log metrics with placeholders
-        this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3, dataframe_5);
+        const placeholderMetrics = this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3, dataframe_5);
+
+        // Create Notion entry with all metrics
+        try {
+            await this.createNotionEntry(workspaceId, placeholderMetrics);
+        } catch (error) {
+            console.error('Error creating Notion entry:', error);
+        }
 
         return allMetrics;
     }
@@ -750,6 +769,7 @@ export class MetricsCalculator {
 
     logMetricsWithPlaceholders(metrics, dataframe_2, dataframe_3, dataframe_5) {
         const placeholderMetrics = {
+            // Existing metrics
             '[[total_pages]]': metrics.total_pages,
             '[[max_depth]]': metrics.max_depth,
             '[[avg_depth]]': this.formatDecimal(metrics.avg_depth),
@@ -767,6 +787,64 @@ export class MetricsCalculator {
             '[[unfindable_pages]]': metrics.unfindable_pages,
             '[[nav_complexity]]': this.formatDecimal(metrics.nav_complexity),
             
+            // Evolution Metrics
+            '[[content_maturity_score]]': this.formatDecimal(metrics.content_maturity_score),
+            '[[growth_sustainability_index]]': this.formatDecimal(metrics.growth_sustainability_index),
+            '[[workspace_complexity_score]]': this.formatDecimal(metrics.workspace_complexity?.overall_complexity),
+            '[[knowledge_structure_score]]': this.formatDecimal(metrics.knowledge_structure_score),
+
+            // Collaboration Patterns
+            '[[team_adoption_score]]': this.formatDecimal(metrics.team_adoption_score),
+            '[[collaboration_density]]': this.formatDecimal(metrics.collaboration_density?.density_score),
+            '[[knowledge_sharing_index]]': this.formatDecimal(metrics.knowledge_sharing_index),
+            '[[cross_team_collaboration_score]]': this.formatDecimal(metrics.cross_team_collaboration_score),
+
+            // Content Quality Metrics
+            '[[content_freshness_score]]': this.formatDecimal(metrics.content_freshness_score),
+            '[[structure_quality_index]]': this.formatDecimal(metrics.structure_quality_index),
+            '[[knowledge_base_health]]': this.formatDecimal(metrics.knowledge_base_health),
+            '[[content_organization_score]]': this.formatDecimal(metrics.content_organization_score),
+            '[[documentation_coverage]]': this.formatDecimal(metrics.documentation_coverage),
+
+            // Usage Patterns
+            '[[automation_effectiveness]]': this.formatDecimal(metrics.automation_effectiveness),
+            '[[integration_impact_score]]': this.formatDecimal(metrics.integration_impact_score),
+            '[[feature_utilization_index]]': this.formatDecimal(metrics.feature_utilization_index),
+            '[[advanced_features_adoption]]': this.formatDecimal(metrics.advanced_features_adoption),
+            '[[workflow_optimization_score]]': this.formatDecimal(metrics.workflow_optimization_score),
+
+            // Predictive Metrics
+            '[[growth_trajectory]]': this.formatDecimal(metrics.growth_trajectory),
+            '[[scaling_readiness_score]]': this.formatDecimal(metrics.scaling_readiness_score),
+            '[[bottleneck_prediction]]': metrics.bottleneck_prediction,
+            '[[growth_potential_score]]': this.formatDecimal(metrics.growth_potential_score),
+            '[[optimization_opportunities]]': metrics.optimization_opportunities,
+
+            // Trend Metrics
+            '[[monthly_growth_rates]]': this.formatDecimal(metrics.monthly_growth_rates?.[0]),
+            '[[blocks_created_last_month]]': metrics.blocks_created_last_month,
+            '[[blocks_created_last_year]]': metrics.blocks_created_last_year,
+            '[[content_growth_trend]]': this.formatDecimal(metrics.content_growth_trend?.[0]),
+            '[[growth_acceleration]]': this.formatDecimal(metrics.growth_acceleration),
+            '[[creation_velocity]]': this.formatDecimal(metrics.creation_velocity),
+            '[[workspace_maturity]]': metrics.workspace_maturity,
+
+            // Collection Metrics
+            '[[total_collections]]': metrics.total_collections,
+            '[[linked_database_count]]': metrics.linked_database_count,
+            '[[standalone_database_count]]': metrics.standalone_database_count,
+            '[[avg_items_per_collection]]': this.formatDecimal(metrics.avg_items_per_collection),
+            '[[collection_usage_ratio]]': this.formatDecimal(metrics.collection_usage_ratio),
+            '[[collection_health_score]]': this.formatDecimal(metrics.collection_health_score),
+            '[[template_count]]': metrics.template_count,
+
+            // Content Type Metrics
+            '[[content_type_distribution]]': JSON.stringify(metrics.content_type_distribution),
+            '[[duplicate_content_rate]]': this.formatPercentage(metrics.duplicate_content_rate),
+            '[[content_health_score]]': this.formatDecimal(metrics.content_health_score),
+            '[[avg_content_per_type]]': this.formatDecimal(metrics.avg_content_per_type),
+            '[[content_diversity_score]]': this.formatDecimal(metrics.content_diversity_score),
+
             // Key Metrics Insights
             '[[key_metrics_insight_1]]': this.formatPercentage(metrics.monthly_content_growth_rate),
             '[[key_metrics_insight_2]]': this.formatPercentage(metrics.monthly_member_growth_rate),
@@ -780,41 +858,11 @@ export class MetricsCalculator {
             '[[key_metrics_insight_10]]': dataframe_3.TOTAL_NUM_INTEGRATIONS,
             '[[key_metrics_insight_11]]': dataframe_3.TOTAL_NUM_BOTS + dataframe_3.TOTAL_NUM_INTERNAL_BOTS + dataframe_3.TOTAL_NUM_PUBLIC_BOTS,
             '[[key_metrics_insight_12]]': dataframe_3.TOTAL_NUM_LINK_PREVIEW_INTEGRATIONS + dataframe_3.TOTAL_NUM_PUBLIC_INTEGRATIONS,
-            '[[key_metrics_insight_13]]': this.formatPercentage((dataframe_3.NUM_ALIVE_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100),
-            '[[key_metrics_insight_14]]': this.formatPercentage((dataframe_3.TOTAL_NUM_PRIVATE_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100),
-            '[[key_metrics_insight_15]]': this.formatPercentage((dataframe_3.TOTAL_NUM_COLLECTION_VIEWS / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100),
-            '[[key_metrics_insight_16]]': this.formatPercentage((dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.NUM_BLOCKS) * 100),
-            '[[key_metrics_insight_17]]': this.formatDecimal(dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.TOTAL_NUM_MEMBERS),
-            '[[key_metrics_insight_18]]': this.formatPercentage(metrics.monthly_content_growth_rate),
-
-            // Growth Metrics
-            '[[growth_rate]]': this.formatPercentage(metrics.monthly_content_growth_rate),
-            '[[monthly_member_growth_rate]]': this.formatPercentage(metrics.monthly_member_growth_rate),
-            '[[monthly_content_growth_rate]]': this.formatPercentage(metrics.monthly_content_growth_rate),
-            '[[expected_members_in_next_year]]': this.formatNumber(metrics.expected_members_in_next_year),
-
-            // Organization Metrics
-            '[[current_visibility_score]]': this.formatPercentage(metrics.current_visibility_score),
-            '[[current_collaboration_score]]': this.formatPercentage(metrics.current_collaboration_score),
-            '[[current_productivity_score]]': this.formatPercentage(metrics.current_productivity_score),
-            '[[current_organization_score]]': this.formatPercentage(metrics.current_organization_score),
-            '[[projected_organisation_score]]': this.formatPercentage(metrics.current_organization_score * 1.3),
-
-            // ROI Metrics
-            '[[current_plan]]': this.formatCurrency(metrics.current_plan),
-            '[[enterprise_plan]]': this.formatCurrency(metrics.enterprise_plan),
-            '[[enterprise_plan_w_ai]]': this.formatCurrency(metrics.enterprise_plan_w_ai),
-            '[[10_percent_increase]]': this.formatCurrency(metrics['10_percent_increase']),
-            '[[20_percent_increase]]': this.formatCurrency(metrics['20_percent_increase']),
-            '[[50_percent_increase]]': this.formatCurrency(metrics['50_percent_increase']),
-            '[[enterprise_plan_roi]]': this.formatPercentage(metrics.enterprise_plan_roi),
-            '[[enterprise_plan_w_ai_roi]]': this.formatPercentage(metrics.enterprise_plan_w_ai_roi)
+            '[[key_metrics_insight_13]]': this.formatPercentage((dataframe_3.NUM_ALIVE_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100)
         };
 
-        console.log('\nMetrics with Placeholders:');
-        Object.entries(placeholderMetrics).forEach(([placeholder, value]) => {
-            console.log(`${placeholder} -> ${value}`);
-        });
+        console.log('Metrics with placeholders:', placeholderMetrics);
+        return placeholderMetrics;
     }
 
     async createNotionEntry(workspaceId, metrics) {
@@ -1088,6 +1136,205 @@ export class MetricsCalculator {
         const monthlyRate = timeRanges.last_month / 30;
         const quarterlyRate = timeRanges.last_quarter / 90;
         return ((monthlyRate - quarterlyRate) / quarterlyRate) * 100;
+    }
+
+    calculateCrossTeamCollaboration(dataframe_3) {
+        const totalTeamspaces = dataframe_3.TOTAL_NUM_TEAMSPACES;
+        const openTeamspaces = dataframe_3.TOTAL_NUM_OPEN_TEAMSPACES;
+        const sharedContentRatio = dataframe_3.TOTAL_NUM_PUBLIC_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        
+        return (openTeamspaces / totalTeamspaces * 50) + (sharedContentRatio * 50);
+    }
+
+    analyzeTeamContentDistribution(dataframe_2, dataframe_3) {
+        const totalContent = dataframe_3.NUM_BLOCKS;
+        const totalTeamspaces = dataframe_3.TOTAL_NUM_TEAMSPACES;
+        return {
+            content_per_teamspace: totalContent / totalTeamspaces,
+            distribution_score: Math.min(100, (totalContent / totalTeamspaces / 100) * 100)
+        };
+    }
+
+    analyzeContentHealth(dataframe_2, dataframe_3) {
+        const aliveRatio = dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.NUM_BLOCKS;
+        const recentContent = dataframe_2.filter(row => {
+            const age = Date.now() - parseInt(row.CREATED_TIME);
+            return age < 90 * this.MILLISECONDS_PER_DAY;
+        }).length;
+        
+        return {
+            alive_ratio: aliveRatio,
+            recent_content_ratio: recentContent / dataframe_2.length,
+            health_score: (aliveRatio * 60 + (recentContent / dataframe_2.length) * 40)
+        };
+    }
+
+    calculateContentFreshness(creationPatterns) {
+        const recentContentScore = (creationPatterns.creation_ranges.last_month / 30) * 100;
+        const trendScore = Math.max(0, 100 + creationPatterns.creation_trend);
+        return (recentContentScore * 0.6 + trendScore * 0.4);
+    }
+
+    calculateStructureQualityIndex(structureQuality) {
+        return Math.max(0, 100 - (
+            structureQuality.avg_depth * 10 +
+            structureQuality.deep_pages_ratio * 30 +
+            structureQuality.orphaned_ratio * 20
+        ));
+    }
+
+    calculateKnowledgeBaseHealth(contentHealth) {
+        return contentHealth.health_score;
+    }
+
+    calculateContentOrganization(dataframe_2, dataframe_3) {
+        const collectionRatio = dataframe_3.NUM_COLLECTIONS / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        const templateRatio = dataframe_2.filter(row => row.TYPE === 'template').length / dataframe_2.length;
+        const structuredContent = (collectionRatio * 50) + (templateRatio * 50);
+        return Math.min(100, structuredContent);
+    }
+
+    calculateDocumentationCoverage(dataframe_2, dataframe_3) {
+        const totalProcesses = dataframe_3.NUM_COLLECTIONS;
+        const documentedProcesses = dataframe_2.filter(row => 
+            row.TYPE === 'template' || row.TYPE === 'collection_view_page'
+        ).length;
+        
+        return Math.min(100, (documentedProcesses / (totalProcesses || 1)) * 100);
+    }
+
+    calculateAutomationEffectiveness(dataframe_3) {
+        const automationRatio = (dataframe_3.TOTAL_NUM_BOTS + dataframe_3.TOTAL_NUM_INTEGRATIONS) / 
+                               dataframe_3.TOTAL_NUM_MEMBERS;
+        return Math.min(100, automationRatio * 100);
+    }
+
+    calculateIntegrationImpact(dataframe_3) {
+        const integrationRatio = dataframe_3.TOTAL_NUM_INTEGRATIONS / this.RECOMMENDED_INTEGRATIONS;
+        const integrationUsage = dataframe_3.TOTAL_NUM_LINK_PREVIEW_INTEGRATIONS / 
+                                dataframe_3.TOTAL_NUM_INTEGRATIONS;
+        
+        return Math.min(100, (integrationRatio * 50) + (integrationUsage * 50));
+    }
+
+    calculateFeatureUtilization(dataframe_2, dataframe_3) {
+        const advancedFeatures = [
+            dataframe_3.NUM_COLLECTIONS,
+            dataframe_3.TOTAL_NUM_COLLECTION_VIEWS,
+            dataframe_3.TOTAL_NUM_INTEGRATIONS,
+            dataframe_3.TOTAL_NUM_BOTS
+        ].reduce((sum, count) => sum + count, 0);
+
+        const basicPages = dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        return Math.min(100, (advancedFeatures / basicPages) * 100);
+    }
+
+    calculateAdvancedFeaturesAdoption(dataframe_2) {
+        const totalPages = dataframe_2.length;
+        const advancedPages = dataframe_2.filter(row => 
+            row.TYPE === 'collection_view_page' || 
+            row.TYPE === 'template' ||
+            row.TYPE === 'database'
+        ).length;
+
+        return (advancedPages / totalPages) * 100;
+    }
+
+    calculateWorkflowOptimization(dataframe_3) {
+        const automationScore = this.calculateAutomationEffectiveness(dataframe_3);
+        const integrationScore = this.calculateIntegrationImpact(dataframe_3);
+        return (automationScore * 0.5 + integrationScore * 0.5);
+    }
+
+    analyzeGrowthPatterns(dataframe_2) {
+        const now = Date.now();
+        const monthlyGrowth = {};
+        
+        dataframe_2.forEach(row => {
+            const month = Math.floor((now - parseInt(row.CREATED_TIME)) / this.MILLISECONDS_PER_MONTH);
+            monthlyGrowth[month] = (monthlyGrowth[month] || 0) + 1;
+        });
+
+        return {
+            monthly_growth: monthlyGrowth,
+            growth_rate: Object.values(monthlyGrowth)[0] / 
+                        (Object.values(monthlyGrowth)[1] || Object.values(monthlyGrowth)[0]),
+            consistency: this.calculateGrowthConsistency(Object.values(monthlyGrowth))
+        };
+    }
+
+    calculateGrowthConsistency(monthlyValues) {
+        if (monthlyValues.length < 2) return 100;
+        
+        const variations = monthlyValues.slice(1).map((value, index) => 
+            Math.abs(value - monthlyValues[index]) / monthlyValues[index]
+        );
+        
+        return Math.max(0, 100 - (average(variations) * 100));
+    }
+
+    analyzeUsagePatterns(dataframe_2, dataframe_3) {
+        const contentPerMember = dataframe_3.NUM_BLOCKS / dataframe_3.TOTAL_NUM_MEMBERS;
+        const collectionUsage = dataframe_3.NUM_COLLECTIONS / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        
+        return {
+            content_per_member: contentPerMember,
+            collection_usage: collectionUsage,
+            usage_score: Math.min(100, (contentPerMember / 10) * 50 + (collectionUsage * 50))
+        };
+    }
+
+    calculateGrowthTrajectory(growthPatterns) {
+        return growthPatterns.growth_rate * growthPatterns.consistency;
+    }
+
+    calculateScalingReadiness(dataframe_2, dataframe_3) {
+        const structureScore = this.calculateStructureQualityIndex(this.analyzeStructureQuality(dataframe_2));
+        const automationScore = this.calculateAutomationEffectiveness(dataframe_3);
+        const organizationScore = this.calculateOrganizationScore(dataframe_2);
+        
+        return (structureScore * 0.4 + automationScore * 0.3 + organizationScore * 0.3);
+    }
+
+    predictBottlenecks(usagePatterns) {
+        const bottlenecks = [];
+        
+        if (usagePatterns.content_per_member > 100) {
+            bottlenecks.push("High content per member ratio - consider restructuring");
+        }
+        if (usagePatterns.collection_usage < 0.1) {
+            bottlenecks.push("Low collection usage - consider implementing more databases");
+        }
+        
+        return bottlenecks.length ? bottlenecks : ["No significant bottlenecks detected"];
+    }
+
+    calculateGrowthPotential(dataframe_2, dataframe_3) {
+        const currentUtilization = this.analyzeUsagePatterns(dataframe_2, dataframe_3).usage_score;
+        const scalingReadiness = this.calculateScalingReadiness(dataframe_2, dataframe_3);
+        
+        return (currentUtilization * 0.3 + scalingReadiness * 0.7);
+    }
+
+    identifyOptimizationOpportunities(dataframe_2, dataframe_3) {
+        const opportunities = [];
+        
+        if (dataframe_3.NUM_COLLECTIONS / dataframe_3.TOTAL_NUM_TOTAL_PAGES < 0.1) {
+            opportunities.push("Increase database usage for better content organization");
+        }
+        if (dataframe_3.TOTAL_NUM_INTEGRATIONS < this.RECOMMENDED_INTEGRATIONS) {
+            opportunities.push("Add more integrations to improve workflow automation");
+        }
+        if (this.countOrphanedPages(dataframe_2) > dataframe_2.length * 0.1) {
+            opportunities.push("Reduce number of orphaned pages");
+        }
+        
+        return opportunities.length ? opportunities : ["No significant optimization opportunities identified"];
+    }
+
+    // Helper function for calculating averages
+    average(array) {
+        return array.reduce((a, b) => a + b, 0) / array.length;
     }
 
     // ... existing methods ...

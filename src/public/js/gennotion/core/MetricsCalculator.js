@@ -194,6 +194,21 @@ export class MetricsCalculator {
         return (aliveRatio * 0.4 + depthScore * 0.3 + orphanedRatio * 0.3) * 100;
     }
 
+    calculateAverageDepth(dataframe_2) {
+        if (!dataframe_2?.length) return 0;
+        const depths = dataframe_2.map(row => row.DEPTH || 0);
+        return depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+    }
+
+    countOrphanedBlocks(dataframe_2) {
+        if (!dataframe_2?.length) return 0;
+        return dataframe_2.filter(row => {
+            const hasNoParent = !row.PARENT_ID || row.PARENT_ID === row.SPACE_ID;
+            const hasNoChildren = !row.CHILD_IDS || JSON.parse(row.CHILD_IDS || '[]').length === 0;
+            return hasNoParent && hasNoChildren;
+        }).length;
+    }
+
     calculateContentDiversityScore(typeDistribution) {
         const total = Object.values(typeDistribution).reduce((sum, count) => sum + count, 0);
         const typeRatios = Object.values(typeDistribution).map(count => count / total);
@@ -933,5 +948,147 @@ export class MetricsCalculator {
         };
     }
 
-    // ... Add implementation for other helper methods ...
+    // Depth and Structure Analysis Methods
+    calculateDepthStatistics(dataframe_2) {
+        const depths = dataframe_2.map(row => row.DEPTH || 0);
+        const avgDepth = depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+        const maxDepth = Math.max(...depths);
+        const medianDepth = this.calculateMedian(depths);
+        const depthDistribution = this.calculateDepthDistribution(depths);
+
+        return {
+            avgDepth,
+            maxDepth,
+            medianDepth,
+            depthDistribution,
+            deepPagesCount: depths.filter(d => d > this.DEEP_PAGE_THRESHOLD).length
+        };
+    }
+
+    getTypeDistribution(dataframe_2) {
+        const typeCount = {};
+        dataframe_2.forEach(row => {
+            const type = row.TYPE || 'unknown';
+            typeCount[type] = (typeCount[type] || 0) + 1;
+        });
+        return typeCount;
+    }
+
+    // Team and Collaboration Analysis Methods
+    analyzeTeamspacePatterns(dataframe_3) {
+        return {
+            total_teamspaces: dataframe_3.TOTAL_NUM_TEAMSPACES,
+            open_teamspaces: dataframe_3.TOTAL_NUM_OPEN_TEAMSPACES,
+            closed_teamspaces: dataframe_3.TOTAL_NUM_CLOSED_TEAMSPACES,
+            private_teamspaces: dataframe_3.TOTAL_NUM_PRIVATE_TEAMSPACES,
+            avg_members_per_teamspace: dataframe_3.TOTAL_NUM_MEMBERS / (dataframe_3.TOTAL_NUM_TEAMSPACES || 1),
+            teamspace_utilization: (dataframe_3.TOTAL_NUM_TEAMSPACES / Math.ceil(dataframe_3.TOTAL_NUM_MEMBERS / this.INDUSTRY_AVERAGE_TEAM_SIZE)) * 100
+        };
+    }
+
+    analyzeMemberActivity(dataframe_2, dataframe_3) {
+        const now = Date.now();
+        const thirtyDaysAgo = now - (30 * this.MILLISECONDS_PER_DAY);
+        const activePages = dataframe_2.filter(row => parseInt(row.CREATED_TIME) > thirtyDaysAgo).length;
+
+        return {
+            total_members: dataframe_3.TOTAL_NUM_MEMBERS,
+            active_pages_per_member: activePages / dataframe_3.TOTAL_NUM_MEMBERS,
+            content_per_member: dataframe_3.NUM_BLOCKS / dataframe_3.TOTAL_NUM_MEMBERS,
+            collections_per_member: dataframe_3.NUM_COLLECTIONS / dataframe_3.TOTAL_NUM_MEMBERS
+        };
+    }
+
+    calculateTeamAdoptionScore(memberActivity, teamspaceMetrics) {
+        const contentScore = Math.min(memberActivity.content_per_member / 10, 1) * 100;
+        const teamspaceScore = Math.min(teamspaceMetrics.teamspace_utilization, 100);
+        const activityScore = Math.min(memberActivity.active_pages_per_member * 20, 100);
+
+        return (contentScore * 0.4 + teamspaceScore * 0.3 + activityScore * 0.3);
+    }
+
+    calculateCollaborationDensity(dataframe_3) {
+        const memberDensity = dataframe_3.TOTAL_NUM_MEMBERS / (dataframe_3.TOTAL_NUM_TEAMSPACES || 1);
+        const optimalDensity = this.INDUSTRY_AVERAGE_TEAM_SIZE;
+        const densityScore = Math.min((memberDensity / optimalDensity) * 100, 100);
+
+        return {
+            density_score: densityScore,
+            members_per_teamspace: memberDensity,
+            optimal_density: optimalDensity
+        };
+    }
+
+    calculateKnowledgeSharingIndex(dataframe_2, dataframe_3) {
+        const publicRatio = dataframe_3.TOTAL_NUM_PUBLIC_PAGES / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+        const templateRatio = dataframe_2.filter(row => row.TYPE === 'template').length / dataframe_2.length;
+        const collectionRatio = dataframe_3.NUM_COLLECTIONS / dataframe_3.TOTAL_NUM_TOTAL_PAGES;
+
+        return (publicRatio * 40 + templateRatio * 30 + collectionRatio * 30);
+    }
+
+    // Content Analysis Methods
+    analyzeCreationPatterns(dataframe_2) {
+        const now = Date.now();
+        const creationTimes = dataframe_2.map(row => parseInt(row.CREATED_TIME));
+        const timeRanges = {
+            last_24h: 0,
+            last_week: 0,
+            last_month: 0,
+            last_quarter: 0
+        };
+
+        creationTimes.forEach(time => {
+            const age = now - time;
+            if (age <= this.MILLISECONDS_PER_DAY) timeRanges.last_24h++;
+            if (age <= 7 * this.MILLISECONDS_PER_DAY) timeRanges.last_week++;
+            if (age <= 30 * this.MILLISECONDS_PER_DAY) timeRanges.last_month++;
+            if (age <= 90 * this.MILLISECONDS_PER_DAY) timeRanges.last_quarter++;
+        });
+
+        return {
+            creation_ranges: timeRanges,
+            daily_average: timeRanges.last_month / 30,
+            weekly_average: timeRanges.last_week / 7,
+            creation_trend: this.calculateCreationTrend(timeRanges)
+        };
+    }
+
+    analyzeStructureQuality(dataframe_2) {
+        const depths = dataframe_2.map(row => row.DEPTH || 0);
+        const orphanedPages = this.countOrphanedPages(dataframe_2);
+        const avgDepth = depths.reduce((sum, depth) => sum + depth, 0) / depths.length;
+        const deepPages = depths.filter(d => d > this.DEEP_PAGE_THRESHOLD).length;
+
+        return {
+            avg_depth: avgDepth,
+            deep_pages_ratio: deepPages / dataframe_2.length,
+            orphaned_ratio: orphanedPages / dataframe_2.length,
+            structure_score: this.calculateStructureScore(avgDepth, deepPages, orphanedPages, dataframe_2.length)
+        };
+    }
+
+    calculateStructureScore(avgDepth, deepPages, orphanedPages, totalPages) {
+        const depthScore = Math.max(0, 100 - (avgDepth * 10));
+        const deepPagesScore = Math.max(0, 100 - (deepPages / totalPages * 200));
+        const orphanedScore = Math.max(0, 100 - (orphanedPages / totalPages * 200));
+
+        return (depthScore * 0.4 + deepPagesScore * 0.3 + orphanedScore * 0.3);
+    }
+
+    countOrphanedPages(dataframe_2) {
+        return dataframe_2.filter(row => {
+            const hasNoParent = !row.PARENT_ID || row.PARENT_ID === row.SPACE_ID;
+            const hasNoChildren = !row.CHILD_IDS || JSON.parse(row.CHILD_IDS || '[]').length === 0;
+            return hasNoParent && hasNoChildren;
+        }).length;
+    }
+
+    calculateCreationTrend(timeRanges) {
+        const monthlyRate = timeRanges.last_month / 30;
+        const quarterlyRate = timeRanges.last_quarter / 90;
+        return ((monthlyRate - quarterlyRate) / quarterlyRate) * 100;
+    }
+
+    // ... existing methods ...
 } 

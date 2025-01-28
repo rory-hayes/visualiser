@@ -13,11 +13,12 @@ export class MetricsCalculator {
         this.NOTION_API_KEY = "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";
     }
 
-    async calculateAllMetrics(dataframe_2, dataframe_3) {
-        // Log both the summary data and full dataset
+    async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5) {
+        // Log all the data
         console.log('Data received:', {
             dataframe_2_length: dataframe_2?.length,
-            dataframe_3: dataframe_3
+            dataframe_3: dataframe_3,
+            dataframe_5_length: dataframe_5?.length
         });
 
         const structureMetrics = this.calculateStructureMetrics(dataframe_2);
@@ -25,6 +26,7 @@ export class MetricsCalculator {
         const growthMetrics = this.calculateGrowthMetrics(dataframe_3, dataframe_2);
         const organizationMetrics = this.calculateOrganizationMetrics(dataframe_3);
         const roiMetrics = this.calculateROIMetrics(dataframe_3);
+        const engagementMetrics = this.calculateEngagementMetrics(dataframe_5);
 
         const allMetrics = {
             ...structureMetrics,
@@ -32,11 +34,12 @@ export class MetricsCalculator {
             ...growthMetrics,
             ...organizationMetrics,
             ...roiMetrics,
+            ...engagementMetrics,
             graphData: dataframe_2
         };
 
         // Log metrics with placeholders
-        this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3);
+        this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3, dataframe_5);
 
         return allMetrics;
     }
@@ -300,6 +303,66 @@ export class MetricsCalculator {
         };
     }
 
+    // Add new method for engagement metrics
+    calculateEngagementMetrics(dataframe_5) {
+        if (!dataframe_5?.length) {
+            console.warn('No engagement data available');
+            return {};
+        }
+
+        // Calculate engagement metrics from dataframe_5
+        const totalInteractions = dataframe_5.reduce((sum, row) => sum + (row.INTERACTION_COUNT || 0), 0);
+        const uniqueUsers = new Set(dataframe_5.map(row => row.USER_ID)).size;
+        const totalPages = new Set(dataframe_5.map(row => row.PAGE_ID)).size;
+
+        // Calculate average interactions per user and page
+        const avgInteractionsPerUser = uniqueUsers ? totalInteractions / uniqueUsers : 0;
+        const avgInteractionsPerPage = totalPages ? totalInteractions / totalPages : 0;
+
+        // Calculate daily active users (DAU)
+        const now = Date.now();
+        const oneDayAgo = now - (24 * 60 * 60 * 1000);
+        const dau = new Set(
+            dataframe_5
+                .filter(row => parseInt(row.LAST_INTERACTION_TIME) > oneDayAgo)
+                .map(row => row.USER_ID)
+        ).size;
+
+        // Calculate monthly active users (MAU)
+        const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+        const mau = new Set(
+            dataframe_5
+                .filter(row => parseInt(row.LAST_INTERACTION_TIME) > thirtyDaysAgo)
+                .map(row => row.USER_ID)
+        ).size;
+
+        // Calculate engagement rate
+        const engagementRate = mau ? (dau / mau) * 100 : 0;
+
+        // Calculate page popularity distribution
+        const pageInteractions = {};
+        dataframe_5.forEach(row => {
+            const pageId = row.PAGE_ID;
+            pageInteractions[pageId] = (pageInteractions[pageId] || 0) + (row.INTERACTION_COUNT || 0);
+        });
+
+        const popularPages = Object.values(pageInteractions).filter(count => count > 100).length;
+        const engagementScore = Math.min(100, (popularPages / totalPages) * 100);
+
+        return {
+            total_interactions: totalInteractions,
+            unique_users: uniqueUsers,
+            engaged_pages: totalPages,
+            avg_interactions_per_user: avgInteractionsPerUser,
+            avg_interactions_per_page: avgInteractionsPerPage,
+            daily_active_users: dau,
+            monthly_active_users: mau,
+            engagement_rate: engagementRate,
+            popular_pages: popularPages,
+            engagement_score: engagementScore
+        };
+    }
+
     // Helper methods
     calculateDepths(dataframe_2) {
         const depths = new Array(dataframe_2.length).fill(0);
@@ -442,7 +505,7 @@ export class MetricsCalculator {
         }).format(value);
     }
 
-    logMetricsWithPlaceholders(metrics, dataframe_2, dataframe_3) {
+    logMetricsWithPlaceholders(metrics, dataframe_2, dataframe_3, dataframe_5) {
         const placeholderMetrics = {
             '[[total_pages]]': metrics.total_pages,
             '[[max_depth]]': metrics.max_depth,

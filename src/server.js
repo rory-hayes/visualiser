@@ -950,12 +950,20 @@ app.post('/api/analyze-workspace', async (req, res) => {
             throw new Error('Failed to get results from Hex');
         }
 
+        // Log the data we're working with
+        console.log('Processing data:', {
+            dataframe2Length: results.data.dataframe_2.length,
+            dataframe3Keys: Object.keys(results.data.dataframe_3),
+            dataframe5Length: results.data.dataframe_5.length
+        });
+
         // Step 3: Calculate metrics
         console.log('Step 3: Calculating metrics...');
         const metricsCalculator = new MetricsCalculator();
         const metrics = await metricsCalculator.calculateAllMetrics(
             results.data.dataframe_2,
-            results.data.dataframe_3
+            results.data.dataframe_3,
+            results.data.dataframe_5  // Add dataframe_5 to the metrics calculation
         );
 
         // Step 4: Create Notion page using our server-side function
@@ -987,16 +995,23 @@ async function waitForHexResults(runId, maxAttempts = 30) {
         try {
             const results = await loadResults();
             
-            // Check if we have valid data
-            if (results?.data?.dataframe_2?.length > 0 && results?.data?.dataframe_3) {
+            // Check if we have valid data for all required dataframes
+            if (results?.data?.dataframe_2?.length > 0 && 
+                results?.data?.dataframe_3 &&
+                results?.data?.dataframe_5?.length > 0) {
                 console.log('Valid results found:', {
                     dataframe2Length: results.data.dataframe_2.length,
-                    hasDataframe3: !!results.data.dataframe_3
+                    hasDataframe3: !!results.data.dataframe_3,
+                    dataframe5Length: results.data.dataframe_5.length
                 });
                 return results;
             }
             
-            console.log(`Attempt ${attempts + 1}: Waiting for valid results...`);
+            console.log(`Attempt ${attempts + 1}: Waiting for valid results...`, {
+                hasDataframe2: !!results?.data?.dataframe_2?.length,
+                hasDataframe3: !!results?.data?.dataframe_3,
+                hasDataframe5: !!results?.data?.dataframe_5?.length
+            });
             await delay(2000); // Wait 2 seconds between attempts
             attempts++;
             
@@ -1145,6 +1160,29 @@ async function createNotionPage(workspaceId, metrics) {
                 `50% Productivity Increase Value: ${formatCurrency(metrics['50_percent_increase'])}`,
                 `Enterprise Plan ROI: ${formatPercentage(metrics.enterprise_plan_roi)}`,
                 `Enterprise Plan with AI ROI: ${formatPercentage(metrics.enterprise_plan_w_ai_roi)}`
+            ]),
+            // Engagement Metrics Section
+            {
+                object: 'block',
+                type: 'heading_2',
+                heading_2: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'Engagement Metrics' }
+                    }]
+                }
+            },
+            ...createBulletedList([
+                `Total Interactions: ${metrics.total_interactions || 0}`,
+                `Unique Users: ${metrics.unique_users || 0}`,
+                `Engaged Pages: ${metrics.engaged_pages || 0}`,
+                `Average Interactions per User: ${formatDecimal(metrics.avg_interactions_per_user)}`,
+                `Average Interactions per Page: ${formatDecimal(metrics.avg_interactions_per_page)}`,
+                `Daily Active Users (DAU): ${metrics.daily_active_users || 0}`,
+                `Monthly Active Users (MAU): ${metrics.monthly_active_users || 0}`,
+                `Engagement Rate (DAU/MAU): ${formatPercentage(metrics.engagement_rate)}`,
+                `Popular Pages: ${metrics.popular_pages || 0}`,
+                `Engagement Score: ${formatPercentage(metrics.engagement_score)}`
             ]),
             // Analysis Date
             {

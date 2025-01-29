@@ -48,6 +48,27 @@ export class SnapshotVisualizer {
 
     async generateSnapshots(dataframe_2, dataframe_3, dataframe_5) {
         try {
+            // Validate input data
+            if (!dataframe_2?.length || !dataframe_3 || !dataframe_5?.length) {
+                console.warn('Missing or invalid data for snapshot generation:', {
+                    df2Length: dataframe_2?.length,
+                    df3Keys: Object.keys(dataframe_3 || {}),
+                    df5Length: dataframe_5?.length
+                });
+                return {
+                    snapshots: {
+                        past: this.generateEmptySnapshot('Past'),
+                        present: this.generateEmptySnapshot('Present'),
+                        future: this.generateEmptySnapshot('Future')
+                    },
+                    visualizations: {
+                        past: this.createEmptyVisualization('Past State (60 days ago)'),
+                        present: this.createEmptyVisualization('Current State'),
+                        future: this.createEmptyVisualization('Projected Future (90 days)')
+                    }
+                };
+            }
+
             console.log('Generating snapshots with data:', {
                 df2Length: dataframe_2?.length,
                 df3Keys: Object.keys(dataframe_3 || {}),
@@ -69,7 +90,18 @@ export class SnapshotVisualizer {
             };
         } catch (error) {
             console.error('Error generating snapshots:', error);
-            throw error;
+            return {
+                snapshots: {
+                    past: this.generateEmptySnapshot('Past'),
+                    present: this.generateEmptySnapshot('Present'),
+                    future: this.generateEmptySnapshot('Future')
+                },
+                visualizations: {
+                    past: this.createEmptyVisualization('Past State (60 days ago)'),
+                    present: this.createEmptyVisualization('Current State'),
+                    future: this.createEmptyVisualization('Projected Future (90 days)')
+                }
+            };
         }
     }
 
@@ -423,5 +455,63 @@ export class SnapshotVisualizer {
                 collaborationScore: snapshot.metrics.collaborationScore.toFixed(1)
             }
         };
+    }
+
+    generateEmptySnapshot(period) {
+        return {
+            timestamp: new Date().toISOString(),
+            data: {
+                nodes: [],
+                members: 0,
+                interactions: []
+            },
+            connections: {
+                total: 0,
+                unique: 0,
+                density: 0,
+                averagePerNode: 0
+            },
+            metrics: {
+                totalNodes: 0,
+                totalMembers: 0,
+                totalConnections: 0,
+                connectionDensity: 0,
+                silos: 0,
+                activeNodes: 0,
+                collaborationScore: 0
+            }
+        };
+    }
+
+    createEmptyVisualization(title) {
+        // Create SVG element
+        const container = this.document.createElement('div');
+        const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', this.GRAPH_CONFIG.width);
+        svg.setAttribute('height', this.GRAPH_CONFIG.height);
+        svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        container.appendChild(svg);
+
+        // Create background
+        const background = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        background.setAttribute('width', '100%');
+        background.setAttribute('height', '100%');
+        background.setAttribute('fill', '#ffffff');
+        svg.appendChild(background);
+
+        // Add title
+        const titleElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        titleElement.setAttribute('x', this.GRAPH_CONFIG.width / 2);
+        titleElement.setAttribute('y', this.GRAPH_CONFIG.height / 2);
+        titleElement.setAttribute('text-anchor', 'middle');
+        titleElement.setAttribute('font-size', '16px');
+        titleElement.setAttribute('font-weight', 'bold');
+        titleElement.textContent = `${title} (No data available)`;
+        svg.appendChild(titleElement);
+
+        // Convert SVG to data URL
+        const svgString = container.innerHTML;
+        const base64 = Buffer.from(svgString).toString('base64');
+        return `data:image/svg+xml;base64,${base64}`;
     }
 } 

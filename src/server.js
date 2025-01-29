@@ -976,54 +976,33 @@ app.post('/api/notion/create-page', async (req, res) => {
 app.post('/api/analyze-workspace', async (req, res) => {
     try {
         const { workspaceId } = req.body;
-        
         if (!workspaceId) {
-            return res.status(400).json({ error: 'Workspace ID is required' });
+            throw new Error('workspaceId is required');
         }
 
-        // Step 1: Generate Hex report
-        console.log('Step 1: Generating Hex report...');
-        const hexResponse = await callHexAPI(workspaceId, "21c6c24a-60e8-487c-b03a-1f04dda4f918");
-        
-        if (!hexResponse.runId) {
-            throw new Error('Failed to get runId from Hex API');
-        }
+        // Step 1: Trigger Hex run
+        console.log('Step 1: Triggering Hex run...');
+        const hexResponse = await triggerHexRun(workspaceId);
 
-        // Step 2: Wait for and process results
-        console.log('Step 2: Processing results...');
+        // Step 2: Wait for Hex run to complete
+        console.log('Step 2: Waiting for Hex run to complete...');
         const results = await waitForHexResults(hexResponse.runId);
-        
-        if (!results || !results.data) {
-            throw new Error('Failed to get results from Hex');
-        }
 
-        // Log the data we're working with
-        console.log('Processing data:', {
-            dataframe2Length: results.data.dataframe_2.length,
-            dataframe3Keys: Object.keys(results.data.dataframe_3),
-            dataframe5Length: results.data.dataframe_5.length
-        });
-
-        // Step 3: Calculate metrics
+        // Step 3: Calculate metrics using our MetricsCalculator
         console.log('Step 3: Calculating metrics...');
         const metricsCalculator = new MetricsCalculator();
         const metrics = await metricsCalculator.calculateAllMetrics(
             results.data.dataframe_2,
             results.data.dataframe_3,
             results.data.dataframe_5,
-            workspaceId  // Add workspaceId parameter
+            workspaceId
         );
-
-        // Step 4: Create Notion page using our server-side function
-        console.log('Step 4: Creating Notion page...');
-        const notionResponse = await createNotionPage(workspaceId, metrics);
 
         // Return complete response
         res.json({
             success: true,
             runId: hexResponse.runId,
-            metrics: metrics,
-            notionPageId: notionResponse.pageId
+            metrics: metrics
         });
 
     } catch (error) {
@@ -1073,239 +1052,12 @@ async function waitForHexResults(runId, maxAttempts = 30) {
     throw new Error('Timeout waiting for results with valid data');
 }
 
-async function createNotionPage(workspaceId, metrics) {
-    try {
-        const notion = new Client({
-            auth: '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'
-        });
-
-        // Create sections of metrics
-        const children = [
-            {
-                object: 'block',
-                type: 'heading_1',
-                heading_1: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Workspace Analysis Report' }
-                    }]
-                }
-            },
-            {
-                object: 'block',
-                type: 'paragraph',
-                paragraph: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: `Workspace ID: ${workspaceId}` }
-                    }]
-                }
-            },
-            // Structure Metrics Section
-            {
-                object: 'block',
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Structure Metrics' }
-                    }]
-                }
-            },
-            ...createBulletedList([
-                `Total Pages: ${metrics.page_count || 0}`,
-                `Active Pages: ${metrics.num_alive_pages || 0}`,
-                `Max Depth: ${metrics.max_depth || 0}`,
-                `Average Depth: ${formatDecimal(metrics.avg_depth)}`,
-                `Deep Pages Count: ${metrics.deep_pages_count || 0}`,
-                `Root Pages: ${metrics.root_pages || 0}`,
-                `Orphaned Blocks: ${metrics.orphaned_blocks || 0}`,
-                `Collections Count: ${metrics.collections_count || 0}`,
-                `Collection Views: ${metrics.collection_view_count || 0}`,
-                `Duplicate Count: ${metrics.duplicate_count || 0}`,
-                `Bottleneck Count: ${metrics.bottleneck_count || 0}`,
-                `Unfindable Pages: ${metrics.unfindable_pages || 0}`,
-                `Navigation Depth Score: ${formatDecimal(metrics.nav_depth_score)}`,
-                `Navigation Complexity: ${formatDecimal(metrics.nav_complexity)}`
-            ]),
-            // Usage Metrics Section
-            {
-                object: 'block',
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Usage Metrics' }
-                    }]
-                }
-            },
-            ...createBulletedList([
-                `Total Members: ${metrics.total_num_members || 0}`,
-                `Total Guests: ${metrics.total_num_guests || 0}`,
-                `Total Teamspaces: ${metrics.total_num_teamspaces || 0}`,
-                `Total Integrations: ${metrics.total_num_integrations || 0}`,
-                `Total Bots: ${metrics.total_num_bots || 0}`,
-                `Average Teamspace Members: ${formatDecimal(metrics.average_teamspace_members)}`,
-                `Automation Usage Rate: ${formatPercentage(metrics.automation_usage_rate)}`,
-                `Integration Coverage: ${formatPercentage(metrics.current_integration_coverage)}`,
-                `Automation Efficiency Gain: ${formatPercentage(metrics.automation_efficiency_gain)}`
-            ]),
-            // Growth Metrics Section
-            {
-                object: 'block',
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Growth Metrics' }
-                    }]
-                }
-            },
-            ...createBulletedList([
-                `Monthly Member Growth Rate: ${formatPercentage(metrics.monthly_member_growth_rate)}`,
-                `Monthly Content Growth Rate: ${formatPercentage(metrics.monthly_content_growth_rate)}`,
-                `Growth Capacity: ${formatPercentage(metrics.growth_capacity)}`,
-                `Expected Members Next Year: ${metrics.expected_members_in_next_year || 0}`,
-                `Nodes Created Last 30 Days: ${metrics.nodes_created_last_30_days || 0}`,
-                `Average Daily Creation (30d): ${formatDecimal(metrics.avg_daily_creation_30d)}`,
-                `Growth Trend (60d): ${formatPercentage(metrics.growth_trend_60d)}`,
-                `Growth Trend (90d): ${formatPercentage(metrics.growth_trend_90d)}`
-            ]),
-            // Organization Metrics Section
-            {
-                object: 'block',
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Organization Metrics' }
-                    }]
-                }
-            },
-            ...createBulletedList([
-                `Visibility Score: ${formatPercentage(metrics.current_visibility_score)}`,
-                `Collaboration Score: ${formatPercentage(metrics.current_collaboration_score)}`,
-                `Productivity Score: ${formatPercentage(metrics.current_productivity_score)}`,
-                `Organization Score: ${formatPercentage(metrics.current_organization_score)}`
-            ]),
-            // ROI Metrics Section
-            {
-                object: 'block',
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'ROI Metrics' }
-                    }]
-                }
-            },
-            ...createBulletedList([
-                `Current Plan Cost: ${formatCurrency(metrics.current_plan)}`,
-                `Enterprise Plan Cost: ${formatCurrency(metrics.enterprise_plan)}`,
-                `Enterprise Plan with AI Cost: ${formatCurrency(metrics.enterprise_plan_w_ai)}`,
-                `10% Productivity Increase Value: ${formatCurrency(metrics['10_percent_increase'])}`,
-                `20% Productivity Increase Value: ${formatCurrency(metrics['20_percent_increase'])}`,
-                `50% Productivity Increase Value: ${formatCurrency(metrics['50_percent_increase'])}`,
-                `Enterprise Plan ROI: ${formatPercentage(metrics.enterprise_plan_roi)}`,
-                `Enterprise Plan with AI ROI: ${formatPercentage(metrics.enterprise_plan_w_ai_roi)}`
-            ]),
-            // Engagement Metrics Section
-            {
-                object: 'block',
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Engagement Metrics' }
-                    }]
-                }
-            },
-            ...createBulletedList([
-                `Total Interactions: ${metrics.total_interactions || 0}`,
-                `Unique Users: ${metrics.unique_users || 0}`,
-                `Engaged Pages: ${metrics.engaged_pages || 0}`,
-                `Average Interactions per User: ${formatDecimal(metrics.avg_interactions_per_user)}`,
-                `Average Interactions per Page: ${formatDecimal(metrics.avg_interactions_per_page)}`,
-                `Daily Active Users (DAU): ${metrics.daily_active_users || 0}`,
-                `Monthly Active Users (MAU): ${metrics.monthly_active_users || 0}`,
-                `Engagement Rate (DAU/MAU): ${formatPercentage(metrics.engagement_rate)}`,
-                `Popular Pages: ${metrics.popular_pages || 0}`,
-                `Engagement Score: ${formatPercentage(metrics.engagement_score)}`
-            ]),
-            // Analysis Date
-            {
-                object: 'block',
-                type: 'paragraph',
-                paragraph: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: `Analysis Date: ${new Date().toISOString()}` }
-                    }]
-                }
-            }
-        ];
-
-        // Create the page with all metrics
-        const response = await notion.pages.create({
-            parent: {
-                database_id: "18730aa1-c7a9-8059-b53e-de31cde8bfc4"
-            },
-            properties: {
-                title: {
-                    title: [
-                        {
-                            text: {
-                                content: `Workspace Analysis - ${workspaceId}`
-                            }
-                        }
-                    ]
-                }
-            },
-            children: children
-        });
-
-        return {
-            success: true,
-            pageId: response.id
-        };
-    } catch (error) {
-        console.error('Error creating Notion page:', error);
-        throw error;
-    }
-}
-
-// Helper functions for formatting
-function formatDecimal(value) {
-    if (value === null || value === undefined) return '0.0';
-    return value.toFixed(1);
-}
-
-function formatPercentage(value) {
-    if (value === null || value === undefined) return '0.0%';
-    return value.toFixed(1) + '%';
-}
-
-function formatCurrency(value) {
-    if (value === null || value === undefined) return '$0';
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(value);
-}
-
-function createBulletedList(items) {
-    return items.map(item => ({
-        object: 'block',
-        type: 'bulleted_list_item',
-        bulleted_list_item: {
-            rich_text: [{
-                type: 'text',
-                text: { content: item }
-            }]
-        }
-    }));
+async function triggerHexRun(workspaceId) {
+    // Implementation of triggerHexRun function
+    // This function should return a promise that resolves to the hexResponse
+    // You can use the callHexAPI function to trigger the run
+    // This is a placeholder and should be replaced with the actual implementation
+    return callHexAPI(workspaceId, "21c6c24a-60e8-487c-b03a-1f04dda4f918");
 }
 
 // Start the Server

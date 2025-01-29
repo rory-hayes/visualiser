@@ -8,6 +8,22 @@ export class SnapshotVisualizer {
         };
 
         this.MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+        
+        // D3 visualization configuration
+        this.GRAPH_CONFIG = {
+            width: 800,
+            height: 600,
+            nodeRadius: {
+                min: 3,
+                max: 15
+            },
+            colors: d3.scaleOrdinal(d3.schemeCategory10),
+            simulation: {
+                charge: -30,
+                linkDistance: 30,
+                centerForce: 1
+            }
+        };
     }
 
     async generateSnapshots(dataframe_2, dataframe_3, dataframe_5) {
@@ -24,9 +40,12 @@ export class SnapshotVisualizer {
                 future: await this.generateFutureProjection(dataframe_2, dataframe_3, dataframe_5)
             };
 
+            // Generate D3 visualizations for each snapshot
+            const visualizations = await this.createD3Visualizations(snapshots);
+
             return {
                 snapshots,
-                visualizationData: this.createVisualization(snapshots)
+                visualizations
             };
         } catch (error) {
             console.error('Error generating snapshots:', error);
@@ -221,74 +240,154 @@ export class SnapshotVisualizer {
         return (densityScore * 0.6 + connectionsPerMemberScore * 0.4);
     }
 
-    createVisualization(snapshots) {
-        // Create visualization data for each snapshot
+    createD3Visualizations(snapshots) {
         return {
-            past: this.createSnapshotVisualization(snapshots.past),
-            present: this.createSnapshotVisualization(snapshots.present),
-            future: this.createSnapshotVisualization(snapshots.future)
+            past: this.createD3Graph(snapshots.past, 'Past State (60 days ago)'),
+            present: this.createD3Graph(snapshots.present, 'Current State'),
+            future: this.createD3Graph(snapshots.future, 'Projected Future (90 days)')
         };
     }
 
-    createSnapshotVisualization(snapshot) {
-        // Create a simplified force-directed graph structure
-        const nodes = this.aggregateNodes(snapshot.data.nodes);
-        const links = this.aggregateConnections(snapshot.connections, nodes);
+    createD3Graph(snapshot, title) {
+        // Create SVG container
+        const svg = d3.create('svg')
+            .attr('width', this.GRAPH_CONFIG.width)
+            .attr('height', this.GRAPH_CONFIG.height)
+            .attr('viewBox', [0, 0, this.GRAPH_CONFIG.width, this.GRAPH_CONFIG.height])
+            .attr('style', 'max-width: 100%; height: auto;');
 
-        return {
-            timestamp: snapshot.timestamp,
-            metrics: snapshot.metrics,
-            visualization: {
-                nodes,
-                links
-            }
-        };
-    }
+        // Prepare graph data
+        const graphData = this.prepareGraphData(snapshot);
 
-    aggregateNodes(nodes) {
-        // Group nodes by type or department
-        const groupedNodes = new Map();
-        
-        nodes.forEach(node => {
-            const type = node.TYPE || 'unknown';
-            if (!groupedNodes.has(type)) {
-                groupedNodes.set(type, {
-                    id: type,
-                    count: 0,
-                    size: 0
-                });
-            }
-            const group = groupedNodes.get(type);
-            group.count++;
-            group.size += 1;
+        // Create force simulation
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force('charge', d3.forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
+            .force('center', d3.forceCenter(this.GRAPH_CONFIG.width / 2, this.GRAPH_CONFIG.height / 2))
+            .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(this.GRAPH_CONFIG.simulation.linkDistance))
+            .force('collide', d3.forceCollide().radius(d => this.calculateNodeRadius(d) + 1));
+
+        // Create links
+        const links = svg.append('g')
+            .selectAll('line')
+            .data(graphData.links)
+            .join('line')
+            .attr('stroke', '#999')
+            .attr('stroke-opacity', 0.6)
+            .attr('stroke-width', d => Math.sqrt(d.value));
+
+        // Create nodes
+        const nodes = svg.append('g')
+            .selectAll('circle')
+            .data(graphData.nodes)
+            .join('circle')
+            .attr('r', d => this.calculateNodeRadius(d))
+            .attr('fill', d => this.GRAPH_CONFIG.colors(d.group))
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1.5);
+
+        // Add title
+        svg.append('text')
+            .attr('x', this.GRAPH_CONFIG.width / 2)
+            .attr('y', 30)
+            .attr('text-anchor', 'middle')
+            .style('font-size', '16px')
+            .style('font-weight', 'bold')
+            .text(title);
+
+        // Add tooltips
+        nodes.append('title')
+            .text(d => `${d.id}\nConnections: ${d.connections}\nType: ${d.group}`);
+
+        // Update positions on simulation tick
+        simulation.on('tick', () => {
+            links
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            nodes
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
         });
 
-        return Array.from(groupedNodes.values());
+        // Convert SVG to image
+        return this.svgToImage(svg.node());
     }
 
-    aggregateConnections(connections, nodes) {
-        // Create links between node groups based on connection patterns
+    prepareGraphData(snapshot) {
+        const nodes = [];
         const links = [];
-        
-        nodes.forEach((source, i) => {
-            nodes.slice(i + 1).forEach(target => {
-                links.push({
-                    source: source.id,
-                    target: target.id,
-                    value: Math.sqrt(source.count * target.count)
+        const nodeMap = new Map();
+
+        // Create nodes
+        snapshot.data.nodes.forEach(node => {
+            const nodeId = node.ID || node.id;
+            if (!nodeMap.has(nodeId)) {
+                nodeMap.set(nodeId, {
+                    id: nodeId,
+                    group: node.TYPE || 'unknown',
+                    connections: 0,
+                    size: 1
                 });
-            });
+            }
         });
 
-        return links;
+        // Create links and update node connections
+        snapshot.data.interactions.forEach(interaction => {
+            const sourceId = interaction.USER_ID;
+            const targetId = interaction.PAGE_ID;
+            
+            if (nodeMap.has(sourceId) && nodeMap.has(targetId)) {
+                links.push({
+                    source: sourceId,
+                    target: targetId,
+                    value: interaction.INTERACTION_COUNT || 1
+                });
+                
+                nodeMap.get(sourceId).connections++;
+                nodeMap.get(targetId).connections++;
+            }
+        });
+
+        return {
+            nodes: Array.from(nodeMap.values()),
+            links
+        };
+    }
+
+    calculateNodeRadius(node) {
+        const minConnections = 1;
+        const maxConnections = Math.max(...Array.from(node.connections));
+        const scale = d3.scaleLinear()
+            .domain([minConnections, maxConnections])
+            .range([this.GRAPH_CONFIG.nodeRadius.min, this.GRAPH_CONFIG.nodeRadius.max]);
+        
+        return scale(node.connections || minConnections);
+    }
+
+    async svgToImage(svgNode) {
+        // Convert SVG to data URL
+        const svgData = new XMLSerializer().serializeToString(svgNode);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        return URL.createObjectURL(svgBlob);
     }
 
     // Helper method to format metrics for Notion
-    formatSnapshotsForNotion(snapshots) {
+    formatSnapshotsForNotion(snapshots, visualizations) {
         return {
-            past: this.formatSnapshotMetrics(snapshots.past, 'Past'),
-            present: this.formatSnapshotMetrics(snapshots.present, 'Present'),
-            future: this.formatSnapshotMetrics(snapshots.future, 'Future')
+            past: {
+                ...this.formatSnapshotMetrics(snapshots.past, 'Past'),
+                visualization: visualizations.past
+            },
+            present: {
+                ...this.formatSnapshotMetrics(snapshots.present, 'Present'),
+                visualization: visualizations.present
+            },
+            future: {
+                ...this.formatSnapshotMetrics(snapshots.future, 'Future'),
+                visualization: visualizations.future
+            }
         };
     }
 

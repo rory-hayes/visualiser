@@ -1150,7 +1150,109 @@ export class MetricsCalculator {
                                     text: { content: `Analysis Date: ${new Date().toISOString()}` }
                                 }]
                             }
-                        }
+                        },
+                        // Add Workspace Evolution Visualizations section
+                        {
+                            object: 'block',
+                            type: 'heading_1',
+                            heading_1: {
+                                rich_text: [{
+                                    type: 'text',
+                                    text: { content: 'Workspace Evolution Visualizations' }
+                                }]
+                            }
+                        },
+                        {
+                            object: 'block',
+                            type: 'paragraph',
+                            paragraph: {
+                                rich_text: [{
+                                    type: 'text',
+                                    text: { content: 'Visual representation of workspace structure and connections over time:' }
+                                }]
+                            }
+                        },
+                        // Past State Visualization
+                        {
+                            object: 'block',
+                            type: 'heading_2',
+                            heading_2: {
+                                rich_text: [{
+                                    type: 'text',
+                                    text: { content: 'Past State (60 days ago)' }
+                                }]
+                            }
+                        },
+                        {
+                            object: 'block',
+                            type: 'image',
+                            image: {
+                                type: 'external',
+                                external: {
+                                    url: metrics.snapshots.past.visualization
+                                }
+                            }
+                        },
+                        // Current State Visualization
+                        {
+                            object: 'block',
+                            type: 'heading_2',
+                            heading_2: {
+                                rich_text: [{
+                                    type: 'text',
+                                    text: { content: 'Current State' }
+                                }]
+                            }
+                        },
+                        {
+                            object: 'block',
+                            type: 'image',
+                            image: {
+                                type: 'external',
+                                external: {
+                                    url: metrics.snapshots.present.visualization
+                                }
+                            }
+                        },
+                        // Future State Visualization
+                        {
+                            object: 'block',
+                            type: 'heading_2',
+                            heading_2: {
+                                rich_text: [{
+                                    type: 'text',
+                                    text: { content: 'Projected Future (90 days)' }
+                                }]
+                            }
+                        },
+                        {
+                            object: 'block',
+                            type: 'image',
+                            image: {
+                                type: 'external',
+                                external: {
+                                    url: metrics.snapshots.future.visualization
+                                }
+                            }
+                        },
+                        // Legend and Explanation
+                        {
+                            object: 'block',
+                            type: 'paragraph',
+                            paragraph: {
+                                rich_text: [{
+                                    type: 'text',
+                                    text: { content: 'Graph Legend:' }
+                                }]
+                            }
+                        },
+                        ...this.createBulletedList([
+                            'Node size represents number of connections',
+                            'Node color indicates page/document type',
+                            'Lines represent connections between nodes',
+                            'Clusters indicate closely related content',
+                            'Isolated nodes may represent potential silos'
+                        ])
                     ]
                 })
             });

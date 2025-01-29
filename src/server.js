@@ -936,42 +936,6 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'healthy' });
 });
 
-// Add Notion API endpoint
-app.post('/api/notion/create-page', async (req, res) => {
-    try {
-        const { workspaceId, metrics } = req.body;
-        
-        const response = await fetch('https://api.notion.com/v1/pages', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer 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`,
-                'Content-Type': 'application/json',
-                'Notion-Version': '2022-06-28'
-            },
-            body: JSON.stringify({
-                parent: { database_id: "18730aa1-c7a9-8059-b53e-de31cde8bfc4" },
-                properties: {
-                    Name: {
-                        title: [
-                            {
-                                text: {
-                                    content: workspaceId,
-                                },
-                            },
-                        ],
-                    }
-                }
-            })
-        });
-
-        const result = await response.json();
-        res.json(result);
-    } catch (error) {
-        console.error('Error creating Notion page:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // Complete workspace analysis endpoint
 app.post('/api/analyze-workspace', async (req, res) => {
     try {

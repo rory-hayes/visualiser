@@ -825,20 +825,55 @@ app.get('/api/hex-results', async (req, res) => {
 });
 
 async function loadHexResults() {
-    const resultsPath = path.join(__dirname, 'data', 'hex_results.json');
-    const fileContent = await fs.readFile(resultsPath, 'utf8');
-    const data = JSON.parse(fileContent);
-    
-    // Don't limit dataframe2 length
-    return {
-        fileSize: data.fileSize,
-        dataframe2Count: data.dataframe2.length,
-        hasDataframe3: !!data.dataframe3,
-        dataframe5Count: data.dataframe5?.length || 0,
-        dataframe2: data.dataframe2,
-        dataframe3: data.dataframe3,
-        dataframe5: data.dataframe5
-    };
+    try {
+        const resultsPath = path.join(__dirname, 'data', 'hex_results.json');
+        
+        // Check if file exists
+        if (!fs.existsSync(resultsPath)) {
+            console.log('Results file not found at:', resultsPath);
+            return {
+                fileSize: 0,
+                dataframe2Count: 0,
+                hasDataframe3: false,
+                dataframe5Count: 0,
+                dataframe2: [],
+                dataframe3: null,
+                dataframe5: []
+            };
+        }
+
+        // Read file using promises
+        const fileContent = await fs.promises.readFile(resultsPath, 'utf8');
+        const data = JSON.parse(fileContent);
+        
+        console.log('Successfully loaded results:', {
+            fileSize: fileContent.length,
+            dataframe2Count: data.data?.dataframe_2?.length || 0,
+            hasDataframe3: !!data.data?.dataframe_3,
+            dataframe5Count: data.data?.dataframe_5?.length || 0
+        });
+        
+        return {
+            fileSize: fileContent.length,
+            dataframe2Count: data.data?.dataframe_2?.length || 0,
+            hasDataframe3: !!data.data?.dataframe_3,
+            dataframe5Count: data.data?.dataframe_5?.length || 0,
+            dataframe2: data.data?.dataframe_2 || [],
+            dataframe3: data.data?.dataframe_3 || null,
+            dataframe5: data.data?.dataframe_5 || []
+        };
+    } catch (error) {
+        console.error('Error loading hex results:', error);
+        return {
+            fileSize: 0,
+            dataframe2Count: 0,
+            hasDataframe3: false,
+            dataframe5Count: 0,
+            dataframe2: [],
+            dataframe3: null,
+            dataframe5: []
+        };
+    }
 }
 
 // Analyze workspace endpoint
@@ -849,26 +884,43 @@ app.post('/api/analyze-workspace', async (req, res) => {
             return res.status(400).json({ error: 'workspaceId is required' });
         }
 
-        console.log('Attempt 1: Loading hex results...');
-        let results = await loadHexResults();
-        let attempts = 1;
+        console.log('Starting workspace analysis for:', workspaceId);
 
-        while ((!results.dataframe2 || !results.dataframe3 || !results.dataframe5) && attempts < 5) {
-            console.log(`Attempt ${attempts + 1}: Waiting for valid results...`, {
-                hasDataframe2: !!results.dataframe2,
-                hasDataframe3: !!results.dataframe3,
-                hasDataframe5: !!results.dataframe5
-            });
-            await new Promise(resolve => setTimeout(resolve, 1000));
+        // Load results with retries
+        let results = null;
+        let attempts = 0;
+        const maxAttempts = 5;
+        
+        while (attempts < maxAttempts) {
+            console.log(`Attempt ${attempts + 1}: Loading hex results...`);
             results = await loadHexResults();
+            
+            if (results.dataframe2?.length > 0 && results.dataframe3 && results.dataframe5?.length > 0) {
+                break;
+            }
+            
             attempts++;
+            if (attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
         }
 
-        if (!results.dataframe2 || !results.dataframe3 || !results.dataframe5) {
+        if (!results.dataframe2?.length || !results.dataframe3 || !results.dataframe5?.length) {
+            console.error('Failed to load complete dataset:', {
+                hasDataframe2: !!results.dataframe2?.length,
+                hasDataframe3: !!results.dataframe3,
+                hasDataframe5: !!results.dataframe5?.length
+            });
             return res.status(500).json({ error: 'Failed to load complete dataset after multiple attempts' });
         }
 
-        console.log('Step 3: Calculating metrics...');
+        console.log('Successfully loaded data:', {
+            dataframe2Length: results.dataframe2.length,
+            hasDataframe3: !!results.dataframe3,
+            dataframe5Length: results.dataframe5.length
+        });
+
+        console.log('Calculating metrics...');
         const calculator = new MetricsCalculator();
         const metrics = await calculator.calculateAllMetrics(
             results.dataframe2,
@@ -877,10 +929,14 @@ app.post('/api/analyze-workspace', async (req, res) => {
             workspaceId
         );
 
+        console.log('Metrics calculation complete');
         res.json({ success: true, metrics });
     } catch (error) {
         console.error('Error analyzing workspace:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ 
+            error: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 

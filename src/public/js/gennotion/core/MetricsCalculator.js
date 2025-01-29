@@ -903,7 +903,7 @@ export class MetricsCalculator {
                 metrics.snapshots.present && 
                 metrics.snapshots.future;
 
-            // Create base Notion page content
+            // Create base Notion page content with combined metrics
             const pageContent = [
                 {
                     object: 'block',
@@ -925,207 +925,96 @@ export class MetricsCalculator {
                         }]
                     }
                 },
-                // 1. Structure Metrics
+                // Combined Structure and Evolution Metrics
                 {
                     object: 'block',
                     type: 'heading_2',
                     heading_2: {
                         rich_text: [{
                             type: 'text',
-                            text: { content: 'Structure Metrics' }
+                            text: { content: 'Structure & Evolution Metrics' }
                         }]
                     }
                 },
                 ...this.createBulletedList([
-                    `Total Pages: ${metrics['[[total_pages]]']}`,
-                    `Max Depth: ${metrics['[[max_depth]]']}`,
-                    `Average Depth: ${metrics['[[avg_depth]]']}`,
-                    `Deep Pages Count: ${metrics['[[deep_pages_count]]']}`,
-                    `Root Pages: ${metrics['[[root_pages]]']}`,
-                    `Orphaned Blocks: ${metrics['[[orphaned_blocks]]']}`,
-                    `Percentage Unlinked: ${metrics['[[percentage_unlinked]]']}`,
-                    `Collections Count: ${metrics['[[collections_count]]']}`,
-                    `Page Count: ${metrics['[[page_count]]']}`,
-                    `Collection Views: ${metrics['[[collection_views]]']}`,
-                    `Navigation Depth Score: ${metrics['[[nav_depth_score]]']}`,
-                    `Scatter Index: ${metrics['[[scatter_index]]']}`,
-                    `Bottleneck Count: ${metrics['[[bottleneck_count]]']}`,
-                    `Duplicate Count: ${metrics['[[duplicate_count]]']}`,
-                    `Unfindable Pages: ${metrics['[[unfindable_pages]]']}`,
-                    `Navigation Complexity: ${metrics['[[nav_complexity]]']}`
+                    `Total Pages: ${metrics['[[total_pages]]']} | Max Depth: ${metrics['[[max_depth]]']} | Avg Depth: ${metrics['[[avg_depth]]']}`,
+                    `Root Pages: ${metrics['[[root_pages]]']} | Deep Pages: ${metrics['[[deep_pages_count]]']} | Orphaned: ${metrics['[[orphaned_blocks]]']}`,
+                    `Collections: ${metrics['[[collections_count]]']} | Views: ${metrics['[[collection_views]]']} | Templates: ${metrics['[[template_count]]']}`,
+                    `Content Maturity: ${metrics['[[content_maturity_score]]']} | Growth Index: ${metrics['[[growth_sustainability_index]]']}`,
+                    `Workspace Complexity: ${metrics['[[workspace_complexity_score]]']} | Knowledge Structure: ${metrics['[[knowledge_structure_score]]']}`
                 ]),
-                // 2. Evolution Metrics
+
+                // Combined Collaboration and Content Quality
                 {
                     object: 'block',
                     type: 'heading_2',
                     heading_2: {
                         rich_text: [{
                             type: 'text',
-                            text: { content: 'Evolution Metrics' }
+                            text: { content: 'Collaboration & Content Quality' }
                         }]
                     }
                 },
                 ...this.createBulletedList([
-                    `Content Maturity Score: ${metrics['[[content_maturity_score]]']}`,
-                    `Growth Sustainability Index: ${metrics['[[growth_sustainability_index]]']}`,
-                    `Workspace Complexity Score: ${metrics['[[workspace_complexity_score]]']}`,
-                    `Knowledge Structure Score: ${metrics['[[knowledge_structure_score]]']}`
+                    `Team Adoption: ${metrics['[[team_adoption_score]]']} | Collaboration Density: ${metrics['[[collaboration_density]]']}`,
+                    `Knowledge Sharing: ${metrics['[[knowledge_sharing_index]]']} | Cross-Team Score: ${metrics['[[cross_team_collaboration_score]]']}`,
+                    `Content Freshness: ${metrics['[[content_freshness_score]]']} | Structure Quality: ${metrics['[[structure_quality_index]]']}`,
+                    `Knowledge Base Health: ${metrics['[[knowledge_base_health]]']} | Documentation: ${metrics['[[documentation_coverage]]']}`
                 ]),
-                // 3. Collaboration Patterns
+
+                // Combined Usage and Predictive Metrics
                 {
                     object: 'block',
                     type: 'heading_2',
                     heading_2: {
                         rich_text: [{
                             type: 'text',
-                            text: { content: 'Collaboration Patterns' }
+                            text: { content: 'Usage & Predictive Metrics' }
                         }]
                     }
                 },
                 ...this.createBulletedList([
-                    `Team Adoption Score: ${metrics['[[team_adoption_score]]']}`,
-                    `Collaboration Density: ${metrics['[[collaboration_density]]']}`,
-                    `Knowledge Sharing Index: ${metrics['[[knowledge_sharing_index]]']}`,
-                    `Cross Team Collaboration Score: ${metrics['[[cross_team_collaboration_score]]']}`
+                    `Automation: ${metrics['[[automation_effectiveness]]']} | Integration Impact: ${metrics['[[integration_impact_score]]']}`,
+                    `Feature Usage: ${metrics['[[feature_utilization_index]]']} | Advanced Features: ${metrics['[[advanced_features_adoption]]']}`,
+                    `Growth Trajectory: ${metrics['[[growth_trajectory]]']} | Scaling Readiness: ${metrics['[[scaling_readiness_score]]']}`,
+                    `Growth Potential: ${metrics['[[growth_potential_score]]']} | Optimization Opportunities: ${metrics['[[optimization_opportunities]]']}`
                 ]),
-                // 4. Content Quality Metrics
+
+                // Combined Trend and Collection Metrics
                 {
                     object: 'block',
                     type: 'heading_2',
                     heading_2: {
                         rich_text: [{
                             type: 'text',
-                            text: { content: 'Content Quality Metrics' }
+                            text: { content: 'Trends & Collections' }
                         }]
                     }
                 },
                 ...this.createBulletedList([
-                    `Content Freshness Score: ${metrics['[[content_freshness_score]]']}`,
-                    `Structure Quality Index: ${metrics['[[structure_quality_index]]']}`,
-                    `Knowledge Base Health: ${metrics['[[knowledge_base_health]]']}`,
-                    `Content Organization Score: ${metrics['[[content_organization_score]]']}`,
-                    `Documentation Coverage: ${metrics['[[documentation_coverage]]']}`
+                    `Monthly Growth: ${metrics['[[monthly_growth_rates]]']} | Creation Velocity: ${metrics['[[creation_velocity]]']}`,
+                    `Recent Blocks: ${metrics['[[blocks_created_last_month]]']} | Yearly Blocks: ${metrics['[[blocks_created_last_year]]']}`,
+                    `Total Collections: ${metrics['[[total_collections]]']} | Linked DBs: ${metrics['[[linked_database_count]]']}`,
+                    `Collection Health: ${metrics['[[collection_health_score]]']} | Usage Ratio: ${metrics['[[collection_usage_ratio]]']}`
                 ]),
-                // 5. Usage Patterns
+
+                // Key Insights (Most important metrics only)
                 {
                     object: 'block',
                     type: 'heading_2',
                     heading_2: {
                         rich_text: [{
                             type: 'text',
-                            text: { content: 'Usage Patterns' }
+                            text: { content: 'Key Insights' }
                         }]
                     }
                 },
                 ...this.createBulletedList([
-                    `Automation Effectiveness: ${metrics['[[automation_effectiveness]]']}`,
-                    `Integration Impact Score: ${metrics['[[integration_impact_score]]']}`,
-                    `Feature Utilization Index: ${metrics['[[feature_utilization_index]]']}`,
-                    `Advanced Features Adoption: ${metrics['[[advanced_features_adoption]]']}`,
-                    `Workflow Optimization Score: ${metrics['[[workflow_optimization_score]]']}`
+                    `Monthly Content Growth: ${metrics['[[key_metrics_insight_1]]']} | Member Growth: ${metrics['[[key_metrics_insight_2]]']}`,
+                    `Members & Guests: ${metrics['[[key_metrics_insight_4]]']} | Members per Space: ${metrics['[[key_metrics_insight_5]]']}`,
+                    `Integration Coverage: ${metrics['[[key_metrics_insight_12]]']} | Alive Pages Ratio: ${metrics['[[key_metrics_insight_13]]']}`
                 ]),
-                // 6. Predictive Metrics
-                {
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Predictive Metrics' }
-                        }]
-                    }
-                },
-                ...this.createBulletedList([
-                    `Growth Trajectory: ${metrics['[[growth_trajectory]]']}`,
-                    `Scaling Readiness Score: ${metrics['[[scaling_readiness_score]]']}`,
-                    `Bottleneck Prediction: ${metrics['[[bottleneck_prediction]]']}`,
-                    `Growth Potential Score: ${metrics['[[growth_potential_score]]']}`,
-                    `Optimization Opportunities: ${metrics['[[optimization_opportunities]]']}`
-                ]),
-                // 7. Trend Metrics
-                {
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Trend Metrics' }
-                        }]
-                    }
-                },
-                ...this.createBulletedList([
-                    `Monthly Growth Rates: ${metrics['[[monthly_growth_rates]]']}`,
-                    `Blocks Created Last Month: ${metrics['[[blocks_created_last_month]]']}`,
-                    `Blocks Created Last Year: ${metrics['[[blocks_created_last_year]]']}`,
-                    `Content Growth Trend: ${metrics['[[content_growth_trend]]']}`,
-                    `Growth Acceleration: ${metrics['[[growth_acceleration]]']}`,
-                    `Creation Velocity: ${metrics['[[creation_velocity]]']}`,
-                    `Workspace Maturity: ${metrics['[[workspace_maturity]]']}`
-                ]),
-                // 8. Collection Metrics
-                {
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Collection Metrics' }
-                        }]
-                    }
-                },
-                ...this.createBulletedList([
-                    `Total Collections: ${metrics['[[total_collections]]']}`,
-                    `Linked Database Count: ${metrics['[[linked_database_count]]']}`,
-                    `Standalone Database Count: ${metrics['[[standalone_database_count]]']}`,
-                    `Average Items per Collection: ${metrics['[[avg_items_per_collection]]']}`,
-                    `Collection Usage Ratio: ${metrics['[[collection_usage_ratio]]']}`,
-                    `Collection Health Score: ${metrics['[[collection_health_score]]']}`,
-                    `Template Count: ${metrics['[[template_count]]']}`
-                ]),
-                // 9. Content Type Metrics
-                {
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Content Type Metrics' }
-                        }]
-                    }
-                },
-                ...this.createBulletedList([
-                    `Content Type Distribution: ${metrics['[[content_type_distribution]]']}`,
-                    `Duplicate Content Rate: ${metrics['[[duplicate_content_rate]]']}`,
-                    `Content Health Score: ${metrics['[[content_health_score]]']}`,
-                    `Average Content per Type: ${metrics['[[avg_content_per_type]]']}`,
-                    `Content Diversity Score: ${metrics['[[content_diversity_score]]']}`
-                ]),
-                // 10. Key Metrics Insights
-                {
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Key Metrics Insights' }
-                        }]
-                    }
-                },
-                ...this.createBulletedList([
-                    `Monthly Content Growth Rate: ${metrics['[[key_metrics_insight_1]]']}`,
-                    `Monthly Member Growth Rate: ${metrics['[[key_metrics_insight_2]]']}`,
-                    `Alive Blocks per Member: ${metrics['[[key_metrics_insight_3]]']}`,
-                    `Total Members and Guests: ${metrics['[[key_metrics_insight_4]]']}`,
-                    `Members per Teamspace: ${metrics['[[key_metrics_insight_5]]']}`,
-                    `Alive Pages per Member: ${metrics['[[key_metrics_insight_6]]']}`,
-                    `Alive Blocks Ratio: ${metrics['[[key_metrics_insight_7]]']}`,
-                    `Alive Collections Ratio: ${metrics['[[key_metrics_insight_8]]']}`,
-                    `Blocks per Teamspace: ${metrics['[[key_metrics_insight_9]]']}`,
-                    `Total Integrations: ${metrics['[[key_metrics_insight_10]]']}`,
-                    `Total Bots: ${metrics['[[key_metrics_insight_11]]']}`,
-                    `Integration Coverage: ${metrics['[[key_metrics_insight_12]]']}`,
-                    `Alive Pages Ratio: ${metrics['[[key_metrics_insight_13]]']}`
-                ]),
+
                 // Analysis Date
                 {
                     object: 'block',
@@ -1136,150 +1025,68 @@ export class MetricsCalculator {
                             text: { content: `Analysis Date: ${new Date().toISOString()}` }
                         }]
                     }
-                },
-                // Add Workspace Evolution Visualizations section
-                {
-                    object: 'block',
-                    type: 'heading_1',
-                    heading_1: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Workspace Evolution Visualizations' }
-                        }]
-                    }
-                },
-                {
-                    object: 'block',
-                    type: 'paragraph',
-                    paragraph: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Visual representation of workspace structure and connections over time:' }
-                        }]
-                    }
-                },
+                }
             ];
 
-            // Only add visualization sections if we have valid snapshot data
+            // Add visualizations section header
             if (hasValidSnapshots) {
-                // Past State
-                if (metrics.snapshots.past.visualization) {
-                    pageContent.push(
-                        {
-                            object: 'block',
-                            type: 'heading_2',
-                            heading_2: {
-                                rich_text: [{
-                                    type: 'text',
-                                    text: { content: 'Past State (60 days ago)' }
-                                }]
-                            }
-                        },
-                        ...this.createBulletedList([
-                            `Total Nodes: ${metrics.snapshots.past.metrics.totalNodes}`,
-                            `Active Members: ${metrics.snapshots.past.metrics.totalMembers}`,
-                            `Total Connections: ${metrics.snapshots.past.metrics.totalConnections}`,
-                            `Connection Density: ${metrics.snapshots.past.metrics.connectionDensity}`,
-                            `Collaboration Score: ${metrics.snapshots.past.metrics.collaborationScore}`,
-                            `Active Nodes: ${metrics.snapshots.past.metrics.activeNodes}`,
-                            `Identified Silos: ${metrics.snapshots.past.metrics.silos}`
-                        ]),
-                        {
-                            object: 'block',
-                            type: 'image',
-                            image: {
-                                type: 'external',
-                                external: {
-                                    url: metrics.snapshots.past.visualization
-                                }
-                            }
-                        }
-                    );
-                }
-
-                // Present State
-                if (metrics.snapshots.present.visualization) {
-                    pageContent.push(
-                        {
-                            object: 'block',
-                            type: 'heading_2',
-                            heading_2: {
-                                rich_text: [{
-                                    type: 'text',
-                                    text: { content: 'Current State' }
-                                }]
-                            }
-                        },
-                        ...this.createBulletedList([
-                            `Total Nodes: ${metrics.snapshots.present.metrics.totalNodes}`,
-                            `Active Members: ${metrics.snapshots.present.metrics.totalMembers}`,
-                            `Total Connections: ${metrics.snapshots.present.metrics.totalConnections}`,
-                            `Connection Density: ${metrics.snapshots.present.metrics.connectionDensity}`,
-                            `Collaboration Score: ${metrics.snapshots.present.metrics.collaborationScore}`,
-                            `Active Nodes: ${metrics.snapshots.present.metrics.activeNodes}`,
-                            `Identified Silos: ${metrics.snapshots.present.metrics.silos}`
-                        ]),
-                        {
-                            object: 'block',
-                            type: 'image',
-                            image: {
-                                type: 'external',
-                                external: {
-                                    url: metrics.snapshots.present.visualization
-                                }
-                            }
-                        }
-                    );
-                }
-
-                // Future State
-                if (metrics.snapshots.future.visualization) {
-                    pageContent.push(
-                        {
-                            object: 'block',
-                            type: 'heading_2',
-                            heading_2: {
-                                rich_text: [{
-                                    type: 'text',
-                                    text: { content: 'Projected Future (90 days)' }
-                                }]
-                            }
-                        },
-                        ...this.createBulletedList([
-                            `Total Nodes: ${metrics.snapshots.future.metrics.totalNodes}`,
-                            `Active Members: ${metrics.snapshots.future.metrics.totalMembers}`,
-                            `Total Connections: ${metrics.snapshots.future.metrics.totalConnections}`,
-                            `Connection Density: ${metrics.snapshots.future.metrics.connectionDensity}`,
-                            `Collaboration Score: ${metrics.snapshots.future.metrics.collaborationScore}`,
-                            `Active Nodes: ${metrics.snapshots.future.metrics.activeNodes}`,
-                            `Identified Silos: ${metrics.snapshots.future.metrics.silos}`
-                        ]),
-                        {
-                            object: 'block',
-                            type: 'image',
-                            image: {
-                                type: 'external',
-                                external: {
-                                    url: metrics.snapshots.future.visualization
-                                }
-                            }
-                        }
-                    );
-                }
-            } else {
-                // Add a note if visualizations are not available
                 pageContent.push(
                     {
                         object: 'block',
-                        type: 'paragraph',
-                        paragraph: {
+                        type: 'heading_1',
+                        heading_1: {
                             rich_text: [{
                                 type: 'text',
-                                text: { content: 'Note: Workspace visualizations are not available for this report.' }
+                                text: { content: 'Workspace Evolution' }
                             }]
                         }
                     }
                 );
+
+                // Add each visualization with minimal metrics
+                ['past', 'present', 'future'].forEach(period => {
+                    const snapshot = metrics.snapshots[period];
+                    const title = period === 'past' ? 'Past (60 days ago)' :
+                                period === 'present' ? 'Current State' :
+                                'Future (90 days)';
+                    
+                    if (snapshot.visualization) {
+                        pageContent.push(
+                            {
+                                object: 'block',
+                                type: 'heading_2',
+                                heading_2: {
+                                    rich_text: [{
+                                        type: 'text',
+                                        text: { content: title }
+                                    }]
+                                }
+                            },
+                            {
+                                object: 'block',
+                                type: 'paragraph',
+                                paragraph: {
+                                    rich_text: [{
+                                        type: 'text',
+                                        text: { 
+                                            content: `Nodes: ${snapshot.metrics.totalNodes} | Members: ${snapshot.metrics.totalMembers} | Score: ${snapshot.metrics.collaborationScore}`
+                                        }
+                                    }]
+                                }
+                            },
+                            {
+                                object: 'block',
+                                type: 'image',
+                                image: {
+                                    type: 'external',
+                                    external: {
+                                        url: snapshot.visualization
+                                    }
+                                }
+                            }
+                        );
+                    }
+                });
             }
 
             // Create the Notion page

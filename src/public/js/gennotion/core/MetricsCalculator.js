@@ -1057,6 +1057,15 @@ export class MetricsCalculator {
         return Math.min(100, (typeCount * 10 + collectionRatio * 50));
     }
 
+    calculateKnowledgeStructure(dataframe_2, dataframe_3) {
+        const templateScore = (dataframe_2.filter(row => row.TYPE === 'template').length / dataframe_2.length) * 100;
+        const collectionScore = (dataframe_3.NUM_COLLECTIONS / dataframe_3.TOTAL_NUM_TOTAL_PAGES) * 100;
+        const hierarchyScore = Math.max(0, 100 - (this.calculateAverageDepth(dataframe_2) * 10));
+        const organizationScore = this.calculateOrganizationScore(dataframe_2);
+
+        return (templateScore * 0.25 + collectionScore * 0.25 + hierarchyScore * 0.25 + organizationScore * 0.25);
+    }
+
     // Depth and Structure Analysis Methods
     calculateDepthStatistics(dataframe_2) {
         const depths = dataframe_2.map(row => row.DEPTH || 0);

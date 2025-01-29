@@ -301,116 +301,151 @@ export class SnapshotVisualizer {
     }
 
     createD3Graph(snapshot, title) {
-        // Create SVG element
-        const container = this.document.createElement('div');
-        const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', this.GRAPH_CONFIG.width);
-        svg.setAttribute('height', this.GRAPH_CONFIG.height);
-        svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        container.appendChild(svg);
+        try {
+            // Create SVG element
+            const container = this.document.createElement('div');
+            const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', this.GRAPH_CONFIG.width);
+            svg.setAttribute('height', this.GRAPH_CONFIG.height);
+            svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            container.appendChild(svg);
 
-        // Prepare graph data
-        const graphData = this.prepareGraphData(snapshot);
+            // Create background
+            const background = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            background.setAttribute('width', '100%');
+            background.setAttribute('height', '100%');
+            background.setAttribute('fill', '#ffffff');
+            svg.appendChild(background);
 
-        // Create force simulation
-        const simulation = forceSimulation(graphData.nodes)
-            .force('charge', forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
-            .force('center', forceCenter(this.GRAPH_CONFIG.width / 2, this.GRAPH_CONFIG.height / 2))
-            .force('link', forceLink(graphData.links).id(d => d.id).distance(this.GRAPH_CONFIG.simulation.linkDistance))
-            .force('collide', forceCollide().radius(d => this.calculateNodeRadius(d) + 1));
+            // Prepare graph data with sampling for large datasets
+            const graphData = this.prepareGraphData(snapshot);
+            if (!graphData.nodes.length) {
+                return this.createEmptyVisualization(title);
+            }
 
-        // Run simulation to completion
-        for (let i = 0; i < 300; i++) {
-            simulation.tick();
+            // Sample nodes if too many
+            const MAX_NODES = 200;
+            if (graphData.nodes.length > MAX_NODES) {
+                const samplingRate = MAX_NODES / graphData.nodes.length;
+                graphData.nodes = graphData.nodes.filter(() => Math.random() < samplingRate);
+                const nodeIds = new Set(graphData.nodes.map(n => n.id));
+                graphData.links = graphData.links.filter(l => 
+                    nodeIds.has(l.source) && nodeIds.has(l.target)
+                );
+            }
+
+            // Create force simulation with timeout
+            const simulation = forceSimulation(graphData.nodes)
+                .force('charge', forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
+                .force('center', forceCenter(this.GRAPH_CONFIG.width / 2, this.GRAPH_CONFIG.height / 2))
+                .force('link', forceLink(graphData.links).id(d => d.id).distance(this.GRAPH_CONFIG.simulation.linkDistance))
+                .force('collide', forceCollide().radius(d => this.calculateNodeRadius(d) + 1))
+                .stop();
+
+            // Run simulation with timeout
+            const MAX_TICKS = 100;
+            const startTime = Date.now();
+            const MAX_TIME = 5000; // 5 seconds timeout
+
+            for (let i = 0; i < MAX_TICKS; i++) {
+                simulation.tick();
+                if (Date.now() - startTime > MAX_TIME) {
+                    console.warn(`Force simulation timed out after ${i} ticks`);
+                    break;
+                }
+            }
+
+            // Draw links
+            graphData.links.forEach(link => {
+                const linkElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                linkElement.setAttribute('x1', link.source.x);
+                linkElement.setAttribute('y1', link.source.y);
+                linkElement.setAttribute('x2', link.target.x);
+                linkElement.setAttribute('y2', link.target.y);
+                linkElement.setAttribute('stroke', '#999');
+                linkElement.setAttribute('stroke-opacity', '0.6');
+                linkElement.setAttribute('stroke-width', Math.sqrt(link.value));
+                svg.appendChild(linkElement);
+            });
+
+            // Draw nodes
+            graphData.nodes.forEach(node => {
+                const nodeElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                nodeElement.setAttribute('cx', node.x);
+                nodeElement.setAttribute('cy', node.y);
+                nodeElement.setAttribute('r', this.calculateNodeRadius(node));
+                nodeElement.setAttribute('fill', this.GRAPH_CONFIG.colors(node.group));
+                nodeElement.setAttribute('stroke', '#fff');
+                nodeElement.setAttribute('stroke-width', '1.5');
+                svg.appendChild(nodeElement);
+            });
+
+            // Add title
+            const titleElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            titleElement.setAttribute('x', this.GRAPH_CONFIG.width / 2);
+            titleElement.setAttribute('y', 30);
+            titleElement.setAttribute('text-anchor', 'middle');
+            titleElement.setAttribute('font-size', '16px');
+            titleElement.setAttribute('font-weight', 'bold');
+            titleElement.textContent = `${title} (${graphData.nodes.length} nodes shown)`;
+            svg.appendChild(titleElement);
+
+            // Convert SVG to data URL
+            const svgString = container.innerHTML;
+            const base64 = Buffer.from(svgString).toString('base64');
+            return `data:image/svg+xml;base64,${base64}`;
+        } catch (error) {
+            console.error('Error creating D3 graph:', error);
+            return this.createEmptyVisualization(title);
         }
-
-        // Create background
-        const background = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        background.setAttribute('width', '100%');
-        background.setAttribute('height', '100%');
-        background.setAttribute('fill', '#ffffff');
-        svg.appendChild(background);
-
-        // Draw links
-        graphData.links.forEach(link => {
-            const linkElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'line');
-            linkElement.setAttribute('x1', link.source.x);
-            linkElement.setAttribute('y1', link.source.y);
-            linkElement.setAttribute('x2', link.target.x);
-            linkElement.setAttribute('y2', link.target.y);
-            linkElement.setAttribute('stroke', '#999');
-            linkElement.setAttribute('stroke-opacity', '0.6');
-            linkElement.setAttribute('stroke-width', Math.sqrt(link.value));
-            svg.appendChild(linkElement);
-        });
-
-        // Draw nodes
-        graphData.nodes.forEach(node => {
-            const nodeElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            nodeElement.setAttribute('cx', node.x);
-            nodeElement.setAttribute('cy', node.y);
-            nodeElement.setAttribute('r', this.calculateNodeRadius(node));
-            nodeElement.setAttribute('fill', this.GRAPH_CONFIG.colors(node.group));
-            nodeElement.setAttribute('stroke', '#fff');
-            nodeElement.setAttribute('stroke-width', '1.5');
-            svg.appendChild(nodeElement);
-        });
-
-        // Add title
-        const titleElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        titleElement.setAttribute('x', this.GRAPH_CONFIG.width / 2);
-        titleElement.setAttribute('y', 30);
-        titleElement.setAttribute('text-anchor', 'middle');
-        titleElement.setAttribute('font-size', '16px');
-        titleElement.setAttribute('font-weight', 'bold');
-        titleElement.textContent = title;
-        svg.appendChild(titleElement);
-
-        // Convert SVG to data URL
-        const svgString = container.innerHTML;
-        const base64 = Buffer.from(svgString).toString('base64');
-        return `data:image/svg+xml;base64,${base64}`;
     }
 
     prepareGraphData(snapshot) {
-        const nodes = [];
-        const links = [];
-        const nodeMap = new Map();
+        try {
+            const nodes = [];
+            const links = [];
+            const nodeMap = new Map();
 
-        // Create nodes
-        snapshot.data.nodes.forEach(node => {
-            const nodeId = node.ID || node.id;
-            if (!nodeMap.has(nodeId)) {
-                nodeMap.set(nodeId, {
-                    id: nodeId,
-                    group: node.TYPE || 'unknown',
-                    connections: 0,
-                    size: 1
-                });
-            }
-        });
+            // Create nodes with a limit
+            const MAX_NODES_TO_PROCESS = 1000;
+            snapshot.data.nodes.slice(0, MAX_NODES_TO_PROCESS).forEach(node => {
+                const nodeId = node.ID || node.id;
+                if (!nodeMap.has(nodeId)) {
+                    nodeMap.set(nodeId, {
+                        id: nodeId,
+                        group: node.TYPE || 'unknown',
+                        connections: 0,
+                        size: 1
+                    });
+                }
+            });
 
-        // Create links and update node connections
-        snapshot.data.interactions.forEach(interaction => {
-            const sourceId = interaction.USER_ID;
-            const targetId = interaction.PAGE_ID;
-            
-            if (nodeMap.has(sourceId) && nodeMap.has(targetId)) {
-                links.push({
-                    source: sourceId,
-                    target: targetId,
-                    value: interaction.INTERACTION_COUNT || 1
-                });
+            // Create links with a limit
+            const MAX_LINKS_TO_PROCESS = 2000;
+            snapshot.data.interactions.slice(0, MAX_LINKS_TO_PROCESS).forEach(interaction => {
+                const sourceId = interaction.USER_ID;
+                const targetId = interaction.PAGE_ID;
                 
-                nodeMap.get(sourceId).connections++;
-                nodeMap.get(targetId).connections++;
-            }
-        });
+                if (nodeMap.has(sourceId) && nodeMap.has(targetId)) {
+                    links.push({
+                        source: sourceId,
+                        target: targetId,
+                        value: interaction.INTERACTION_COUNT || 1
+                    });
+                    
+                    nodeMap.get(sourceId).connections++;
+                    nodeMap.get(targetId).connections++;
+                }
+            });
 
-        return {
-            nodes: Array.from(nodeMap.values()),
-            links
-        };
+            return {
+                nodes: Array.from(nodeMap.values()),
+                links
+            };
+        } catch (error) {
+            console.error('Error preparing graph data:', error);
+            return { nodes: [], links: [] };
+        }
     }
 
     calculateNodeRadius(node) {

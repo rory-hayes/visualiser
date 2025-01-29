@@ -265,6 +265,9 @@ const __dirname = dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname))); // This will serve files from the src directory
 
+// Add specific route for visualizations
+app.use('/visualizations', express.static(path.join(__dirname, 'public', 'visualizations')));
+
 // Add MIME type for ES modules
 app.use((req, res, next) => {
     if (req.url.endsWith('.js')) {

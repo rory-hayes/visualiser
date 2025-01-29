@@ -96,13 +96,24 @@ export class SnapshotVisualizer {
             const filename = `${type}_${timestamp}.svg`;
             const filePath = path.join(this.visualizationsDir, filename);
             
+            // Log the file path and SVG content
+            console.log(`Saving visualization to: ${filePath}`);
+            console.log(`SVG content length: ${svg.length}`);
+            
             // Save SVG to file
             await fs.promises.writeFile(filePath, svg, 'utf8');
             
-            // Return the snapshot with the URL instead of data URL
+            // Verify file was saved
+            const exists = await fs.promises.access(filePath).then(() => true).catch(() => false);
+            console.log(`File saved successfully: ${exists}`);
+            
+            // Return the snapshot with the URL
+            const visualizationUrl = `/visualizations/${filename}`;
+            console.log(`Visualization URL: ${visualizationUrl}`);
+            
             return {
                 ...snapshot,
-                visualization: `/visualizations/${filename}`
+                visualization: visualizationUrl
             };
         } catch (error) {
             console.error(`Error creating ${type} visualization:`, error);
@@ -533,26 +544,42 @@ export class SnapshotVisualizer {
     }
 
     generateSVG(data, connections, title) {
-        // Limit the number of nodes and connections
-        const nodes = data.slice(0, this.maxNodes);
-        const links = connections.slice(0, this.maxLinks);
-
-        // Create SVG content
+        // Create SVG content with improved visualization
         let svg = `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.width} ${this.height}">`;
         
         // Add white background
         svg += `<rect width="100%" height="100%" fill="#fff"/>`;
 
-        // Add nodes
-        nodes.forEach((node, index) => {
-            const x = Math.random() * (this.width - 20) + 10;
-            const y = Math.random() * (this.height - 20) + 10;
-            const color = this.getNodeColor(node.type || 'default');
-            svg += `<circle cx="${x}" cy="${y}" r="3" fill="${color}"/>`;
+        // Set up force simulation
+        const simulation = forceSimulation(data.slice(0, this.maxNodes))
+            .force('charge', forceManyBody().strength(-30))
+            .force('center', forceCenter(this.width / 2, this.height / 2))
+            .force('collide', forceCollide(5));
+
+        // Run simulation synchronously
+        for (let i = 0; i < 30; ++i) simulation.tick();
+
+        // Add connections (if any)
+        if (connections && connections.length) {
+            connections.slice(0, this.maxLinks).forEach(link => {
+                const source = data.find(n => n.id === link.source);
+                const target = data.find(n => n.id === link.target);
+                if (source && target) {
+                    svg += `<line x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" stroke="#999" stroke-width="1"/>`;
+                }
+            });
+        }
+
+        // Add nodes with simulation positions
+        data.slice(0, this.maxNodes).forEach(node => {
+            if (typeof node.x === 'number' && typeof node.y === 'number') {
+                const color = this.getNodeColor(node.type || 'default');
+                svg += `<circle cx="${node.x}" cy="${node.y}" r="3" fill="${color}"/>`;
+            }
         });
 
         // Add title
-        svg += `<text x="${this.width/2}" y="15" text-anchor="middle" font-size="10">${title}</text>`;
+        svg += `<text x="${this.width/2}" y="15" text-anchor="middle" font-size="10" fill="#000">${title}</text>`;
 
         svg += '</svg>';
         return svg;
@@ -561,7 +588,7 @@ export class SnapshotVisualizer {
     generateEmptySVG() {
         return `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
             <rect width="100%" height="100%" fill="#fff"/>
-            <text x="${this.width/2}" y="${this.height/2}" text-anchor="middle" font-size="10">No data available</text>
+            <text x="${this.width/2}" y="${this.height/2}" text-anchor="middle" font-size="10" fill="#000">No data available</text>
         </svg>`;
     }
 

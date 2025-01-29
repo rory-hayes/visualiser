@@ -17,7 +17,7 @@ export class MetricsCalculator {
         this.NOTION_API_KEY = "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";
     }
 
-    async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5) {
+    async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5, workspaceId) {
         // Log all the data
         console.log('Data received:', {
             dataframe_2_length: dataframe_2?.length,
@@ -29,6 +29,7 @@ export class MetricsCalculator {
         const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
         console.log('Workspace age (months):', workspaceAge);
 
+        // Calculate all metrics
         const structureMetrics = this.calculateStructureMetrics(dataframe_2, dataframe_3);
         const usageMetrics = this.calculateUsageMetrics(dataframe_3, dataframe_5);
         const growthMetrics = this.calculateGrowthMetrics(dataframe_3, dataframe_2, dataframe_5);
@@ -71,6 +72,9 @@ export class MetricsCalculator {
 
         // Create Notion entry with all metrics
         try {
+            if (!workspaceId) {
+                throw new Error('workspaceId is required');
+            }
             await this.createNotionEntry(workspaceId, placeholderMetrics);
         } catch (error) {
             console.error('Error creating Notion entry:', error);
@@ -777,8 +781,8 @@ export class MetricsCalculator {
 
     logMetricsWithPlaceholders(metrics, dataframe_2, dataframe_3, dataframe_5) {
         const placeholderMetrics = {
-            // Existing metrics
-            '[[total_pages]]': metrics.total_pages,
+            // 1. Structure Metrics
+            '[[total_pages]]': dataframe_3.TOTAL_NUM_TOTAL_PAGES || 0,
             '[[max_depth]]': metrics.max_depth,
             '[[avg_depth]]': this.formatDecimal(metrics.avg_depth),
             '[[deep_pages_count]]': metrics.deep_pages_count,
@@ -795,40 +799,40 @@ export class MetricsCalculator {
             '[[unfindable_pages]]': metrics.unfindable_pages,
             '[[nav_complexity]]': this.formatDecimal(metrics.nav_complexity),
             
-            // Evolution Metrics
+            // 2. Evolution Metrics
             '[[content_maturity_score]]': this.formatDecimal(metrics.content_maturity_score),
             '[[growth_sustainability_index]]': this.formatDecimal(metrics.growth_sustainability_index),
             '[[workspace_complexity_score]]': this.formatDecimal(metrics.workspace_complexity?.overall_complexity),
             '[[knowledge_structure_score]]': this.formatDecimal(metrics.knowledge_structure_score),
 
-            // Collaboration Patterns
+            // 3. Collaboration Patterns
             '[[team_adoption_score]]': this.formatDecimal(metrics.team_adoption_score),
             '[[collaboration_density]]': this.formatDecimal(metrics.collaboration_density?.density_score),
             '[[knowledge_sharing_index]]': this.formatDecimal(metrics.knowledge_sharing_index),
             '[[cross_team_collaboration_score]]': this.formatDecimal(metrics.cross_team_collaboration_score),
 
-            // Content Quality Metrics
+            // 4. Content Quality Metrics
             '[[content_freshness_score]]': this.formatDecimal(metrics.content_freshness_score),
             '[[structure_quality_index]]': this.formatDecimal(metrics.structure_quality_index),
             '[[knowledge_base_health]]': this.formatDecimal(metrics.knowledge_base_health),
             '[[content_organization_score]]': this.formatDecimal(metrics.content_organization_score),
             '[[documentation_coverage]]': this.formatDecimal(metrics.documentation_coverage),
 
-            // Usage Patterns
+            // 5. Usage Patterns
             '[[automation_effectiveness]]': this.formatDecimal(metrics.automation_effectiveness),
             '[[integration_impact_score]]': this.formatDecimal(metrics.integration_impact_score),
             '[[feature_utilization_index]]': this.formatDecimal(metrics.feature_utilization_index),
             '[[advanced_features_adoption]]': this.formatDecimal(metrics.advanced_features_adoption),
             '[[workflow_optimization_score]]': this.formatDecimal(metrics.workflow_optimization_score),
 
-            // Predictive Metrics
+            // 6. Predictive Metrics
             '[[growth_trajectory]]': this.formatDecimal(metrics.growth_trajectory),
             '[[scaling_readiness_score]]': this.formatDecimal(metrics.scaling_readiness_score),
             '[[bottleneck_prediction]]': metrics.bottleneck_prediction,
             '[[growth_potential_score]]': this.formatDecimal(metrics.growth_potential_score),
             '[[optimization_opportunities]]': metrics.optimization_opportunities,
 
-            // Trend Metrics
+            // 7. Trend Metrics
             '[[monthly_growth_rates]]': this.formatDecimal(metrics.monthly_growth_rates?.[0]),
             '[[blocks_created_last_month]]': metrics.blocks_created_last_month,
             '[[blocks_created_last_year]]': metrics.blocks_created_last_year,
@@ -837,7 +841,7 @@ export class MetricsCalculator {
             '[[creation_velocity]]': this.formatDecimal(metrics.creation_velocity),
             '[[workspace_maturity]]': metrics.workspace_maturity,
 
-            // Collection Metrics
+            // 8. Collection Metrics
             '[[total_collections]]': metrics.total_collections,
             '[[linked_database_count]]': metrics.linked_database_count,
             '[[standalone_database_count]]': metrics.standalone_database_count,
@@ -846,14 +850,14 @@ export class MetricsCalculator {
             '[[collection_health_score]]': this.formatDecimal(metrics.collection_health_score),
             '[[template_count]]': metrics.template_count,
 
-            // Content Type Metrics
+            // 9. Content Type Metrics
             '[[content_type_distribution]]': JSON.stringify(metrics.content_type_distribution),
             '[[duplicate_content_rate]]': this.formatPercentage(metrics.duplicate_content_rate),
             '[[content_health_score]]': this.formatDecimal(metrics.content_health_score),
             '[[avg_content_per_type]]': this.formatDecimal(metrics.avg_content_per_type),
             '[[content_diversity_score]]': this.formatDecimal(metrics.content_diversity_score),
 
-            // Key Metrics Insights
+            // 10. Key Metrics Insights
             '[[key_metrics_insight_1]]': this.formatPercentage(metrics.monthly_content_growth_rate),
             '[[key_metrics_insight_2]]': this.formatPercentage(metrics.monthly_member_growth_rate),
             '[[key_metrics_insight_3]]': this.formatDecimal(dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.TOTAL_NUM_MEMBERS),

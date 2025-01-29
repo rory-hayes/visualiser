@@ -1,4 +1,14 @@
-import * as d3 from 'd3';
+import { 
+    forceSimulation, 
+    forceManyBody, 
+    forceCenter, 
+    forceLink, 
+    forceCollide,
+    scaleOrdinal,
+    scaleLinear,
+    schemeCategory10
+} from 'd3';
+
 import { createCanvas, loadImage } from 'canvas';
 import { JSDOM } from 'jsdom';
 
@@ -21,7 +31,7 @@ export class SnapshotVisualizer {
                 min: 3,
                 max: 15
             },
-            colors: d3.scaleOrdinal(d3.schemeCategory10),
+            colors: scaleOrdinal(schemeCategory10),
             simulation: {
                 charge: -30,
                 linkDistance: 30,
@@ -272,11 +282,11 @@ export class SnapshotVisualizer {
         const graphData = this.prepareGraphData(snapshot);
 
         // Create force simulation
-        const simulation = d3.forceSimulation(graphData.nodes)
-            .force('charge', d3.forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
-            .force('center', d3.forceCenter(this.GRAPH_CONFIG.width / 2, this.GRAPH_CONFIG.height / 2))
-            .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(this.GRAPH_CONFIG.simulation.linkDistance))
-            .force('collide', d3.forceCollide().radius(d => this.calculateNodeRadius(d) + 1));
+        const simulation = forceSimulation(graphData.nodes)
+            .force('charge', forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
+            .force('center', forceCenter(this.GRAPH_CONFIG.width / 2, this.GRAPH_CONFIG.height / 2))
+            .force('link', forceLink(graphData.links).id(d => d.id).distance(this.GRAPH_CONFIG.simulation.linkDistance))
+            .force('collide', forceCollide().radius(d => this.calculateNodeRadius(d) + 1));
 
         // Run simulation to completion
         for (let i = 0; i < 300; i++) {
@@ -360,7 +370,7 @@ export class SnapshotVisualizer {
     calculateNodeRadius(node) {
         const minConnections = 1;
         const maxConnections = Math.max(...Array.from(node.connections));
-        const scale = d3.scaleLinear()
+        const scale = scaleLinear()
             .domain([minConnections, maxConnections])
             .range([this.GRAPH_CONFIG.nodeRadius.min, this.GRAPH_CONFIG.nodeRadius.max]);
         

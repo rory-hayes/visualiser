@@ -886,12 +886,11 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
-            // Ensure all metrics are JSON-safe and properly formatted
-            const sanitizedMetrics = {
-                // Structure Metrics Section
+            // Create sections with proper formatting
+            const sections = {
                 "Structure Metrics": {
                     "Total Pages": metrics['[[total_pages]]'],
-                    "Active Pages": metrics['[[active_pages]]'],
+                    "Active Pages": metrics['[[active_pages]]'] || dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES,
                     "Max Depth": metrics['[[max_depth]]'],
                     "Average Depth": metrics['[[avg_depth]]'],
                     "Deep Pages Count": metrics['[[deep_pages_count]]'] || 0,
@@ -905,24 +904,18 @@ export class MetricsCalculator {
                     "Navigation Depth Score": metrics['[[nav_depth_score]]'],
                     "Navigation Complexity": metrics['[[nav_complexity]]']
                 },
-                
-                // Evolution Metrics Section
                 "Evolution Metrics": {
                     "Content Maturity Score": metrics['[[content_maturity_score]]'],
                     "Growth Sustainability Index": metrics['[[growth_sustainability_index]]'],
                     "Workspace Complexity Score": metrics['[[workspace_complexity_score]]'],
                     "Knowledge Structure Score": metrics['[[knowledge_structure_score]]']
                 },
-                
-                // Collaboration Patterns Section
                 "Collaboration Patterns": {
                     "Team Adoption Score": metrics['[[team_adoption_score]]'],
                     "Collaboration Density": metrics['[[collaboration_density]]'],
                     "Knowledge Sharing Index": metrics['[[knowledge_sharing_index]]'],
                     "Cross Team Collaboration Score": metrics['[[cross_team_collaboration_score]]']
                 },
-                
-                // Content Quality Metrics Section
                 "Content Quality Metrics": {
                     "Content Freshness Score": metrics['[[content_freshness_score]]'],
                     "Structure Quality Index": metrics['[[structure_quality_index]]'],
@@ -930,8 +923,6 @@ export class MetricsCalculator {
                     "Content Organization Score": metrics['[[content_organization_score]]'],
                     "Documentation Coverage": metrics['[[documentation_coverage]]']
                 },
-                
-                // Usage Patterns Section
                 "Usage Patterns": {
                     "Automation Effectiveness": metrics['[[automation_effectiveness]]'],
                     "Integration Impact Score": metrics['[[integration_impact_score]]'],
@@ -939,8 +930,6 @@ export class MetricsCalculator {
                     "Advanced Features Adoption": metrics['[[advanced_features_adoption]]'],
                     "Workflow Optimization Score": metrics['[[workflow_optimization_score]]']
                 },
-                
-                // Predictive Metrics Section
                 "Predictive Metrics": {
                     "Growth Trajectory": metrics['[[growth_trajectory]]'],
                     "Scaling Readiness Score": metrics['[[scaling_readiness_score]]'],
@@ -948,8 +937,6 @@ export class MetricsCalculator {
                     "Growth Potential Score": metrics['[[growth_potential_score]]'],
                     "Optimization Opportunities": metrics['[[optimization_opportunities]]']
                 },
-                
-                // Trend Metrics Section
                 "Trend Metrics": {
                     "Monthly Growth Rates": metrics['[[monthly_growth_rates]]'],
                     "Blocks Created Last Month": metrics['[[blocks_created_last_month]]'],
@@ -959,8 +946,6 @@ export class MetricsCalculator {
                     "Creation Velocity": metrics['[[creation_velocity]]'],
                     "Workspace Maturity": metrics['[[workspace_maturity]]']
                 },
-                
-                // Collection Metrics Section
                 "Collection Metrics": {
                     "Total Collections": metrics['[[total_collections]]'],
                     "Linked Database Count": metrics['[[linked_database_count]]'],
@@ -970,8 +955,6 @@ export class MetricsCalculator {
                     "Collection Health Score": metrics['[[collection_health_score]]'],
                     "Template Count": metrics['[[template_count]]']
                 },
-                
-                // Content Type Metrics Section
                 "Content Type Metrics": {
                     "Content Type Distribution": metrics['[[content_type_distribution]]'],
                     "Duplicate Content Rate": metrics['[[duplicate_content_rate]]'],
@@ -979,8 +962,6 @@ export class MetricsCalculator {
                     "Average Content per Type": metrics['[[avg_content_per_type]]'],
                     "Content Diversity Score": metrics['[[content_diversity_score]]']
                 },
-                
-                // Key Metrics Insights
                 "Key Metrics Insights": {
                     "Monthly Content Growth Rate": metrics['[[key_metrics_insight_1]]'],
                     "Monthly Member Growth Rate": metrics['[[key_metrics_insight_2]]'],
@@ -998,14 +979,25 @@ export class MetricsCalculator {
                 }
             };
 
+            // Format sections into Notion blocks
+            const formattedContent = Object.entries(sections).map(([sectionTitle, sectionMetrics]) => ({
+                type: 'section',
+                title: sectionTitle,
+                metrics: Object.entries(sectionMetrics).map(([key, value]) => ({
+                    key,
+                    value: Array.isArray(value) ? value.join('\n') : value
+                }))
+            }));
+
             const response = await fetch('/api/notion/create-page', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    workspaceId: workspaceId,
-                    metrics: sanitizedMetrics
+                    workspaceId,
+                    sections: formattedContent,
+                    analysisDate: new Date().toISOString()
                 })
             });
 

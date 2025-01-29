@@ -86,7 +86,14 @@ export class MetricsCalculator {
     calculateWorkspaceAge(dataframe_2) {
         if (!dataframe_2?.length) return 0;
         
-        const creationTimes = dataframe_2.map(row => parseInt(row.CREATED_TIME));
+        // Filter out any invalid timestamps and convert to numbers
+        const creationTimes = dataframe_2
+            .map(row => row.CREATED_TIME)
+            .filter(time => time && !isNaN(time))
+            .map(time => typeof time === 'string' ? parseInt(time) : time);
+            
+        if (!creationTimes.length) return 0;
+        
         const oldestTime = Math.min(...creationTimes);
         const now = Date.now();
         
@@ -879,19 +886,117 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
-            // Ensure all metrics are JSON-safe
-            const sanitizedMetrics = {};
-            Object.entries(metrics).forEach(([key, value]) => {
-                if (value === undefined || value === null) {
-                    sanitizedMetrics[key] = 'N/A';
-                } else if (Array.isArray(value)) {
-                    sanitizedMetrics[key] = JSON.stringify(value);
-                } else if (typeof value === 'object') {
-                    sanitizedMetrics[key] = JSON.stringify(value);
-                } else {
-                    sanitizedMetrics[key] = value;
+            // Ensure all metrics are JSON-safe and properly formatted
+            const sanitizedMetrics = {
+                // Structure Metrics Section
+                "Structure Metrics": {
+                    "Total Pages": metrics['[[total_pages]]'],
+                    "Active Pages": metrics['[[active_pages]]'],
+                    "Max Depth": metrics['[[max_depth]]'],
+                    "Average Depth": metrics['[[avg_depth]]'],
+                    "Deep Pages Count": metrics['[[deep_pages_count]]'] || 0,
+                    "Root Pages": metrics['[[root_pages]]'],
+                    "Orphaned Blocks": metrics['[[orphaned_blocks]]'] || 0,
+                    "Collections Count": metrics['[[collections_count]]'] || metrics['[[total_collections]]'],
+                    "Collection Views": metrics['[[collection_views]]'],
+                    "Duplicate Count": metrics['[[duplicate_count]]'] || 0,
+                    "Bottleneck Count": metrics['[[bottleneck_count]]'] || 0,
+                    "Unfindable Pages": metrics['[[unfindable_pages]]'] || 0,
+                    "Navigation Depth Score": metrics['[[nav_depth_score]]'],
+                    "Navigation Complexity": metrics['[[nav_complexity]]']
+                },
+                
+                // Evolution Metrics Section
+                "Evolution Metrics": {
+                    "Content Maturity Score": metrics['[[content_maturity_score]]'],
+                    "Growth Sustainability Index": metrics['[[growth_sustainability_index]]'],
+                    "Workspace Complexity Score": metrics['[[workspace_complexity_score]]'],
+                    "Knowledge Structure Score": metrics['[[knowledge_structure_score]]']
+                },
+                
+                // Collaboration Patterns Section
+                "Collaboration Patterns": {
+                    "Team Adoption Score": metrics['[[team_adoption_score]]'],
+                    "Collaboration Density": metrics['[[collaboration_density]]'],
+                    "Knowledge Sharing Index": metrics['[[knowledge_sharing_index]]'],
+                    "Cross Team Collaboration Score": metrics['[[cross_team_collaboration_score]]']
+                },
+                
+                // Content Quality Metrics Section
+                "Content Quality Metrics": {
+                    "Content Freshness Score": metrics['[[content_freshness_score]]'],
+                    "Structure Quality Index": metrics['[[structure_quality_index]]'],
+                    "Knowledge Base Health": metrics['[[knowledge_base_health]]'],
+                    "Content Organization Score": metrics['[[content_organization_score]]'],
+                    "Documentation Coverage": metrics['[[documentation_coverage]]']
+                },
+                
+                // Usage Patterns Section
+                "Usage Patterns": {
+                    "Automation Effectiveness": metrics['[[automation_effectiveness]]'],
+                    "Integration Impact Score": metrics['[[integration_impact_score]]'],
+                    "Feature Utilization Index": metrics['[[feature_utilization_index]]'],
+                    "Advanced Features Adoption": metrics['[[advanced_features_adoption]]'],
+                    "Workflow Optimization Score": metrics['[[workflow_optimization_score]]']
+                },
+                
+                // Predictive Metrics Section
+                "Predictive Metrics": {
+                    "Growth Trajectory": metrics['[[growth_trajectory]]'],
+                    "Scaling Readiness Score": metrics['[[scaling_readiness_score]]'],
+                    "Bottleneck Prediction": metrics['[[bottleneck_prediction]]'],
+                    "Growth Potential Score": metrics['[[growth_potential_score]]'],
+                    "Optimization Opportunities": metrics['[[optimization_opportunities]]']
+                },
+                
+                // Trend Metrics Section
+                "Trend Metrics": {
+                    "Monthly Growth Rates": metrics['[[monthly_growth_rates]]'],
+                    "Blocks Created Last Month": metrics['[[blocks_created_last_month]]'],
+                    "Blocks Created Last Year": metrics['[[blocks_created_last_year]]'],
+                    "Content Growth Trend": metrics['[[content_growth_trend]]'],
+                    "Growth Acceleration": metrics['[[growth_acceleration]]'],
+                    "Creation Velocity": metrics['[[creation_velocity]]'],
+                    "Workspace Maturity": metrics['[[workspace_maturity]]']
+                },
+                
+                // Collection Metrics Section
+                "Collection Metrics": {
+                    "Total Collections": metrics['[[total_collections]]'],
+                    "Linked Database Count": metrics['[[linked_database_count]]'],
+                    "Standalone Database Count": metrics['[[standalone_database_count]]'],
+                    "Average Items per Collection": metrics['[[avg_items_per_collection]]'],
+                    "Collection Usage Ratio": metrics['[[collection_usage_ratio]]'],
+                    "Collection Health Score": metrics['[[collection_health_score]]'],
+                    "Template Count": metrics['[[template_count]]']
+                },
+                
+                // Content Type Metrics Section
+                "Content Type Metrics": {
+                    "Content Type Distribution": metrics['[[content_type_distribution]]'],
+                    "Duplicate Content Rate": metrics['[[duplicate_content_rate]]'],
+                    "Content Health Score": metrics['[[content_health_score]]'],
+                    "Average Content per Type": metrics['[[avg_content_per_type]]'],
+                    "Content Diversity Score": metrics['[[content_diversity_score]]']
+                },
+                
+                // Key Metrics Insights
+                "Key Metrics Insights": {
+                    "Monthly Content Growth Rate": metrics['[[key_metrics_insight_1]]'],
+                    "Monthly Member Growth Rate": metrics['[[key_metrics_insight_2]]'],
+                    "Alive Blocks per Member": metrics['[[key_metrics_insight_3]]'],
+                    "Total Members and Guests": metrics['[[key_metrics_insight_4]]'],
+                    "Members per Teamspace": metrics['[[key_metrics_insight_5]]'],
+                    "Alive Pages per Member": metrics['[[key_metrics_insight_6]]'],
+                    "Alive Blocks Ratio": metrics['[[key_metrics_insight_7]]'],
+                    "Alive Collections Ratio": metrics['[[key_metrics_insight_8]]'],
+                    "Blocks per Teamspace": metrics['[[key_metrics_insight_9]]'],
+                    "Total Integrations": metrics['[[key_metrics_insight_10]]'],
+                    "Total Bots": metrics['[[key_metrics_insight_11]]'],
+                    "Integration Coverage": metrics['[[key_metrics_insight_12]]'],
+                    "Alive Pages Ratio": metrics['[[key_metrics_insight_13]]']
                 }
-            });
+            };
 
             const response = await fetch('/api/notion/create-page', {
                 method: 'POST',

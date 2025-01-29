@@ -81,8 +81,25 @@ export class SnapshotVisualizer {
                 future: await this.generateFutureProjection(dataframe_2, dataframe_3, dataframe_5)
             };
 
+            console.log('Generated base snapshots, creating visualizations...');
+
             // Generate D3 visualizations for each snapshot
-            const visualizations = await this.createD3Visualizations(snapshots);
+            const visualizations = {
+                past: this.createD3Graph(snapshots.past, 'Past State (60 days ago)'),
+                present: this.createD3Graph(snapshots.present, 'Current State'),
+                future: this.createD3Graph(snapshots.future, 'Projected Future (90 days)')
+            };
+
+            console.log('Visualizations created:', {
+                hasVisPast: !!visualizations.past,
+                hasVisPresent: !!visualizations.present,
+                hasVisFuture: !!visualizations.future
+            });
+
+            // Attach visualizations to snapshots
+            snapshots.past.visualization = visualizations.past;
+            snapshots.present.visualization = visualizations.present;
+            snapshots.future.visualization = visualizations.future;
 
             return {
                 snapshots,
@@ -292,16 +309,10 @@ export class SnapshotVisualizer {
         return (densityScore * 0.6 + connectionsPerMemberScore * 0.4);
     }
 
-    createD3Visualizations(snapshots) {
-        return {
-            past: this.createD3Graph(snapshots.past, 'Past State (60 days ago)'),
-            present: this.createD3Graph(snapshots.present, 'Current State'),
-            future: this.createD3Graph(snapshots.future, 'Projected Future (90 days)')
-        };
-    }
-
     createD3Graph(snapshot, title) {
         try {
+            console.log(`Creating D3 graph for ${title}...`);
+            
             // Create SVG element
             const container = this.document.createElement('div');
             const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -319,7 +330,13 @@ export class SnapshotVisualizer {
 
             // Prepare graph data with sampling for large datasets
             const graphData = this.prepareGraphData(snapshot);
+            console.log(`Prepared graph data for ${title}:`, {
+                nodeCount: graphData.nodes.length,
+                linkCount: graphData.links.length
+            });
+
             if (!graphData.nodes.length) {
+                console.warn(`No nodes found for ${title}, creating empty visualization`);
                 return this.createEmptyVisualization(title);
             }
 
@@ -332,6 +349,10 @@ export class SnapshotVisualizer {
                 graphData.links = graphData.links.filter(l => 
                     nodeIds.has(l.source) && nodeIds.has(l.target)
                 );
+                console.log(`Sampled nodes for ${title}:`, {
+                    sampledNodeCount: graphData.nodes.length,
+                    sampledLinkCount: graphData.links.length
+                });
             }
 
             // Create force simulation with timeout
@@ -350,10 +371,12 @@ export class SnapshotVisualizer {
             for (let i = 0; i < MAX_TICKS; i++) {
                 simulation.tick();
                 if (Date.now() - startTime > MAX_TIME) {
-                    console.warn(`Force simulation timed out after ${i} ticks`);
+                    console.warn(`Force simulation timed out after ${i} ticks for ${title}`);
                     break;
                 }
             }
+
+            console.log(`Simulation completed for ${title}, drawing elements...`);
 
             // Draw links
             graphData.links.forEach(link => {
@@ -393,9 +416,12 @@ export class SnapshotVisualizer {
             // Convert SVG to data URL
             const svgString = container.innerHTML;
             const base64 = Buffer.from(svgString).toString('base64');
-            return `data:image/svg+xml;base64,${base64}`;
+            const dataUrl = `data:image/svg+xml;base64,${base64}`;
+            
+            console.log(`Successfully created visualization for ${title}`);
+            return dataUrl;
         } catch (error) {
-            console.error('Error creating D3 graph:', error);
+            console.error(`Error creating D3 graph for ${title}:`, error);
             return this.createEmptyVisualization(title);
         }
     }

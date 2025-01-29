@@ -897,12 +897,6 @@ export class MetricsCalculator {
         try {
             console.log('DEBUG 1 - Initial metrics received:', metrics);
 
-            // Validate snapshots data
-            const hasValidSnapshots = metrics.snapshots && 
-                metrics.snapshots.past && 
-                metrics.snapshots.present && 
-                metrics.snapshots.future;
-
             // Create base Notion page content with combined metrics
             const pageContent = [
                 {
@@ -1015,6 +1009,23 @@ export class MetricsCalculator {
                     `Integration Coverage: ${metrics['[[key_metrics_insight_12]]']} | Alive Pages Ratio: ${metrics['[[key_metrics_insight_13]]']}`
                 ]),
 
+                // Workspace Evolution Summary (text-based)
+                {
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Workspace Evolution Summary' }
+                        }]
+                    }
+                },
+                ...this.createBulletedList([
+                    `Past State (60 days ago): ${metrics.snapshots?.past?.metrics?.totalNodes || 0} nodes, ${metrics.snapshots?.past?.metrics?.totalMembers || 0} members`,
+                    `Current State: ${metrics.snapshots?.present?.metrics?.totalNodes || 0} nodes, ${metrics.snapshots?.present?.metrics?.totalMembers || 0} members`,
+                    `Projected Future (90 days): ${metrics.snapshots?.future?.metrics?.totalNodes || 0} nodes, ${metrics.snapshots?.future?.metrics?.totalMembers || 0} members`
+                ]),
+
                 // Analysis Date
                 {
                     object: 'block',
@@ -1027,67 +1038,6 @@ export class MetricsCalculator {
                     }
                 }
             ];
-
-            // Add visualizations section header
-            if (hasValidSnapshots) {
-                pageContent.push(
-                    {
-                        object: 'block',
-                        type: 'heading_1',
-                        heading_1: {
-                            rich_text: [{
-                                type: 'text',
-                                text: { content: 'Workspace Evolution' }
-                            }]
-                        }
-                    }
-                );
-
-                // Add each visualization with minimal metrics
-                ['past', 'present', 'future'].forEach(period => {
-                    const snapshot = metrics.snapshots[period];
-                    const title = period === 'past' ? 'Past (60 days ago)' :
-                                period === 'present' ? 'Current State' :
-                                'Future (90 days)';
-                    
-                    if (snapshot.visualization) {
-                        pageContent.push(
-                            {
-                                object: 'block',
-                                type: 'heading_2',
-                                heading_2: {
-                                    rich_text: [{
-                                        type: 'text',
-                                        text: { content: title }
-                                    }]
-                                }
-                            },
-                            {
-                                object: 'block',
-                                type: 'paragraph',
-                                paragraph: {
-                                    rich_text: [{
-                                        type: 'text',
-                                        text: { 
-                                            content: `Nodes: ${snapshot.metrics.totalNodes} | Members: ${snapshot.metrics.totalMembers} | Score: ${snapshot.metrics.collaborationScore}`
-                                        }
-                                    }]
-                                }
-                            },
-                            {
-                                object: 'block',
-                                type: 'image',
-                                image: {
-                                    type: 'external',
-                                    external: {
-                                        url: snapshot.visualization
-                                    }
-                                }
-                            }
-                        );
-                    }
-                });
-            }
 
             // Create the Notion page
             const response = await fetch('https://api.notion.com/v1/pages', {

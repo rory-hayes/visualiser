@@ -1,3 +1,5 @@
+import { SnapshotVisualizer } from './SnapshotVisualizer.js';
+
 export class MetricsCalculator {
     constructor() {
         // Constants for calculations
@@ -15,6 +17,8 @@ export class MetricsCalculator {
         // Notion API configuration
         this.NOTION_DATABASE_ID = "18730aa1-c7a9-8059-b53e-de31cde8bfc4";
         this.NOTION_API_KEY = "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";
+
+        this.snapshotVisualizer = new SnapshotVisualizer();
     }
 
     async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5, workspaceId) {

@@ -1366,7 +1366,7 @@ export class MetricsCalculator {
             Math.abs(value - monthlyValues[index]) / monthlyValues[index]
         );
         
-        return Math.max(0, 100 - (average(variations) * 100));
+        return Math.max(0, 100 - (this.average(variations) * 100));
     }
 
     analyzeUsagePatterns(dataframe_2, dataframe_3) {

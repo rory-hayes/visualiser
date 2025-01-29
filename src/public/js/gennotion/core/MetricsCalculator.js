@@ -1016,7 +1016,7 @@ export class MetricsCalculator {
                 metrics: sanitizedMetrics
             });
 
-            const response = await fetch('/api/notion/create-page', {
+            const response = await fetch('https://visualiser-xhjh.onrender.com/api/notion/create-page', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

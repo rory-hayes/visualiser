@@ -311,28 +311,13 @@ export class SnapshotVisualizer {
 
     createD3Graph(snapshot, title) {
         try {
-            console.log(`Creating D3 graph for ${title}...`);
+            console.log(`Creating minimal D3 graph for ${title}...`);
             
-            // Create SVG element with smaller dimensions
-            const container = this.document.createElement('div');
-            const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            // Reduce dimensions to decrease SVG size
-            const width = 400;
-            const height = 300;
-            svg.setAttribute('width', width);
-            svg.setAttribute('height', height);
-            svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-            container.appendChild(svg);
-
-            // Create background
-            const background = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            background.setAttribute('width', '100%');
-            background.setAttribute('height', '100%');
-            background.setAttribute('fill', '#ffffff');
-            svg.appendChild(background);
-
-            // Prepare graph data with more aggressive sampling
+            // Create minimal SVG
+            const width = 300;
+            const height = 200;
+            
+            // Prepare graph data with extreme sampling
             const graphData = this.prepareGraphData(snapshot);
             console.log(`Prepared graph data for ${title}:`, {
                 nodeCount: graphData.nodes.length,
@@ -344,85 +329,63 @@ export class SnapshotVisualizer {
                 return this.createEmptyVisualization(title);
             }
 
-            // More aggressive node sampling
-            const MAX_NODES = 50; // Reduced from 200
+            // Ultra-aggressive node sampling
+            const MAX_NODES = 20; // Drastically reduced
             if (graphData.nodes.length > MAX_NODES) {
                 const samplingRate = MAX_NODES / graphData.nodes.length;
                 graphData.nodes = graphData.nodes.filter(() => Math.random() < samplingRate);
                 const nodeIds = new Set(graphData.nodes.map(n => n.id));
                 graphData.links = graphData.links.filter(l => 
                     nodeIds.has(l.source) && nodeIds.has(l.target)
-                );
-                console.log(`Sampled nodes for ${title}:`, {
-                    sampledNodeCount: graphData.nodes.length,
-                    sampledLinkCount: graphData.links.length
-                });
+                ).slice(0, MAX_NODES * 2);
             }
 
-            // Create force simulation with reduced iterations
+            // Quick force simulation
             const simulation = forceSimulation(graphData.nodes)
-                .force('charge', forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
+                .force('charge', forceManyBody().strength(-20))
                 .force('center', forceCenter(width / 2, height / 2))
-                .force('link', forceLink(graphData.links).id(d => d.id).distance(20)) // Reduced distance
-                .force('collide', forceCollide().radius(d => this.calculateNodeRadius(d) + 1))
+                .force('link', forceLink(graphData.links).id(d => d.id).distance(15))
                 .stop();
 
-            // Run simulation with fewer ticks
-            const MAX_TICKS = 50; // Reduced from 100
-            const startTime = Date.now();
-            const MAX_TIME = 3000; // Reduced timeout to 3 seconds
-
-            for (let i = 0; i < MAX_TICKS; i++) {
+            // Minimal simulation
+            for (let i = 0; i < 30; i++) {
                 simulation.tick();
-                if (Date.now() - startTime > MAX_TIME) {
-                    console.warn(`Force simulation timed out after ${i} ticks for ${title}`);
-                    break;
-                }
             }
 
-            // Draw links with simplified styling
+            // Generate minimal SVG
+            let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}">`;
+            svg += `<rect width="100%" height="100%" fill="#fff"/>`;
+
+            // Add links with minimal attributes
             graphData.links.forEach(link => {
-                const linkElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'line');
-                linkElement.setAttribute('x1', link.source.x);
-                linkElement.setAttribute('y1', link.source.y);
-                linkElement.setAttribute('x2', link.target.x);
-                linkElement.setAttribute('y2', link.target.y);
-                linkElement.setAttribute('stroke', '#999');
-                linkElement.setAttribute('stroke-width', '1');
-                svg.appendChild(linkElement);
+                svg += `<line x1="${Math.round(link.source.x)}" y1="${Math.round(link.source.y)}" x2="${Math.round(link.target.x)}" y2="${Math.round(link.target.y)}" stroke="#999"/>`;
             });
 
-            // Draw nodes with simplified styling
+            // Add nodes with minimal attributes
             graphData.nodes.forEach(node => {
-                const nodeElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-                nodeElement.setAttribute('cx', node.x);
-                nodeElement.setAttribute('cy', node.y);
-                nodeElement.setAttribute('r', Math.min(4, this.calculateNodeRadius(node))); // Smaller radius
-                nodeElement.setAttribute('fill', this.GRAPH_CONFIG.colors(node.group));
-                svg.appendChild(nodeElement);
+                svg += `<circle cx="${Math.round(node.x)}" cy="${Math.round(node.y)}" r="3" fill="${this.GRAPH_CONFIG.colors(node.group)}"/>`;
             });
 
-            // Add simplified title
-            const titleElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            titleElement.setAttribute('x', width / 2);
-            titleElement.setAttribute('y', 20);
-            titleElement.setAttribute('text-anchor', 'middle');
-            titleElement.setAttribute('font-size', '12px');
-            titleElement.textContent = title;
-            svg.appendChild(titleElement);
+            // Add minimal title
+            svg += `<text x="${width/2}" y="15" text-anchor="middle" font-size="10">${title}</text>`;
+            svg += '</svg>';
 
-            // Convert SVG to compressed data URL
-            let svgString = container.innerHTML;
-            // Remove unnecessary whitespace and formatting
-            svgString = svgString.replace(/\s+/g, ' ')
-                               .replace(/>\s+</g, '><')
-                               .replace(/\s+>/g, '>')
-                               .replace(/\s+\/>/g, '/>');
-            
-            const base64 = Buffer.from(svgString).toString('base64');
+            // Compress SVG
+            svg = svg.replace(/\s+/g, ' ')
+                    .replace(/> </g, '><')
+                    .replace(/\s*([<>])\s*/g, '$1')
+                    .replace(/\s+$/g, '');
+
+            const base64 = Buffer.from(svg).toString('base64');
             const dataUrl = `data:image/svg+xml;base64,${base64}`;
             
-            console.log(`Created visualization for ${title}, URL length: ${dataUrl.length}`);
+            console.log(`Created minimal visualization for ${title}, URL length: ${dataUrl.length}`);
+            
+            if (dataUrl.length > 1900) { // Leave some margin for safety
+                console.warn(`Visualization still too large (${dataUrl.length} chars), falling back to empty state`);
+                return this.createEmptyVisualization(title);
+            }
+            
             return dataUrl;
         } catch (error) {
             console.error(`Error creating D3 graph for ${title}:`, error);
@@ -549,14 +512,8 @@ export class SnapshotVisualizer {
     }
 
     createEmptyVisualization(title) {
-        // Create minimal SVG for empty state
-        const width = 400;
-        const height = 300;
-        const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-            <rect width="100%" height="100%" fill="#ffffff"/>
-            <text x="${width/2}" y="${height/2}" text-anchor="middle" font-size="12px">${title} (No data)</text>
-        </svg>`;
-        
+        // Ultra-minimal empty state
+        const svg = `<svg width="300" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#fff"/><text x="150" y="100" text-anchor="middle" font-size="10">${title}</text></svg>`;
         const base64 = Buffer.from(svg).toString('base64');
         return `data:image/svg+xml;base64,${base64}`;
     }

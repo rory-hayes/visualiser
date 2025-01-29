@@ -9,7 +9,6 @@ import {
     schemeCategory10
 } from 'd3';
 
-import { createCanvas, loadImage } from 'canvas';
 import { JSDOM } from 'jsdom';
 
 export class SnapshotVisualizer {
@@ -38,10 +37,6 @@ export class SnapshotVisualizer {
                 centerForce: 1
             }
         };
-
-        // Initialize canvas for rendering
-        this.canvas = createCanvas(this.GRAPH_CONFIG.width, this.GRAPH_CONFIG.height);
-        this.ctx = this.canvas.getContext('2d');
 
         // Initialize virtual DOM for server-side rendering
         const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
@@ -274,9 +269,13 @@ export class SnapshotVisualizer {
     }
 
     createD3Graph(snapshot, title) {
-        // Clear canvas
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(0, 0, this.GRAPH_CONFIG.width, this.GRAPH_CONFIG.height);
+        // Create SVG element
+        const container = this.document.createElement('div');
+        const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', this.GRAPH_CONFIG.width);
+        svg.setAttribute('height', this.GRAPH_CONFIG.height);
+        svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        container.appendChild(svg);
 
         // Prepare graph data
         const graphData = this.prepareGraphData(snapshot);
@@ -293,37 +292,52 @@ export class SnapshotVisualizer {
             simulation.tick();
         }
 
+        // Create background
+        const background = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        background.setAttribute('width', '100%');
+        background.setAttribute('height', '100%');
+        background.setAttribute('fill', '#ffffff');
+        svg.appendChild(background);
+
         // Draw links
-        this.ctx.strokeStyle = '#999';
-        this.ctx.globalAlpha = 0.6;
         graphData.links.forEach(link => {
-            this.ctx.beginPath();
-            this.ctx.moveTo(link.source.x, link.source.y);
-            this.ctx.lineTo(link.target.x, link.target.y);
-            this.ctx.lineWidth = Math.sqrt(link.value);
-            this.ctx.stroke();
+            const linkElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            linkElement.setAttribute('x1', link.source.x);
+            linkElement.setAttribute('y1', link.source.y);
+            linkElement.setAttribute('x2', link.target.x);
+            linkElement.setAttribute('y2', link.target.y);
+            linkElement.setAttribute('stroke', '#999');
+            linkElement.setAttribute('stroke-opacity', '0.6');
+            linkElement.setAttribute('stroke-width', Math.sqrt(link.value));
+            svg.appendChild(linkElement);
         });
-        this.ctx.globalAlpha = 1;
 
         // Draw nodes
         graphData.nodes.forEach(node => {
-            this.ctx.beginPath();
-            this.ctx.arc(node.x, node.y, this.calculateNodeRadius(node), 0, 2 * Math.PI);
-            this.ctx.fillStyle = this.GRAPH_CONFIG.colors(node.group);
-            this.ctx.fill();
-            this.ctx.strokeStyle = '#fff';
-            this.ctx.lineWidth = 1.5;
-            this.ctx.stroke();
+            const nodeElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            nodeElement.setAttribute('cx', node.x);
+            nodeElement.setAttribute('cy', node.y);
+            nodeElement.setAttribute('r', this.calculateNodeRadius(node));
+            nodeElement.setAttribute('fill', this.GRAPH_CONFIG.colors(node.group));
+            nodeElement.setAttribute('stroke', '#fff');
+            nodeElement.setAttribute('stroke-width', '1.5');
+            svg.appendChild(nodeElement);
         });
 
         // Add title
-        this.ctx.fillStyle = '#000000';
-        this.ctx.font = 'bold 16px Arial';
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText(title, this.GRAPH_CONFIG.width / 2, 30);
+        const titleElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        titleElement.setAttribute('x', this.GRAPH_CONFIG.width / 2);
+        titleElement.setAttribute('y', 30);
+        titleElement.setAttribute('text-anchor', 'middle');
+        titleElement.setAttribute('font-size', '16px');
+        titleElement.setAttribute('font-weight', 'bold');
+        titleElement.textContent = title;
+        svg.appendChild(titleElement);
 
-        // Convert canvas to PNG data URL
-        return this.canvas.toDataURL('image/png');
+        // Convert SVG to data URL
+        const svgString = container.innerHTML;
+        const base64 = Buffer.from(svgString).toString('base64');
+        return `data:image/svg+xml;base64,${base64}`;
     }
 
     prepareGraphData(snapshot) {

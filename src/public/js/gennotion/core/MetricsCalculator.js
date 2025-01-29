@@ -18,6 +18,9 @@ export class MetricsCalculator {
     }
 
     async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5, workspaceId) {
+        // Debug workspaceId
+        console.log('DEBUG - calculateAllMetrics workspaceId:', workspaceId);
+        
         // Log all the data
         console.log('Data received:', {
             dataframe_2_length: dataframe_2?.length,
@@ -73,11 +76,14 @@ export class MetricsCalculator {
         // Create Notion entry with all metrics
         try {
             if (!workspaceId) {
+                console.error('DEBUG - Missing workspaceId in calculateAllMetrics');
                 throw new Error('workspaceId is required');
             }
+            console.log('DEBUG - About to create Notion entry with workspaceId:', workspaceId);
             await this.createNotionEntry(workspaceId, placeholderMetrics);
         } catch (error) {
             console.error('Error creating Notion entry:', error);
+            throw error;
         }
 
         return allMetrics;
@@ -886,6 +892,9 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
+            // Debug log 1: Initial metrics received
+            console.log('DEBUG 1 - Initial metrics received:', metrics);
+
             // Ensure all metrics are JSON-safe and properly formatted
             const sanitizedMetrics = {
                 // Structure Metrics Section
@@ -998,6 +1007,15 @@ export class MetricsCalculator {
                 }
             };
 
+            // Debug log 2: Sanitized metrics before sending to Notion
+            console.log('DEBUG 2 - Sanitized metrics:', JSON.stringify(sanitizedMetrics, null, 2));
+
+            // Debug log 3: Request payload
+            console.log('DEBUG 3 - Request payload:', {
+                workspaceId,
+                metrics: sanitizedMetrics
+            });
+
             const response = await fetch('/api/notion/create-page', {
                 method: 'POST',
                 headers: {
@@ -1010,14 +1028,19 @@ export class MetricsCalculator {
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorText = await response.text();
+                console.error('DEBUG 4 - Error response:', errorText);
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
             }
 
             const result = await response.json();
-            console.log("Success! Notion entry created:", result);
+            // Debug log 5: Success response
+            console.log("DEBUG 5 - Success! Notion entry created:", result);
             return result;
         } catch (error) {
-            console.error("Error creating Notion entry:", error);
+            // Debug log 6: Error details
+            console.error("DEBUG 6 - Error creating Notion entry:", error);
+            console.error("DEBUG 7 - Error stack:", error.stack);
             throw error;
         }
     }

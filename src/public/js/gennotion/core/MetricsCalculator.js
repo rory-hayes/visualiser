@@ -25,16 +25,10 @@ export class MetricsCalculator {
         // Debug workspaceId
         console.log('DEBUG - calculateAllMetrics workspaceId:', workspaceId);
         
-        // Log all the data
-        console.log('Data received:', {
-            dataframe_2_length: dataframe_2?.length,
-            dataframe_3: dataframe_3,
-            dataframe_5_length: dataframe_5?.length
-        });
-
-        // Calculate workspace age and validate data
-        const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
-        console.log('Workspace age (months):', workspaceAge);
+        // Generate snapshots and visualizations
+        console.log('Generating snapshots and visualizations...');
+        const snapshotResults = await this.snapshotVisualizer.generateSnapshots(dataframe_2, dataframe_3, dataframe_5);
+        console.log('Generated snapshots:', snapshotResults);
 
         // Calculate all metrics
         const structureMetrics = this.calculateStructureMetrics(dataframe_2, dataframe_3);
@@ -71,7 +65,8 @@ export class MetricsCalculator {
             ...collaborationPatterns,
             ...contentQualityMetrics,
             ...usagePatterns,
-            ...predictiveMetrics
+            ...predictiveMetrics,
+            snapshots: snapshotResults.snapshots
         };
 
         // Log metrics with placeholders
@@ -84,7 +79,7 @@ export class MetricsCalculator {
                 throw new Error('workspaceId is required');
             }
             console.log('DEBUG - About to create Notion entry with workspaceId:', workspaceId);
-            await this.createNotionEntry(workspaceId, placeholderMetrics);
+            await this.createNotionEntry(workspaceId, { ...placeholderMetrics, snapshots: snapshotResults.snapshots });
         } catch (error) {
             console.error('Error creating Notion entry:', error);
             throw error;
@@ -898,6 +893,7 @@ export class MetricsCalculator {
         try {
             console.log('DEBUG 1 - Initial metrics received:', metrics);
 
+            // Create base Notion page with metrics
             const response = await fetch('https://api.notion.com/v1/pages', {
                 method: 'POST',
                 headers: {
@@ -1183,6 +1179,15 @@ export class MetricsCalculator {
                                 }]
                             }
                         },
+                        ...this.createBulletedList([
+                            `Total Nodes: ${metrics.snapshots.past.metrics.totalNodes}`,
+                            `Active Members: ${metrics.snapshots.past.metrics.totalMembers}`,
+                            `Total Connections: ${metrics.snapshots.past.metrics.totalConnections}`,
+                            `Connection Density: ${metrics.snapshots.past.metrics.connectionDensity}`,
+                            `Collaboration Score: ${metrics.snapshots.past.metrics.collaborationScore}`,
+                            `Active Nodes: ${metrics.snapshots.past.metrics.activeNodes}`,
+                            `Identified Silos: ${metrics.snapshots.past.metrics.silos}`
+                        ]),
                         {
                             object: 'block',
                             type: 'image',
@@ -1204,6 +1209,15 @@ export class MetricsCalculator {
                                 }]
                             }
                         },
+                        ...this.createBulletedList([
+                            `Total Nodes: ${metrics.snapshots.present.metrics.totalNodes}`,
+                            `Active Members: ${metrics.snapshots.present.metrics.totalMembers}`,
+                            `Total Connections: ${metrics.snapshots.present.metrics.totalConnections}`,
+                            `Connection Density: ${metrics.snapshots.present.metrics.connectionDensity}`,
+                            `Collaboration Score: ${metrics.snapshots.present.metrics.collaborationScore}`,
+                            `Active Nodes: ${metrics.snapshots.present.metrics.activeNodes}`,
+                            `Identified Silos: ${metrics.snapshots.present.metrics.silos}`
+                        ]),
                         {
                             object: 'block',
                             type: 'image',
@@ -1225,6 +1239,15 @@ export class MetricsCalculator {
                                 }]
                             }
                         },
+                        ...this.createBulletedList([
+                            `Total Nodes: ${metrics.snapshots.future.metrics.totalNodes}`,
+                            `Active Members: ${metrics.snapshots.future.metrics.totalMembers}`,
+                            `Total Connections: ${metrics.snapshots.future.metrics.totalConnections}`,
+                            `Connection Density: ${metrics.snapshots.future.metrics.connectionDensity}`,
+                            `Collaboration Score: ${metrics.snapshots.future.metrics.collaborationScore}`,
+                            `Active Nodes: ${metrics.snapshots.future.metrics.activeNodes}`,
+                            `Identified Silos: ${metrics.snapshots.future.metrics.silos}`
+                        ]),
                         {
                             object: 'block',
                             type: 'image',
@@ -1235,7 +1258,7 @@ export class MetricsCalculator {
                                 }
                             }
                         },
-                        // Legend and Explanation
+                        // Graph Legend
                         {
                             object: 'block',
                             type: 'paragraph',

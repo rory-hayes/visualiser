@@ -1,3 +1,7 @@
+import * as d3 from 'd3';
+import { createCanvas, loadImage } from 'canvas';
+import { JSDOM } from 'jsdom';
+
 export class SnapshotVisualizer {
     constructor() {
         // Configuration for visualization
@@ -24,6 +28,17 @@ export class SnapshotVisualizer {
                 centerForce: 1
             }
         };
+
+        // Initialize canvas for rendering
+        this.canvas = createCanvas(this.GRAPH_CONFIG.width, this.GRAPH_CONFIG.height);
+        this.ctx = this.canvas.getContext('2d');
+
+        // Initialize virtual DOM for server-side rendering
+        const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+        this.window = dom.window;
+        this.document = this.window.document;
+        global.window = this.window;
+        global.document = this.document;
     }
 
     async generateSnapshots(dataframe_2, dataframe_3, dataframe_5) {
@@ -249,12 +264,9 @@ export class SnapshotVisualizer {
     }
 
     createD3Graph(snapshot, title) {
-        // Create SVG container
-        const svg = d3.create('svg')
-            .attr('width', this.GRAPH_CONFIG.width)
-            .attr('height', this.GRAPH_CONFIG.height)
-            .attr('viewBox', [0, 0, this.GRAPH_CONFIG.width, this.GRAPH_CONFIG.height])
-            .attr('style', 'max-width: 100%; height: auto;');
+        // Clear canvas
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillRect(0, 0, this.GRAPH_CONFIG.width, this.GRAPH_CONFIG.height);
 
         // Prepare graph data
         const graphData = this.prepareGraphData(snapshot);
@@ -266,53 +278,42 @@ export class SnapshotVisualizer {
             .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(this.GRAPH_CONFIG.simulation.linkDistance))
             .force('collide', d3.forceCollide().radius(d => this.calculateNodeRadius(d) + 1));
 
-        // Create links
-        const links = svg.append('g')
-            .selectAll('line')
-            .data(graphData.links)
-            .join('line')
-            .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', d => Math.sqrt(d.value));
+        // Run simulation to completion
+        for (let i = 0; i < 300; i++) {
+            simulation.tick();
+        }
 
-        // Create nodes
-        const nodes = svg.append('g')
-            .selectAll('circle')
-            .data(graphData.nodes)
-            .join('circle')
-            .attr('r', d => this.calculateNodeRadius(d))
-            .attr('fill', d => this.GRAPH_CONFIG.colors(d.group))
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 1.5);
+        // Draw links
+        this.ctx.strokeStyle = '#999';
+        this.ctx.globalAlpha = 0.6;
+        graphData.links.forEach(link => {
+            this.ctx.beginPath();
+            this.ctx.moveTo(link.source.x, link.source.y);
+            this.ctx.lineTo(link.target.x, link.target.y);
+            this.ctx.lineWidth = Math.sqrt(link.value);
+            this.ctx.stroke();
+        });
+        this.ctx.globalAlpha = 1;
 
-        // Add title
-        svg.append('text')
-            .attr('x', this.GRAPH_CONFIG.width / 2)
-            .attr('y', 30)
-            .attr('text-anchor', 'middle')
-            .style('font-size', '16px')
-            .style('font-weight', 'bold')
-            .text(title);
-
-        // Add tooltips
-        nodes.append('title')
-            .text(d => `${d.id}\nConnections: ${d.connections}\nType: ${d.group}`);
-
-        // Update positions on simulation tick
-        simulation.on('tick', () => {
-            links
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
-
-            nodes
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
+        // Draw nodes
+        graphData.nodes.forEach(node => {
+            this.ctx.beginPath();
+            this.ctx.arc(node.x, node.y, this.calculateNodeRadius(node), 0, 2 * Math.PI);
+            this.ctx.fillStyle = this.GRAPH_CONFIG.colors(node.group);
+            this.ctx.fill();
+            this.ctx.strokeStyle = '#fff';
+            this.ctx.lineWidth = 1.5;
+            this.ctx.stroke();
         });
 
-        // Convert SVG to image
-        return this.svgToImage(svg.node());
+        // Add title
+        this.ctx.fillStyle = '#000000';
+        this.ctx.font = 'bold 16px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(title, this.GRAPH_CONFIG.width / 2, 30);
+
+        // Convert canvas to PNG data URL
+        return this.canvas.toDataURL('image/png');
     }
 
     prepareGraphData(snapshot) {
@@ -364,13 +365,6 @@ export class SnapshotVisualizer {
             .range([this.GRAPH_CONFIG.nodeRadius.min, this.GRAPH_CONFIG.nodeRadius.max]);
         
         return scale(node.connections || minConnections);
-    }
-
-    async svgToImage(svgNode) {
-        // Convert SVG to data URL
-        const svgData = new XMLSerializer().serializeToString(svgNode);
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        return URL.createObjectURL(svgBlob);
     }
 
     // Helper method to format metrics for Notion

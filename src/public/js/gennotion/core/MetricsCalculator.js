@@ -30,6 +30,10 @@ export class MetricsCalculator {
         const snapshotResults = await this.snapshotVisualizer.generateSnapshots(dataframe_2, dataframe_3, dataframe_5);
         console.log('Generated snapshots:', snapshotResults);
 
+        // Calculate workspace age first
+        const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
+        console.log('Calculated workspace age:', workspaceAge);
+
         // Calculate all metrics
         const structureMetrics = this.calculateStructureMetrics(dataframe_2, dataframe_3);
         const usageMetrics = this.calculateUsageMetrics(dataframe_3, dataframe_5);

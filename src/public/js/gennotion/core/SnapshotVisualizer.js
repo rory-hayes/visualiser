@@ -10,6 +10,12 @@ import {
 } from 'd3';
 
 import { JSDOM } from 'jsdom';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export class SnapshotVisualizer {
     constructor() {
@@ -38,6 +44,17 @@ export class SnapshotVisualizer {
             }
         };
 
+        this.width = 300;
+        this.height = 200;
+        this.maxNodes = 20;
+        this.maxLinks = 40;
+        this.visualizationsDir = path.join(__dirname, '..', '..', '..', '..', 'public', 'visualizations');
+        
+        // Ensure visualizations directory exists
+        if (!fs.existsSync(this.visualizationsDir)) {
+            fs.mkdirSync(this.visualizationsDir, { recursive: true });
+        }
+
         // Initialize virtual DOM for server-side rendering
         const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
         this.window = dom.window;
@@ -47,79 +64,75 @@ export class SnapshotVisualizer {
     }
 
     async generateSnapshots(dataframe_2, dataframe_3, dataframe_5) {
+        console.log('Generating snapshots...');
+        
+        // Generate base snapshots
+        const baseSnapshots = this.generateBaseSnapshots(dataframe_2, dataframe_3, dataframe_5);
+        console.log('Base snapshots generated:', baseSnapshots);
+
+        // Create visualizations and save them
+        const snapshots = {
+            past: await this.createVisualization(baseSnapshots.past, 'Past State (60 days ago)', 'past'),
+            present: await this.createVisualization(baseSnapshots.present, 'Current State', 'present'),
+            future: await this.createVisualization(baseSnapshots.future, 'Projected Future (90 days)', 'future')
+        };
+
+        console.log('Snapshots with visualizations:', snapshots);
+        return { snapshots };
+    }
+
+    async createVisualization(snapshot, title, type) {
+        if (!snapshot || !snapshot.data || !snapshot.connections) {
+            console.log(`No data for ${type} visualization`);
+            return this.createEmptyVisualization(type);
+        }
+
         try {
-            // Validate input data
-            if (!dataframe_2?.length || !dataframe_3 || !dataframe_5?.length) {
-                console.warn('Missing or invalid data for snapshot generation:', {
-                    df2Length: dataframe_2?.length,
-                    df3Keys: Object.keys(dataframe_3 || {}),
-                    df5Length: dataframe_5?.length
-                });
-                return {
-                    snapshots: {
-                        past: this.generateEmptySnapshot('Past'),
-                        present: this.generateEmptySnapshot('Present'),
-                        future: this.generateEmptySnapshot('Future')
-                    },
-                    visualizations: {
-                        past: this.createEmptyVisualization('Past State (60 days ago)'),
-                        present: this.createEmptyVisualization('Current State'),
-                        future: this.createEmptyVisualization('Projected Future (90 days)')
-                    }
-                };
-            }
-
-            console.log('Generating snapshots with data:', {
-                df2Length: dataframe_2?.length,
-                df3Keys: Object.keys(dataframe_3 || {}),
-                df5Length: dataframe_5?.length
-            });
-
-            const snapshots = {
-                past: await this.generatePastSnapshot(dataframe_2, dataframe_3, dataframe_5),
-                present: await this.generatePresentSnapshot(dataframe_2, dataframe_3, dataframe_5),
-                future: await this.generateFutureProjection(dataframe_2, dataframe_3, dataframe_5)
-            };
-
-            console.log('Generated base snapshots, creating visualizations...');
-
-            // Generate D3 visualizations for each snapshot
-            const visualizations = {
-                past: this.createD3Graph(snapshots.past, 'Past State (60 days ago)'),
-                present: this.createD3Graph(snapshots.present, 'Current State'),
-                future: this.createD3Graph(snapshots.future, 'Projected Future (90 days)')
-            };
-
-            console.log('Visualizations created:', {
-                hasVisPast: !!visualizations.past,
-                hasVisPresent: !!visualizations.present,
-                hasVisFuture: !!visualizations.future
-            });
-
-            // Attach visualizations to snapshots
-            snapshots.past.visualization = visualizations.past;
-            snapshots.present.visualization = visualizations.present;
-            snapshots.future.visualization = visualizations.future;
-
+            // Generate SVG content
+            const svg = this.generateSVG(snapshot.data, snapshot.connections, title);
+            
+            // Create a unique filename
+            const timestamp = Date.now();
+            const filename = `${type}_${timestamp}.svg`;
+            const filePath = path.join(this.visualizationsDir, filename);
+            
+            // Save SVG to file
+            await fs.promises.writeFile(filePath, svg, 'utf8');
+            
+            // Return the snapshot with the URL instead of data URL
             return {
-                snapshots,
-                visualizations
+                ...snapshot,
+                visualization: `/visualizations/${filename}`
             };
         } catch (error) {
-            console.error('Error generating snapshots:', error);
-            return {
-                snapshots: {
-                    past: this.generateEmptySnapshot('Past'),
-                    present: this.generateEmptySnapshot('Present'),
-                    future: this.generateEmptySnapshot('Future')
-                },
-                visualizations: {
-                    past: this.createEmptyVisualization('Past State (60 days ago)'),
-                    present: this.createEmptyVisualization('Current State'),
-                    future: this.createEmptyVisualization('Projected Future (90 days)')
-                }
-            };
+            console.error(`Error creating ${type} visualization:`, error);
+            return this.createEmptyVisualization(type);
         }
+    }
+
+    async createEmptyVisualization(type) {
+        const svg = this.generateEmptySVG();
+        const timestamp = Date.now();
+        const filename = `empty_${type}_${timestamp}.svg`;
+        const filePath = path.join(this.visualizationsDir, filename);
+        
+        await fs.promises.writeFile(filePath, svg, 'utf8');
+        
+        return {
+            timestamp: new Date().toISOString(),
+            data: [],
+            connections: [],
+            metrics: {
+                totalNodes: 0,
+                totalMembers: 0,
+                totalConnections: 0,
+                connectionDensity: 0,
+                collaborationScore: 0,
+                activeNodes: 0,
+                silos: 0
+            },
+            visualization: `/visualizations/${filename}`
+        };
     }
 
     async generatePastSnapshot(dataframe_2, dataframe_3, dataframe_5) {
@@ -511,10 +524,55 @@ export class SnapshotVisualizer {
         };
     }
 
-    createEmptyVisualization(title) {
-        // Ultra-minimal empty state
-        const svg = `<svg width="300" height="200" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%" fill="#fff"/><text x="150" y="100" text-anchor="middle" font-size="10">${title}</text></svg>`;
-        const base64 = Buffer.from(svg).toString('base64');
-        return `data:image/svg+xml;base64,${base64}`;
+    generateBaseSnapshots(dataframe_2, dataframe_3, dataframe_5) {
+        return {
+            past: this.generatePastSnapshot(dataframe_2, dataframe_3, dataframe_5),
+            present: this.generatePresentSnapshot(dataframe_2, dataframe_3, dataframe_5),
+            future: this.generateFutureProjection(dataframe_2, dataframe_3, dataframe_5)
+        };
+    }
+
+    generateSVG(data, connections, title) {
+        // Limit the number of nodes and connections
+        const nodes = data.slice(0, this.maxNodes);
+        const links = connections.slice(0, this.maxLinks);
+
+        // Create SVG content
+        let svg = `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.width} ${this.height}">`;
+        
+        // Add white background
+        svg += `<rect width="100%" height="100%" fill="#fff"/>`;
+
+        // Add nodes
+        nodes.forEach((node, index) => {
+            const x = Math.random() * (this.width - 20) + 10;
+            const y = Math.random() * (this.height - 20) + 10;
+            const color = this.getNodeColor(node.type || 'default');
+            svg += `<circle cx="${x}" cy="${y}" r="3" fill="${color}"/>`;
+        });
+
+        // Add title
+        svg += `<text x="${this.width/2}" y="15" text-anchor="middle" font-size="10">${title}</text>`;
+
+        svg += '</svg>';
+        return svg;
+    }
+
+    generateEmptySVG() {
+        return `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100%" height="100%" fill="#fff"/>
+            <text x="${this.width/2}" y="${this.height/2}" text-anchor="middle" font-size="10">No data available</text>
+        </svg>`;
+    }
+
+    getNodeColor(type) {
+        const colors = {
+            'page': '#1f77b4',
+            'database': '#ff7f0e',
+            'collection': '#2ca02c',
+            'template': '#d62728',
+            'default': '#9467bd'
+        };
+        return colors[type] || colors.default;
     }
 } 

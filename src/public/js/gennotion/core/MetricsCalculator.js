@@ -1009,35 +1009,101 @@ export class MetricsCalculator {
                     `Integration Coverage: ${metrics['[[key_metrics_insight_12]]']} | Alive Pages Ratio: ${metrics['[[key_metrics_insight_13]]']}`
                 ]),
 
-                // Workspace Evolution Summary (text-based)
+                // Workspace Evolution Visualizations
                 {
                     object: 'block',
                     type: 'heading_2',
                     heading_2: {
                         rich_text: [{
                             type: 'text',
-                            text: { content: 'Workspace Evolution Summary' }
-                        }]
-                    }
-                },
-                ...this.createBulletedList([
-                    `Past State (60 days ago): ${metrics.snapshots?.past?.metrics?.totalNodes || 0} nodes, ${metrics.snapshots?.past?.metrics?.totalMembers || 0} members`,
-                    `Current State: ${metrics.snapshots?.present?.metrics?.totalNodes || 0} nodes, ${metrics.snapshots?.present?.metrics?.totalMembers || 0} members`,
-                    `Projected Future (90 days): ${metrics.snapshots?.future?.metrics?.totalNodes || 0} nodes, ${metrics.snapshots?.future?.metrics?.totalMembers || 0} members`
-                ]),
-
-                // Analysis Date
-                {
-                    object: 'block',
-                    type: 'paragraph',
-                    paragraph: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: `Analysis Date: ${new Date().toISOString()}` }
+                            text: { content: 'Workspace Evolution Visualizations' }
                         }]
                     }
                 }
             ];
+
+            // Add visualization blocks if available
+            if (metrics.snapshots) {
+                const baseUrl = 'https://visualiser-xhjh.onrender.com';
+                
+                if (metrics.snapshots.past?.visualization) {
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_3',
+                        heading_3: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Past State (60 days ago)' }
+                            }]
+                        }
+                    }, {
+                        object: 'block',
+                        type: 'image',
+                        image: {
+                            type: 'external',
+                            external: {
+                                url: `${baseUrl}${metrics.snapshots.past.visualization}`
+                            }
+                        }
+                    });
+                }
+
+                if (metrics.snapshots.present?.visualization) {
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_3',
+                        heading_3: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Current State' }
+                            }]
+                        }
+                    }, {
+                        object: 'block',
+                        type: 'image',
+                        image: {
+                            type: 'external',
+                            external: {
+                                url: `${baseUrl}${metrics.snapshots.present.visualization}`
+                            }
+                        }
+                    });
+                }
+
+                if (metrics.snapshots.future?.visualization) {
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_3',
+                        heading_3: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Projected Future (90 days)' }
+                            }]
+                        }
+                    }, {
+                        object: 'block',
+                        type: 'image',
+                        image: {
+                            type: 'external',
+                            external: {
+                                url: `${baseUrl}${metrics.snapshots.future.visualization}`
+                            }
+                        }
+                    });
+                }
+            }
+
+            // Add analysis date
+            pageContent.push({
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: `Analysis Date: ${new Date().toISOString()}` }
+                    }]
+                }
+            });
 
             // Create the Notion page
             const response = await fetch('https://api.notion.com/v1/pages', {

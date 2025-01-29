@@ -313,12 +313,16 @@ export class SnapshotVisualizer {
         try {
             console.log(`Creating D3 graph for ${title}...`);
             
-            // Create SVG element
+            // Create SVG element with smaller dimensions
             const container = this.document.createElement('div');
             const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', this.GRAPH_CONFIG.width);
-            svg.setAttribute('height', this.GRAPH_CONFIG.height);
+            // Reduce dimensions to decrease SVG size
+            const width = 400;
+            const height = 300;
+            svg.setAttribute('width', width);
+            svg.setAttribute('height', height);
             svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
             container.appendChild(svg);
 
             // Create background
@@ -328,7 +332,7 @@ export class SnapshotVisualizer {
             background.setAttribute('fill', '#ffffff');
             svg.appendChild(background);
 
-            // Prepare graph data with sampling for large datasets
+            // Prepare graph data with more aggressive sampling
             const graphData = this.prepareGraphData(snapshot);
             console.log(`Prepared graph data for ${title}:`, {
                 nodeCount: graphData.nodes.length,
@@ -340,8 +344,8 @@ export class SnapshotVisualizer {
                 return this.createEmptyVisualization(title);
             }
 
-            // Sample nodes if too many
-            const MAX_NODES = 200;
+            // More aggressive node sampling
+            const MAX_NODES = 50; // Reduced from 200
             if (graphData.nodes.length > MAX_NODES) {
                 const samplingRate = MAX_NODES / graphData.nodes.length;
                 graphData.nodes = graphData.nodes.filter(() => Math.random() < samplingRate);
@@ -355,18 +359,18 @@ export class SnapshotVisualizer {
                 });
             }
 
-            // Create force simulation with timeout
+            // Create force simulation with reduced iterations
             const simulation = forceSimulation(graphData.nodes)
                 .force('charge', forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
-                .force('center', forceCenter(this.GRAPH_CONFIG.width / 2, this.GRAPH_CONFIG.height / 2))
-                .force('link', forceLink(graphData.links).id(d => d.id).distance(this.GRAPH_CONFIG.simulation.linkDistance))
+                .force('center', forceCenter(width / 2, height / 2))
+                .force('link', forceLink(graphData.links).id(d => d.id).distance(20)) // Reduced distance
                 .force('collide', forceCollide().radius(d => this.calculateNodeRadius(d) + 1))
                 .stop();
 
-            // Run simulation with timeout
-            const MAX_TICKS = 100;
+            // Run simulation with fewer ticks
+            const MAX_TICKS = 50; // Reduced from 100
             const startTime = Date.now();
-            const MAX_TIME = 5000; // 5 seconds timeout
+            const MAX_TIME = 3000; // Reduced timeout to 3 seconds
 
             for (let i = 0; i < MAX_TICKS; i++) {
                 simulation.tick();
@@ -376,9 +380,7 @@ export class SnapshotVisualizer {
                 }
             }
 
-            console.log(`Simulation completed for ${title}, drawing elements...`);
-
-            // Draw links
+            // Draw links with simplified styling
             graphData.links.forEach(link => {
                 const linkElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'line');
                 linkElement.setAttribute('x1', link.source.x);
@@ -386,39 +388,41 @@ export class SnapshotVisualizer {
                 linkElement.setAttribute('x2', link.target.x);
                 linkElement.setAttribute('y2', link.target.y);
                 linkElement.setAttribute('stroke', '#999');
-                linkElement.setAttribute('stroke-opacity', '0.6');
-                linkElement.setAttribute('stroke-width', Math.sqrt(link.value));
+                linkElement.setAttribute('stroke-width', '1');
                 svg.appendChild(linkElement);
             });
 
-            // Draw nodes
+            // Draw nodes with simplified styling
             graphData.nodes.forEach(node => {
                 const nodeElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 nodeElement.setAttribute('cx', node.x);
                 nodeElement.setAttribute('cy', node.y);
-                nodeElement.setAttribute('r', this.calculateNodeRadius(node));
+                nodeElement.setAttribute('r', Math.min(4, this.calculateNodeRadius(node))); // Smaller radius
                 nodeElement.setAttribute('fill', this.GRAPH_CONFIG.colors(node.group));
-                nodeElement.setAttribute('stroke', '#fff');
-                nodeElement.setAttribute('stroke-width', '1.5');
                 svg.appendChild(nodeElement);
             });
 
-            // Add title
+            // Add simplified title
             const titleElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            titleElement.setAttribute('x', this.GRAPH_CONFIG.width / 2);
-            titleElement.setAttribute('y', 30);
+            titleElement.setAttribute('x', width / 2);
+            titleElement.setAttribute('y', 20);
             titleElement.setAttribute('text-anchor', 'middle');
-            titleElement.setAttribute('font-size', '16px');
-            titleElement.setAttribute('font-weight', 'bold');
-            titleElement.textContent = `${title} (${graphData.nodes.length} nodes shown)`;
+            titleElement.setAttribute('font-size', '12px');
+            titleElement.textContent = title;
             svg.appendChild(titleElement);
 
-            // Convert SVG to data URL
-            const svgString = container.innerHTML;
+            // Convert SVG to compressed data URL
+            let svgString = container.innerHTML;
+            // Remove unnecessary whitespace and formatting
+            svgString = svgString.replace(/\s+/g, ' ')
+                               .replace(/>\s+</g, '><')
+                               .replace(/\s+>/g, '>')
+                               .replace(/\s+\/>/g, '/>');
+            
             const base64 = Buffer.from(svgString).toString('base64');
             const dataUrl = `data:image/svg+xml;base64,${base64}`;
             
-            console.log(`Successfully created visualization for ${title}`);
+            console.log(`Created visualization for ${title}, URL length: ${dataUrl.length}`);
             return dataUrl;
         } catch (error) {
             console.error(`Error creating D3 graph for ${title}:`, error);
@@ -545,34 +549,15 @@ export class SnapshotVisualizer {
     }
 
     createEmptyVisualization(title) {
-        // Create SVG element
-        const container = this.document.createElement('div');
-        const svg = this.document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', this.GRAPH_CONFIG.width);
-        svg.setAttribute('height', this.GRAPH_CONFIG.height);
-        svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-        container.appendChild(svg);
-
-        // Create background
-        const background = this.document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        background.setAttribute('width', '100%');
-        background.setAttribute('height', '100%');
-        background.setAttribute('fill', '#ffffff');
-        svg.appendChild(background);
-
-        // Add title
-        const titleElement = this.document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        titleElement.setAttribute('x', this.GRAPH_CONFIG.width / 2);
-        titleElement.setAttribute('y', this.GRAPH_CONFIG.height / 2);
-        titleElement.setAttribute('text-anchor', 'middle');
-        titleElement.setAttribute('font-size', '16px');
-        titleElement.setAttribute('font-weight', 'bold');
-        titleElement.textContent = `${title} (No data available)`;
-        svg.appendChild(titleElement);
-
-        // Convert SVG to data URL
-        const svgString = container.innerHTML;
-        const base64 = Buffer.from(svgString).toString('base64');
+        // Create minimal SVG for empty state
+        const width = 400;
+        const height = 300;
+        const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100%" height="100%" fill="#ffffff"/>
+            <text x="${width/2}" y="${height/2}" text-anchor="middle" font-size="12px">${title} (No data)</text>
+        </svg>`;
+        
+        const base64 = Buffer.from(svg).toString('base64');
         return `data:image/svg+xml;base64,${base64}`;
     }
 } 

@@ -333,21 +333,29 @@ export class MetricsCalculator {
     }
 
     calculateTeamMetrics(dataframe_3, dataframe_5) {
+        if (!dataframe_3) {
+            console.warn('No team metrics data available');
+            return {};
+        }
+
+        const previousMembers = dataframe_5?.NUM_MEMBERS || dataframe_3.TOTAL_NUM_MEMBERS;
+        const memberGrowth = ((dataframe_3.TOTAL_NUM_MEMBERS - previousMembers) / previousMembers) * 100;
+
         return {
-            total_members: dataframe_3.TOTAL_NUM_MEMBERS,
-            total_guests: dataframe_3.TOTAL_NUM_GUESTS,
-            member_growth: ((dataframe_3.TOTAL_NUM_MEMBERS - dataframe_5.NUM_MEMBERS) / dataframe_5.NUM_MEMBERS) * 100,
+            total_members: dataframe_3.TOTAL_NUM_MEMBERS || 0,
+            total_guests: dataframe_3.TOTAL_NUM_GUESTS || 0,
+            member_growth: memberGrowth,
             teamspaces: {
-                total: dataframe_3.TOTAL_NUM_TEAMSPACES,
-                open: dataframe_3.TOTAL_NUM_OPEN_TEAMSPACES,
-                closed: dataframe_3.TOTAL_NUM_CLOSED_TEAMSPACES,
-                private: dataframe_3.TOTAL_NUM_PRIVATE_TEAMSPACES
+                total: dataframe_3.TOTAL_NUM_TEAMSPACES || 0,
+                open: dataframe_3.TOTAL_NUM_OPEN_TEAMSPACES || 0,
+                closed: dataframe_3.TOTAL_NUM_CLOSED_TEAMSPACES || 0,
+                private: dataframe_3.TOTAL_NUM_PRIVATE_TEAMSPACES || 0
             },
             automation: {
-                total_bots: dataframe_3.TOTAL_NUM_BOTS,
-                internal_bots: dataframe_3.TOTAL_NUM_INTERNAL_BOTS,
-                public_bots: dataframe_3.TOTAL_NUM_PUBLIC_BOTS,
-                integrations: dataframe_3.TOTAL_NUM_INTEGRATIONS
+                total_bots: dataframe_3.TOTAL_NUM_BOTS || 0,
+                internal_bots: dataframe_3.TOTAL_NUM_INTERNAL_BOTS || 0,
+                public_bots: dataframe_3.TOTAL_NUM_PUBLIC_BOTS || 0,
+                integrations: dataframe_3.TOTAL_NUM_INTEGRATIONS || 0
             },
             team_efficiency_score: this.calculateTeamEfficiencyScore(dataframe_3)
         };
@@ -867,16 +875,34 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
+            // Ensure all metrics are JSON-safe
+            const sanitizedMetrics = {};
+            Object.entries(metrics).forEach(([key, value]) => {
+                if (value === undefined || value === null) {
+                    sanitizedMetrics[key] = 'N/A';
+                } else if (Array.isArray(value)) {
+                    sanitizedMetrics[key] = JSON.stringify(value);
+                } else if (typeof value === 'object') {
+                    sanitizedMetrics[key] = JSON.stringify(value);
+                } else {
+                    sanitizedMetrics[key] = value;
+                }
+            });
+
             const response = await fetch('/api/notion/create-page', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    workspaceId,
-                    metrics
+                    workspaceId: workspaceId,
+                    metrics: sanitizedMetrics
                 })
             });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
             const result = await response.json();
             console.log("Success! Notion entry created:", result);

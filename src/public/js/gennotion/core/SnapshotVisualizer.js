@@ -28,26 +28,27 @@ export class SnapshotVisualizer {
 
         this.MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
         
-        // D3 visualization configuration
+        // Updated D3 visualization configuration
         this.GRAPH_CONFIG = {
-            width: 800,
-            height: 600,
+            width: 1200,
+            height: 800,
             nodeRadius: {
-                min: 3,
-                max: 15
+                min: 5,
+                max: 20
             },
             colors: scaleOrdinal(schemeCategory10),
             simulation: {
-                charge: -30,
-                linkDistance: 30,
-                centerForce: 1
+                charge: -100,
+                linkDistance: 100,
+                centerForce: 0.5
             }
         };
 
-        this.width = 300;
-        this.height = 200;
-        this.maxNodes = 20;
-        this.maxLinks = 40;
+        // Update dimensions
+        this.width = this.GRAPH_CONFIG.width;
+        this.height = this.GRAPH_CONFIG.height;
+        this.maxNodes = 100; // Increased max nodes
+        this.maxLinks = 200; // Increased max links
         this.visualizationsDir = path.join(__dirname, '..', '..', '..', '..', 'public', 'visualizations');
         
         // Ensure visualizations directory exists
@@ -679,61 +680,179 @@ export class SnapshotVisualizer {
     }
 
     generateSVG(data, connections, title) {
+        console.log('Generating SVG with:', {
+            nodesCount: data?.length || 0,
+            title
+        });
+
         // Create SVG content with improved visualization
         let svg = `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.width} ${this.height}">`;
         
         // Add white background
         svg += `<rect width="100%" height="100%" fill="#fff"/>`;
 
-        // Set up force simulation
-        const simulation = forceSimulation(data.slice(0, this.maxNodes))
-            .force('charge', forceManyBody().strength(-30))
-            .force('center', forceCenter(this.width / 2, this.height / 2))
-            .force('collide', forceCollide(5));
+        // Extract nodes and links from dataframe_2
+        const { nodes, links } = this.extractNodesAndLinks(data);
+
+        console.log('Extracted graph data:', {
+            nodesCount: nodes.length,
+            linksCount: links.length
+        });
+
+        // Set up force simulation with improved parameters
+        const simulation = forceSimulation(nodes)
+            .force('charge', forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
+            .force('center', forceCenter(this.width / 2, this.height / 2).strength(this.GRAPH_CONFIG.simulation.centerForce))
+            .force('link', forceLink(links).distance(this.GRAPH_CONFIG.simulation.linkDistance))
+            .force('collide', forceCollide(30));
 
         // Run simulation synchronously
-        for (let i = 0; i < 30; ++i) simulation.tick();
+        for (let i = 0; i < 100; ++i) simulation.tick();
 
-        // Add connections (if any)
-        if (connections && connections.length) {
-            connections.slice(0, this.maxLinks).forEach(link => {
-                const source = data.find(n => n.id === link.source);
-                const target = data.find(n => n.id === link.target);
-                if (source && target) {
-                    svg += `<line x1="${source.x}" y1="${source.y}" x2="${target.x}" y2="${target.y}" stroke="#999" stroke-width="1"/>`;
-                }
-            });
-        }
+        // Add links
+        links.forEach(link => {
+            svg += `<line 
+                x1="${Math.round(link.source.x)}" 
+                y1="${Math.round(link.source.y)}" 
+                x2="${Math.round(link.target.x)}" 
+                y2="${Math.round(link.target.y)}" 
+                stroke="#999" 
+                stroke-width="1"
+            />`;
+        });
 
-        // Add nodes with simulation positions
-        data.slice(0, this.maxNodes).forEach(node => {
-            if (typeof node.x === 'number' && typeof node.y === 'number') {
-                const color = this.getNodeColor(node.type || 'default');
-                svg += `<circle cx="${node.x}" cy="${node.y}" r="3" fill="${color}"/>`;
+        // Add nodes with improved visualization
+        nodes.forEach(node => {
+            const radius = this.calculateNodeRadius(node);
+            const color = this.getNodeColor(node.type);
+            
+            // Add node circle
+            svg += `<circle 
+                cx="${Math.round(node.x)}" 
+                cy="${Math.round(node.y)}" 
+                r="${radius}" 
+                fill="${color}"
+                stroke="#fff"
+                stroke-width="1.5"
+            />`;
+
+            // Add node label if it's a collection or has many connections
+            if (node.type === 'collection' || node.connections > 5) {
+                svg += `<text 
+                    x="${Math.round(node.x)}" 
+                    y="${Math.round(node.y + radius + 10)}"
+                    text-anchor="middle" 
+                    font-size="8" 
+                    fill="#666"
+                >${node.title || node.type}</text>`;
             }
         });
 
-        // Add title
-        svg += `<text x="${this.width/2}" y="15" text-anchor="middle" font-size="10" fill="#000">${title}</text>`;
+        // Add title with better styling
+        svg += `
+            <text 
+                x="${this.width/2}" 
+                y="30" 
+                text-anchor="middle" 
+                font-size="20" 
+                font-weight="bold" 
+                fill="#333"
+            >${title}</text>
+        `;
+
+        // Add legend
+        svg += this.generateLegend();
 
         svg += '</svg>';
         return svg;
     }
 
+    extractNodesAndLinks(data) {
+        const nodes = [];
+        const links = [];
+        const nodeMap = new Map();
+
+        // First pass: Create nodes
+        data.forEach(item => {
+            if (!nodeMap.has(item.ID)) {
+                const node = {
+                    id: item.ID,
+                    type: item.TYPE || 'page',
+                    title: item.TITLE,
+                    connections: 0,
+                    x: 0,
+                    y: 0
+                };
+                nodes.push(node);
+                nodeMap.set(item.ID, node);
+            }
+
+            // Add connections based on parent-child relationships
+            if (item.PARENT_ID && nodeMap.has(item.PARENT_ID)) {
+                links.push({
+                    source: item.PARENT_ID,
+                    target: item.ID
+                });
+                nodeMap.get(item.ID).connections++;
+                nodeMap.get(item.PARENT_ID).connections++;
+            }
+
+            // Add connections for collection views
+            if (item.COLLECTION_ID && nodeMap.has(item.COLLECTION_ID)) {
+                links.push({
+                    source: item.COLLECTION_ID,
+                    target: item.ID
+                });
+                nodeMap.get(item.ID).connections++;
+                nodeMap.get(item.COLLECTION_ID).connections++;
+            }
+        });
+
+        return { nodes, links };
+    }
+
+    generateLegend() {
+        const legendX = 50;
+        const legendY = this.height - 100;
+        const itemHeight = 20;
+
+        let legend = `<g transform="translate(${legendX},${legendY})">`;
+        legend += `<rect x="-10" y="-25" width="200" height="100" fill="white" fill-opacity="0.9" stroke="#ccc"/>`;
+        
+        const types = ['page', 'database', 'collection', 'template'];
+        types.forEach((type, i) => {
+            const color = this.getNodeColor(type);
+            legend += `
+                <circle cx="0" cy="${i * itemHeight}" r="5" fill="${color}"/>
+                <text x="15" y="${i * itemHeight + 4}" font-size="12">${type}</text>
+            `;
+        });
+
+        legend += '</g>';
+        return legend;
+    }
+
     generateEmptySVG() {
         return `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
             <rect width="100%" height="100%" fill="#fff"/>
-            <text x="${this.width/2}" y="${this.height/2}" text-anchor="middle" font-size="10" fill="#000">No data available</text>
+            <text 
+                x="${this.width/2}" 
+                y="${this.height/2}" 
+                text-anchor="middle" 
+                font-size="24" 
+                fill="#666"
+            >No data available</text>
         </svg>`;
     }
 
     getNodeColor(type) {
         const colors = {
-            'page': '#1f77b4',
-            'database': '#ff7f0e',
-            'collection': '#2ca02c',
-            'template': '#d62728',
-            'default': '#9467bd'
+            'page': '#4A90E2',
+            'database': '#F5A623',
+            'collection': '#7ED321',
+            'collection_view': '#BD10E0',
+            'template': '#9013FE',
+            'default': '#9B9B9B'
         };
         return colors[type] || colors.default;
     }

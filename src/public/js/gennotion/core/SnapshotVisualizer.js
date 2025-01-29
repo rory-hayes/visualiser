@@ -64,21 +64,62 @@ export class SnapshotVisualizer {
     }
 
     async generateSnapshots(dataframe_2, dataframe_3, dataframe_5) {
-        console.log('Generating snapshots...');
-        
-        // Generate base snapshots
-        const baseSnapshots = this.generateBaseSnapshots(dataframe_2, dataframe_3, dataframe_5);
-        console.log('Base snapshots generated:', baseSnapshots);
+        console.log('Generating snapshots with data:', {
+            df2Length: dataframe_2?.length || 0,
+            df3Present: !!dataframe_3,
+            df5Length: dataframe_5?.length || 0
+        });
 
-        // Create visualizations and save them
-        const snapshots = {
-            past: await this.createVisualization(baseSnapshots.past, 'Past State (60 days ago)', 'past'),
-            present: await this.createVisualization(baseSnapshots.present, 'Current State', 'present'),
-            future: await this.createVisualization(baseSnapshots.future, 'Projected Future (90 days)', 'future')
-        };
+        try {
+            // Validate input data
+            if (!dataframe_2?.length || !dataframe_3 || !dataframe_5?.length) {
+                console.error('Missing or empty input data');
+                return {
+                    snapshots: {
+                        past: await this.createEmptyVisualization('past'),
+                        present: await this.createEmptyVisualization('present'),
+                        future: await this.createEmptyVisualization('future')
+                    }
+                };
+            }
 
-        console.log('Snapshots with visualizations:', snapshots);
-        return { snapshots };
+            // Generate base snapshots
+            const baseSnapshots = {
+                past: await this.generatePastSnapshot(dataframe_2, dataframe_3, dataframe_5),
+                present: await this.generatePresentSnapshot(dataframe_2, dataframe_3, dataframe_5),
+                future: await this.generateFutureProjection(dataframe_2, dataframe_3, dataframe_5)
+            };
+
+            console.log('Base snapshots generated:', {
+                pastNodes: baseSnapshots.past?.data?.nodes?.length || 0,
+                presentNodes: baseSnapshots.present?.data?.nodes?.length || 0,
+                futureNodes: baseSnapshots.future?.data?.nodes?.length || 0
+            });
+
+            // Create visualizations and save them
+            const snapshots = {
+                past: await this.createVisualization(baseSnapshots.past, 'Past State (60 days ago)', 'past'),
+                present: await this.createVisualization(baseSnapshots.present, 'Current State', 'present'),
+                future: await this.createVisualization(baseSnapshots.future, 'Projected Future (90 days)', 'future')
+            };
+
+            console.log('Visualization URLs generated:', {
+                past: snapshots.past?.visualization,
+                present: snapshots.present?.visualization,
+                future: snapshots.future?.visualization
+            });
+
+            return { snapshots };
+        } catch (error) {
+            console.error('Error generating snapshots:', error);
+            return {
+                snapshots: {
+                    past: await this.createEmptyVisualization('past'),
+                    present: await this.createEmptyVisualization('present'),
+                    future: await this.createEmptyVisualization('future')
+                }
+            };
+        }
     }
 
     async createVisualization(snapshot, title, type) {
@@ -147,105 +188,199 @@ export class SnapshotVisualizer {
     }
 
     async generatePastSnapshot(dataframe_2, dataframe_3, dataframe_5) {
+        console.log('Generating past snapshot...');
         const pastDate = new Date(Date.now() - (this.SNAPSHOT_INTERVALS.PAST * this.MILLISECONDS_PER_DAY));
         
-        // Filter data for past date
-        const pastData = {
-            nodes: dataframe_2.filter(row => new Date(row.CREATED_TIME) <= pastDate),
-            members: dataframe_3.TOTAL_NUM_MEMBERS,
-            interactions: dataframe_5.filter(row => new Date(row.LAST_INTERACTION_TIME) <= pastDate)
-        };
+        try {
+            // Filter data for past date
+            const pastData = {
+                nodes: dataframe_2.filter(row => new Date(row.CREATED_TIME) <= pastDate),
+                members: dataframe_3.TOTAL_NUM_MEMBERS,
+                interactions: dataframe_5.filter(row => new Date(row.LAST_INTERACTION_TIME) <= pastDate)
+            };
 
-        const connections = this.calculateConnections(pastData.nodes, pastData.interactions);
-        const metrics = this.calculateSnapshotMetrics(pastData, connections);
+            console.log('Past snapshot data:', {
+                nodesCount: pastData.nodes.length,
+                members: pastData.members,
+                interactionsCount: pastData.interactions.length
+            });
 
-        return {
-            timestamp: pastDate.toISOString(),
-            data: pastData,
-            connections,
-            metrics
-        };
+            const connections = this.calculateConnections(pastData.nodes, pastData.interactions);
+            const metrics = this.calculateSnapshotMetrics(pastData, connections);
+
+            return {
+                timestamp: pastDate.toISOString(),
+                data: pastData.nodes,
+                connections: pastData.interactions,
+                metrics
+            };
+        } catch (error) {
+            console.error('Error generating past snapshot:', error);
+            return null;
+        }
     }
 
     async generatePresentSnapshot(dataframe_2, dataframe_3, dataframe_5) {
-        const presentDate = new Date();
-        
-        // Use current data
-        const presentData = {
-            nodes: dataframe_2,
-            members: dataframe_3.TOTAL_NUM_MEMBERS,
-            interactions: dataframe_5
-        };
+        console.log('Generating present snapshot...');
+        try {
+            // Use current data
+            const presentData = {
+                nodes: dataframe_2,
+                members: dataframe_3.TOTAL_NUM_MEMBERS,
+                interactions: dataframe_5
+            };
 
-        const connections = this.calculateConnections(presentData.nodes, presentData.interactions);
-        const metrics = this.calculateSnapshotMetrics(presentData, connections);
+            console.log('Present snapshot data:', {
+                nodesCount: presentData.nodes.length,
+                members: presentData.members,
+                interactionsCount: presentData.interactions.length
+            });
 
-        return {
-            timestamp: presentDate.toISOString(),
-            data: presentData,
-            connections,
-            metrics
-        };
+            const connections = this.calculateConnections(presentData.nodes, presentData.interactions);
+            const metrics = this.calculateSnapshotMetrics(presentData, connections);
+
+            return {
+                timestamp: new Date().toISOString(),
+                data: presentData.nodes,
+                connections: presentData.interactions,
+                metrics
+            };
+        } catch (error) {
+            console.error('Error generating present snapshot:', error);
+            return null;
+        }
     }
 
     async generateFutureProjection(dataframe_2, dataframe_3, dataframe_5) {
-        const futureDate = new Date(Date.now() + (this.SNAPSHOT_INTERVALS.FUTURE * this.MILLISECONDS_PER_DAY));
-        
-        // Calculate growth rates
-        const growthRates = this.calculateGrowthRates(dataframe_2, dataframe_3, dataframe_5);
-        
-        // Project future state
-        const futureData = {
-            nodes: this.projectNodes(dataframe_2, growthRates.nodeGrowth),
-            members: Math.round(dataframe_3.TOTAL_NUM_MEMBERS * (1 + growthRates.memberGrowth)),
-            interactions: this.projectInteractions(dataframe_5, growthRates.interactionGrowth)
-        };
+        console.log('Generating future projection...');
+        try {
+            // Calculate growth rates based on historical data
+            const thirtyDaysAgo = new Date(Date.now() - (30 * this.MILLISECONDS_PER_DAY));
+            const recentNodes = dataframe_2.filter(row => new Date(row.CREATED_TIME) >= thirtyDaysAgo);
+            const nodeGrowthRate = recentNodes.length / dataframe_2.length;
 
-        const connections = this.calculateConnections(futureData.nodes, futureData.interactions);
-        const metrics = this.calculateSnapshotMetrics(futureData, connections);
+            // Project future data
+            const futureDate = new Date(Date.now() + (this.SNAPSHOT_INTERVALS.FUTURE * this.MILLISECONDS_PER_DAY));
+            const projectedNodeCount = Math.round(dataframe_2.length * (1 + nodeGrowthRate));
+            
+            // Create projected nodes by duplicating existing ones with modifications
+            const projectedNodes = dataframe_2.slice(0, projectedNodeCount).map(node => ({
+                ...node,
+                CREATED_TIME: futureDate.toISOString(),
+                PROJECTED: true
+            }));
 
-        return {
-            timestamp: futureDate.toISOString(),
-            data: futureData,
-            connections,
-            metrics,
-            growthRates
-        };
+            // Project interactions based on current patterns
+            const projectedInteractions = this.projectInteractions(dataframe_5, nodeGrowthRate);
+
+            const futureData = {
+                nodes: projectedNodes,
+                members: Math.round(dataframe_3.TOTAL_NUM_MEMBERS * (1 + nodeGrowthRate * 0.5)), // Assume slower member growth
+                interactions: projectedInteractions
+            };
+
+            console.log('Future projection data:', {
+                nodesCount: futureData.nodes.length,
+                members: futureData.members,
+                interactionsCount: futureData.interactions.length
+            });
+
+            const connections = this.calculateConnections(futureData.nodes, futureData.interactions);
+            const metrics = this.calculateSnapshotMetrics(futureData, connections);
+
+            return {
+                timestamp: futureDate.toISOString(),
+                data: futureData.nodes,
+                connections: futureData.interactions,
+                metrics
+            };
+        } catch (error) {
+            console.error('Error generating future projection:', error);
+            return null;
+        }
     }
 
     calculateConnections(nodes, interactions) {
-        // Calculate total connections
-        const totalConnections = interactions.reduce((sum, interaction) => sum + (interaction.INTERACTION_COUNT || 0), 0);
-        
-        // Calculate unique connections between members
-        const uniqueConnections = new Set(
-            interactions.map(interaction => `${interaction.USER_ID}-${interaction.PAGE_ID}`)
-        ).size;
+        try {
+            console.log('Calculating connections for:', {
+                nodesCount: nodes?.length || 0,
+                interactionsCount: interactions?.length || 0
+            });
 
-        // Calculate connection density
-        const possibleConnections = nodes.length * (nodes.length - 1) / 2;
-        const density = possibleConnections > 0 ? uniqueConnections / possibleConnections : 0;
+            if (!nodes?.length || !interactions?.length) {
+                return {
+                    total: 0,
+                    unique: 0,
+                    density: 0,
+                    averagePerNode: 0
+                };
+            }
 
-        return {
-            total: totalConnections,
-            unique: uniqueConnections,
-            density: density,
-            averagePerNode: nodes.length > 0 ? totalConnections / nodes.length : 0
-        };
+            // Create a map of connections
+            const connectionMap = new Map();
+            interactions.forEach(interaction => {
+                const key = `${interaction.USER_ID}-${interaction.PAGE_ID}`;
+                if (!connectionMap.has(key)) {
+                    connectionMap.set(key, 0);
+                }
+                connectionMap.set(key, connectionMap.get(key) + 1);
+            });
+
+            const totalConnections = interactions.length;
+            const uniqueConnections = connectionMap.size;
+            const maxPossibleConnections = nodes.length * (nodes.length - 1);
+            const density = maxPossibleConnections > 0 ? uniqueConnections / maxPossibleConnections : 0;
+            const averagePerNode = nodes.length > 0 ? totalConnections / nodes.length : 0;
+
+            return {
+                total: totalConnections,
+                unique: uniqueConnections,
+                density: density,
+                averagePerNode: averagePerNode
+            };
+        } catch (error) {
+            console.error('Error calculating connections:', error);
+            return {
+                total: 0,
+                unique: 0,
+                density: 0,
+                averagePerNode: 0
+            };
+        }
     }
 
     calculateSnapshotMetrics(data, connections) {
-        return {
-            totalNodes: data.nodes.length,
-            totalMembers: data.members,
-            totalConnections: connections.total,
-            uniqueConnections: connections.unique,
-            connectionDensity: connections.density,
-            averageConnectionsPerNode: connections.averagePerNode,
-            silos: this.detectSilos(data.nodes, data.interactions),
-            activeNodes: this.countActiveNodes(data.nodes),
-            collaborationScore: this.calculateCollaborationScore(connections, data.members)
-        };
+        try {
+            console.log('Calculating snapshot metrics for:', {
+                nodesCount: data.nodes?.length || 0,
+                members: data.members || 0,
+                connectionsCount: connections?.total || 0
+            });
+
+            const metrics = {
+                totalNodes: data.nodes?.length || 0,
+                totalMembers: data.members || 0,
+                totalConnections: connections?.total || 0,
+                connectionDensity: connections?.density || 0,
+                silos: this.detectSilos(data.nodes, data.interactions),
+                activeNodes: this.countActiveNodes(data.nodes),
+                collaborationScore: this.calculateCollaborationScore(connections, data.members)
+            };
+
+            console.log('Calculated metrics:', metrics);
+            return metrics;
+        } catch (error) {
+            console.error('Error calculating snapshot metrics:', error);
+            return {
+                totalNodes: 0,
+                totalMembers: 0,
+                totalConnections: 0,
+                connectionDensity: 0,
+                silos: 0,
+                activeNodes: 0,
+                collaborationScore: 0
+            };
+        }
     }
 
     calculateGrowthRates(dataframe_2, dataframe_3, dataframe_5) {

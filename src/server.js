@@ -1010,7 +1010,8 @@ app.post('/api/analyze-workspace', async (req, res) => {
         const metrics = await metricsCalculator.calculateAllMetrics(
             results.data.dataframe_2,
             results.data.dataframe_3,
-            results.data.dataframe_5  // Add dataframe_5 to the metrics calculation
+            results.data.dataframe_5,
+            workspaceId  // Add workspaceId parameter
         );
 
         // Step 4: Create Notion page using our server-side function

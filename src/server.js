@@ -53,16 +53,30 @@ requiredEnvVars.forEach(varName => {
 const app = express();
 
 // Initialize storage file
-const STORAGE_FILE = path.join(process.cwd(), 'hex_results.json');
+const STORAGE_FILE = path.join(__dirname, 'data', 'hex_results.json');
+
+// Create data directory if it doesn't exist
 try {
+    if (!fs.existsSync(path.join(__dirname, 'data'))) {
+        fs.mkdirSync(path.join(__dirname, 'data'), { recursive: true });
+        console.log('Created data directory');
+    }
+
     if (!fs.existsSync(STORAGE_FILE)) {
-        fs.writeFileSync(STORAGE_FILE, JSON.stringify({}));
+        fs.writeFileSync(STORAGE_FILE, JSON.stringify({
+            timestamp: new Date().toISOString(),
+            data: {
+                dataframe_2: [],
+                dataframe_3: null,
+                dataframe_5: []
+            }
+        }));
         console.log('Created storage file:', STORAGE_FILE);
     } else {
         console.log('Storage file exists:', STORAGE_FILE);
     }
 } catch (error) {
-    console.error('Error initializing storage file:', error);
+    console.error('Error initializing storage:', error);
 }
 
 // Helper functions for storage
@@ -800,12 +814,19 @@ app.post('/api/hex-results', async (req, res) => {
             dataframe3Keys: results.data?.dataframe_3 ? Object.keys(results.data.dataframe_3) : []
         });
 
+        // Ensure data directory exists
+        const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) {
+            fs.mkdirSync(dataDir, { recursive: true });
+        }
+
         // Save results to file
         await fs.promises.writeFile(STORAGE_FILE, JSON.stringify({
             timestamp: new Date().toISOString(),
             data: results.data
         }));
-        
+
+        console.log('Successfully saved results to:', STORAGE_FILE);
         res.json({ success: true });
     } catch (error) {
         console.error('Error saving hex results:', error);
@@ -826,7 +847,8 @@ app.get('/api/hex-results', async (req, res) => {
 
 async function loadHexResults() {
     try {
-        const resultsPath = path.join(__dirname, 'data', 'hex_results.json');
+        const resultsPath = STORAGE_FILE;
+        console.log('Loading results from:', resultsPath);
         
         // Check if file exists
         if (!fs.existsSync(resultsPath)) {
@@ -844,6 +866,19 @@ async function loadHexResults() {
 
         // Read file using promises
         const fileContent = await fs.promises.readFile(resultsPath, 'utf8');
+        if (!fileContent || fileContent.trim() === '') {
+            console.log('Empty file content');
+            return {
+                fileSize: 0,
+                dataframe2Count: 0,
+                hasDataframe3: false,
+                dataframe5Count: 0,
+                dataframe2: [],
+                dataframe3: null,
+                dataframe5: []
+            };
+        }
+
         const data = JSON.parse(fileContent);
         
         console.log('Successfully loaded results:', {
@@ -890,28 +925,50 @@ app.post('/api/analyze-workspace', async (req, res) => {
         let results = null;
         let attempts = 0;
         const maxAttempts = 5;
+        const retryDelay = 2000; // 2 seconds between retries
         
         while (attempts < maxAttempts) {
             console.log(`Attempt ${attempts + 1}: Loading hex results...`);
             results = await loadHexResults();
             
+            // Log the actual data we received
+            console.log('Loaded data:', {
+                hasDataframe2: !!results.dataframe2?.length,
+                dataframe2Length: results.dataframe2?.length || 0,
+                hasDataframe3: !!results.dataframe3,
+                hasDataframe5: !!results.dataframe5?.length,
+                dataframe5Length: results.dataframe5?.length || 0
+            });
+            
             if (results.dataframe2?.length > 0 && results.dataframe3 && results.dataframe5?.length > 0) {
+                console.log('Successfully loaded complete dataset');
                 break;
             }
             
             attempts++;
             if (attempts < maxAttempts) {
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                console.log(`Waiting ${retryDelay/1000} seconds before next attempt...`);
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
             }
         }
 
         if (!results.dataframe2?.length || !results.dataframe3 || !results.dataframe5?.length) {
             console.error('Failed to load complete dataset:', {
                 hasDataframe2: !!results.dataframe2?.length,
+                dataframe2Length: results.dataframe2?.length || 0,
                 hasDataframe3: !!results.dataframe3,
-                hasDataframe5: !!results.dataframe5?.length
+                hasDataframe5: !!results.dataframe5?.length,
+                dataframe5Length: results.dataframe5?.length || 0
             });
-            return res.status(500).json({ error: 'Failed to load complete dataset after multiple attempts' });
+            return res.status(500).json({ 
+                error: 'Failed to load complete dataset after multiple attempts',
+                details: {
+                    attempts,
+                    hasDataframe2: !!results.dataframe2?.length,
+                    hasDataframe3: !!results.dataframe3,
+                    hasDataframe5: !!results.dataframe5?.length
+                }
+            });
         }
 
         console.log('Successfully loaded data:', {
@@ -935,7 +992,8 @@ app.post('/api/analyze-workspace', async (req, res) => {
         console.error('Error analyzing workspace:', error);
         res.status(500).json({ 
             error: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+            details: error.details || undefined
         });
     }
 });

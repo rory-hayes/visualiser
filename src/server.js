@@ -265,8 +265,11 @@ const __dirname = dirname(__filename);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname))); // This will serve files from the src directory
 
-// Add specific route for visualizations
-app.use('/visualizations', express.static(path.join(__dirname, 'public', 'visualizations')));
+// Add specific route for visualizations with proper MIME type
+app.use('/visualizations', (req, res, next) => {
+    res.set('Content-Type', 'image/svg+xml');
+    next();
+}, express.static(path.join(__dirname, 'public', 'visualizations')));
 
 // Add MIME type for ES modules
 app.use((req, res, next) => {
@@ -280,6 +283,12 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
     console.log('Requested URL:', req.url);
     console.log('Server root directory:', __dirname);
+    if (req.url.includes('visualizations')) {
+        console.log('Visualization request:', {
+            url: req.url,
+            fullPath: path.join(__dirname, 'public', req.url)
+        });
+    }
     next();
 });
 

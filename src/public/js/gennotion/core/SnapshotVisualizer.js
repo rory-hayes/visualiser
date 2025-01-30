@@ -772,43 +772,105 @@ export class SnapshotVisualizer {
         const links = [];
         const nodeMap = new Map();
 
-        // First pass: Create nodes
-        data.forEach(item => {
-            if (!nodeMap.has(item.ID)) {
-                const node = {
-                    id: item.ID,
-                    type: item.TYPE || 'page',
-                    title: item.TITLE,
-                    connections: 0,
-                    x: 0,
-                    y: 0
-                };
-                nodes.push(node);
-                nodeMap.set(item.ID, node);
-            }
-
-            // Add connections based on parent-child relationships
-            if (item.PARENT_ID && nodeMap.has(item.PARENT_ID)) {
-                links.push({
-                    source: item.PARENT_ID,
-                    target: item.ID
-                });
-                nodeMap.get(item.ID).connections++;
-                nodeMap.get(item.PARENT_ID).connections++;
-            }
-
-            // Add connections for collection views
-            if (item.COLLECTION_ID && nodeMap.has(item.COLLECTION_ID)) {
-                links.push({
-                    source: item.COLLECTION_ID,
-                    target: item.ID
-                });
-                nodeMap.get(item.ID).connections++;
-                nodeMap.get(item.COLLECTION_ID).connections++;
-            }
+        console.log('Starting node and link extraction from data:', {
+            dataLength: data?.length || 0
         });
 
-        return { nodes, links };
+        try {
+            // First pass: Create all nodes
+            data.forEach(item => {
+                if (!nodeMap.has(item.ID)) {
+                    const node = {
+                        id: item.ID,
+                        type: item.TYPE || 'page',
+                        title: item.TITLE,
+                        connections: 0,
+                        x: 0,
+                        y: 0
+                    };
+                    nodes.push(node);
+                    nodeMap.set(item.ID, node);
+                }
+
+                // Also create nodes for parents and collections if they don't exist
+                if (item.PARENT_ID && !nodeMap.has(item.PARENT_ID)) {
+                    const parentNode = {
+                        id: item.PARENT_ID,
+                        type: 'page', // Default type for parent
+                        title: 'Parent Page',
+                        connections: 0,
+                        x: 0,
+                        y: 0
+                    };
+                    nodes.push(parentNode);
+                    nodeMap.set(item.PARENT_ID, parentNode);
+                }
+
+                if (item.COLLECTION_ID && !nodeMap.has(item.COLLECTION_ID)) {
+                    const collectionNode = {
+                        id: item.COLLECTION_ID,
+                        type: 'collection',
+                        title: 'Collection',
+                        connections: 0,
+                        x: 0,
+                        y: 0
+                    };
+                    nodes.push(collectionNode);
+                    nodeMap.set(item.COLLECTION_ID, collectionNode);
+                }
+            });
+
+            console.log('Created nodes:', {
+                nodeCount: nodes.length,
+                uniqueNodeTypes: [...new Set(nodes.map(n => n.type))]
+            });
+
+            // Second pass: Create links only between existing nodes
+            data.forEach(item => {
+                // Add parent-child relationship
+                if (item.PARENT_ID && nodeMap.has(item.PARENT_ID) && nodeMap.has(item.ID)) {
+                    links.push({
+                        source: nodeMap.get(item.PARENT_ID),
+                        target: nodeMap.get(item.ID)
+                    });
+                    nodeMap.get(item.ID).connections++;
+                    nodeMap.get(item.PARENT_ID).connections++;
+                }
+
+                // Add collection relationship
+                if (item.COLLECTION_ID && nodeMap.has(item.COLLECTION_ID) && nodeMap.has(item.ID)) {
+                    links.push({
+                        source: nodeMap.get(item.COLLECTION_ID),
+                        target: nodeMap.get(item.ID)
+                    });
+                    nodeMap.get(item.ID).connections++;
+                    nodeMap.get(item.COLLECTION_ID).connections++;
+                }
+            });
+
+            console.log('Created links:', {
+                linkCount: links.length,
+                nodesWithConnections: nodes.filter(n => n.connections > 0).length
+            });
+
+            // Limit the number of nodes and links if necessary
+            if (nodes.length > this.maxNodes) {
+                // Sort nodes by connections and keep the most connected ones
+                nodes.sort((a, b) => b.connections - a.connections);
+                const keptNodes = new Set(nodes.slice(0, this.maxNodes).map(n => n.id));
+                nodes.length = this.maxNodes;
+                
+                // Filter links to only include kept nodes
+                links = links.filter(link => 
+                    keptNodes.has(link.source.id) && keptNodes.has(link.target.id)
+                ).slice(0, this.maxLinks);
+            }
+
+            return { nodes, links };
+        } catch (error) {
+            console.error('Error in extractNodesAndLinks:', error);
+            return { nodes: [], links: [] };
+        }
     }
 
     generateLegend() {

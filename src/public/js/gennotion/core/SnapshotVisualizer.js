@@ -149,8 +149,8 @@ export class SnapshotVisualizer {
             const exists = await fs.promises.access(filePath).then(() => true).catch(() => false);
             console.log(`File saved successfully: ${exists}`);
             
-            // Return the snapshot with the full URL
-            const visualizationUrl = `https://visualiser-xhjh.onrender.com/visualizations/${filename}`;
+            // Return the snapshot with the URL (using just the path)
+            const visualizationUrl = `/visualizations/${filename}`;
             console.log(`Visualization URL: ${visualizationUrl}`);
             
             return {
@@ -184,7 +184,7 @@ export class SnapshotVisualizer {
                 activeNodes: 0,
                 silos: 0
             },
-            visualization: `https://visualiser-xhjh.onrender.com/visualizations/${filename}`
+            visualization: `/visualizations/${filename}`
         };
     }
 

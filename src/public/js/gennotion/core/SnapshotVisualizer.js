@@ -28,27 +28,28 @@ export class SnapshotVisualizer {
 
         this.MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
         
-        // Updated D3 visualization configuration
+        // Updated D3 visualization configuration for large-scale graphs
         this.GRAPH_CONFIG = {
             width: 1200,
             height: 800,
             nodeRadius: {
-                min: 5,
-                max: 20
+                min: 2,  // Smaller nodes
+                max: 8   // Smaller maximum size
             },
             colors: scaleOrdinal(schemeCategory10),
             simulation: {
-                charge: -100,
-                linkDistance: 100,
-                centerForce: 0.5
+                charge: -30,        // Reduced charge for tighter packing
+                linkDistance: 30,   // Shorter links
+                centerForce: 1,     // Stronger center force
+                collideForce: 0.5   // Added collision force
             }
         };
 
         // Update dimensions
         this.width = this.GRAPH_CONFIG.width;
         this.height = this.GRAPH_CONFIG.height;
-        this.maxNodes = 100; // Increased max nodes
-        this.maxLinks = 200; // Increased max links
+        this.maxNodes = 10000;  // Increased to handle full dataset
+        this.maxLinks = 20000;  // Increased for more connections
         this.visualizationsDir = path.join(__dirname, '..', '..', '..', '..', 'public', 'visualizations');
         
         // Ensure visualizations directory exists
@@ -602,13 +603,13 @@ export class SnapshotVisualizer {
     }
 
     calculateNodeRadius(node) {
-        const minConnections = 1;
-        const maxConnections = Math.max(...Array.from(node.connections));
-        const scale = scaleLinear()
-            .domain([minConnections, maxConnections])
-            .range([this.GRAPH_CONFIG.nodeRadius.min, this.GRAPH_CONFIG.nodeRadius.max]);
-        
-        return scale(node.connections || minConnections);
+        // Logarithmic scale for node size based on connections
+        const connections = node.connections || 1;
+        const baseSize = Math.log2(connections + 1) * 0.8;
+        return Math.max(
+            this.GRAPH_CONFIG.nodeRadius.min,
+            Math.min(this.GRAPH_CONFIG.nodeRadius.max, baseSize)
+        );
     }
 
     // Helper method to format metrics for Notion
@@ -687,23 +688,22 @@ export class SnapshotVisualizer {
         });
 
         try {
-            // Extract nodes and links with proper hierarchy
             const { nodes, links } = this.extractNodesAndLinks(data);
-
-            console.log('Extracted graph data:', {
-                nodesCount: nodes.length,
-                linksCount: links.length
-            });
-
-            // Start SVG with proper XML structure and namespace
+            
             let svg = '<?xml version="1.0" encoding="UTF-8"?>\n';
             svg += `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg" version="1.1">`;
-
-            // Add filters first
-            svg += this.addSVGFilters();
+            
+            // Add definitions for gradients and filters
+            svg += `<defs>
+                ${this.addSVGFilters()}
+                <radialGradient id="nodeGradient">
+                    <stop offset="0%" stop-color="#fff" stop-opacity="0.1"/>
+                    <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+                </radialGradient>
+            </defs>`;
             
             // Add white background
-            svg += `<rect width="100%" height="100%" fill="#fff"/>`;
+            svg += `<rect width="100%" height="100%" fill="#f8f9fa"/>`;
 
             if (nodes.length === 0) {
                 svg += this.addNoDataMessage();
@@ -711,113 +711,111 @@ export class SnapshotVisualizer {
                 return svg;
             }
 
-            // Create force simulation
+            // Create force simulation with optimized parameters
             const simulation = forceSimulation(nodes)
-                .force('charge', forceManyBody().strength(-500))
+                .force('charge', forceManyBody()
+                    .strength(d => -30 * Math.sqrt(d.connections || 1)))
                 .force('center', forceCenter(this.width / 2, this.height / 2))
-                .force('link', forceLink(links).distance(100))
-                .force('collide', forceCollide().radius(d => this.calculateNodeRadius(d) * 2));
+                .force('link', forceLink(links)
+                    .id(d => d.id)
+                    .distance(d => 30 + Math.min(20, Math.sqrt(d.source.connections + d.target.connections))))
+                .force('collide', forceCollide()
+                    .radius(d => this.calculateNodeRadius(d) + 1)
+                    .strength(0.5));
 
-            // Run simulation synchronously
+            // Run simulation with more iterations for better layout
             for (let i = 0; i < 300; ++i) simulation.tick();
 
-            // Create a group for all visualization elements
+            // Create main visualization group
             svg += '<g class="visualization">';
 
-            // Draw links first (they should be behind nodes)
+            // Draw links with varying opacity based on connection strength
             links.forEach(link => {
-                if (link.source && link.target && 
-                    typeof link.source.x === 'number' && 
-                    typeof link.source.y === 'number' && 
-                    typeof link.target.x === 'number' && 
-                    typeof link.target.y === 'number') {
-                    
-                    const strokeWidth = link.type === 'parent-child' ? 2 : 1;
-                    const strokeDash = link.type === 'reference' ? '5,5' : 'none';
-                    const strokeOpacity = link.type === 'parent-child' ? 0.8 : 0.4;
-                    
+                if (this.isValidCoordinate(link.source) && this.isValidCoordinate(link.target)) {
+                    const strokeOpacity = Math.min(0.2, 0.1 + (link.value || 1) * 0.02);
                     svg += `<line 
                         x1="${Math.round(link.source.x)}" 
                         y1="${Math.round(link.source.y)}" 
                         x2="${Math.round(link.target.x)}" 
                         y2="${Math.round(link.target.y)}" 
                         stroke="#999" 
-                        stroke-width="${strokeWidth}"
+                        stroke-width="1"
                         stroke-opacity="${strokeOpacity}"
-                        stroke-dasharray="${strokeDash}"
                     />`;
                 }
             });
 
-            // Draw nodes
+            // Draw nodes with size based on connections and type
             nodes.forEach(node => {
-                if (typeof node.x === 'number' && typeof node.y === 'number') {
+                if (this.isValidCoordinate(node)) {
                     const radius = this.calculateNodeRadius(node);
                     const color = this.getNodeColor(node.type);
-                    const safeTitle = (node.title || '').replace(/[<>&"']/g, '').substring(0, 20);
+                    const opacity = Math.min(0.8, 0.3 + (node.connections || 1) * 0.1);
                     
                     svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">`;
                     svg += `<circle 
                         r="${radius}" 
                         fill="${color}"
+                        fill-opacity="${opacity}"
                         stroke="#fff"
-                        stroke-width="2"
-                        filter="url(#shadow)"
+                        stroke-width="0.5"
                     />`;
 
-                    if (node.type === 'collection' || node.type === 'database' || node.connections > 3) {
-                        const fontSize = Math.max(8, Math.min(12, radius / 2));
+                    // Only add labels for significant nodes
+                    if (node.connections > 10 || node.type === 'database' || node.type === 'collection') {
+                        const fontSize = Math.max(6, Math.min(8, radius));
                         svg += `<text 
                             y="${radius + fontSize}"
                             text-anchor="middle" 
-                            font-size="${fontSize}"
-                            font-weight="${node.type === 'database' ? 'bold' : 'normal'}"
+                            font-size="${fontSize}px"
                             fill="#666"
-                        >${safeTitle}</text>`;
+                            fill-opacity="0.8"
+                        >${node.title.substring(0, 15)}</text>`;
                     }
                     svg += '</g>';
                 }
             });
 
-            svg += '</g>'; // Close visualization group
+            svg += '</g>';
 
-            // Add title with proper escaping
-            const safeTitle = (title || 'Workspace Visualization').replace(/[<>&"']/g, '');
-            svg += `<text 
-                x="${this.width/2}" 
-                y="30" 
-                text-anchor="middle" 
-                font-size="20" 
-                font-weight="bold" 
-                fill="#333"
-            >${safeTitle}</text>`;
-
-            // Add legend
+            // Add title and stats with proper styling
+            svg += this.addTitleAndStats(title, nodes.length, links.length);
+            
+            // Add minimal legend
             svg += this.generateLegend();
 
-            // Add stats
-            svg += `<text 
-                x="10" 
-                y="${this.height - 10}" 
-                font-size="12" 
-                fill="#666"
-            >Nodes: ${nodes.length} | Links: ${links.length}</text>`;
-
-            // Close SVG tag
             svg += '</svg>';
-            
-            // Validate basic XML structure
-            if (!svg.includes('</svg>') || (svg.match(/<svg/g) || []).length !== 1) {
-                console.error('Invalid SVG structure generated');
-                return this.generateEmptySVG();
-            }
-
             return svg;
 
         } catch (error) {
             console.error('Error generating SVG:', error);
             return this.generateEmptySVG();
         }
+    }
+
+    isValidCoordinate(point) {
+        return point && 
+               typeof point.x === 'number' && !isNaN(point.x) &&
+               typeof point.y === 'number' && !isNaN(point.y);
+    }
+
+    addTitleAndStats(title, nodeCount, linkCount) {
+        return `
+            <text 
+                x="${this.width/2}" 
+                y="30" 
+                text-anchor="middle" 
+                font-size="20" 
+                font-weight="bold" 
+                fill="#333"
+            >${title}</text>
+            <text 
+                x="10" 
+                y="${this.height - 10}" 
+                font-size="12" 
+                fill="#666"
+            >Nodes: ${nodeCount.toLocaleString()} | Links: ${linkCount.toLocaleString()}</text>
+        `;
     }
 
     addNoDataMessage() {

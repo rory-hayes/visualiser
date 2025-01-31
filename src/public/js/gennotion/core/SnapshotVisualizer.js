@@ -707,24 +707,25 @@ export class SnapshotVisualizer {
                 return svg;
             }
 
-            // Create force simulation
-            const simulation = forceSimulation(nodes)
-                .force('charge', forceManyBody().strength(-300))
-                .force('center', forceCenter(this.width / 2, this.height / 2))
-                .force('link', forceLink(links).distance(100))
-                .force('collide', forceCollide(30));
+            // Position nodes in a grid layout instead of using force simulation
+            const gridSize = Math.ceil(Math.sqrt(nodes.length));
+            const cellWidth = this.width / (gridSize + 1);
+            const cellHeight = this.height / (gridSize + 1);
 
-            // Run simulation manually
-            for (let i = 0; i < 300; ++i) {
-                simulation.tick();
-            }
-
-            // Stop simulation
-            simulation.stop();
+            nodes.forEach((node, index) => {
+                const row = Math.floor(index / gridSize);
+                const col = index % gridSize;
+                node.x = cellWidth + (col * cellWidth);
+                node.y = cellHeight + (row * cellHeight);
+            });
 
             // Draw links
             links.forEach(link => {
-                if (link.source && link.target) {
+                if (link.source && link.target && 
+                    typeof link.source.x === 'number' && 
+                    typeof link.source.y === 'number' &&
+                    typeof link.target.x === 'number' && 
+                    typeof link.target.y === 'number') {
                     svg += `<line 
                         x1="${Math.round(link.source.x)}" 
                         y1="${Math.round(link.source.y)}" 
@@ -739,27 +740,32 @@ export class SnapshotVisualizer {
 
             // Draw nodes
             nodes.forEach(node => {
-                const radius = Math.max(5, Math.min(20, 5 + (node.connections || 0)));
-                const color = this.getNodeColor(node.type);
-                
-                svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">
-                    <circle 
-                        r="${radius}" 
-                        fill="${color}"
-                        stroke="#fff"
-                        stroke-width="1.5"
-                    />`;
+                if (typeof node.x === 'number' && typeof node.y === 'number') {
+                    const radius = Math.max(5, Math.min(20, 5 + (node.connections || 0)));
+                    const color = this.getNodeColor(node.type || 'default');
+                    
+                    svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">
+                        <circle 
+                            r="${radius}" 
+                            fill="${color}"
+                            stroke="#fff"
+                            stroke-width="1.5"
+                        />`;
 
-                if (node.type === 'collection' || (node.connections || 0) > 3) {
-                    svg += `<text 
-                        y="${radius + 8}"
-                        text-anchor="middle" 
-                        font-size="10" 
-                        fill="#666"
-                    >${(node.title || '').substring(0, 20)}</text>`;
+                    if (node.type === 'collection' || (node.connections || 0) > 3) {
+                        const title = (node.title || '').substring(0, 20);
+                        if (title) {
+                            svg += `<text 
+                                y="${radius + 8}"
+                                text-anchor="middle" 
+                                font-size="10" 
+                                fill="#666"
+                            >${title}</text>`;
+                        }
+                    }
+
+                    svg += '</g>';
                 }
-
-                svg += '</g>';
             });
 
             // Add title
@@ -770,7 +776,7 @@ export class SnapshotVisualizer {
                 font-size="20" 
                 font-weight="bold" 
                 fill="#333"
-            >${title}</text>`;
+            >${title || 'Workspace Visualization'}</text>`;
 
             // Add legend
             svg += this.generateLegend();
@@ -809,7 +815,7 @@ export class SnapshotVisualizer {
         }
 
         const nodes = new Map();
-        const links = [];
+        let links = []; // Changed from const to let
 
         try {
             // First pass: Create nodes
@@ -876,14 +882,31 @@ export class SnapshotVisualizer {
 
             // Convert nodes Map to array and limit if necessary
             let nodesArray = Array.from(nodes.values());
+            
+            // Sort nodes by connections before limiting
+            nodesArray.sort((a, b) => (b.connections || 0) - (a.connections || 0));
+            
+            // Limit nodes if necessary
             if (nodesArray.length > this.maxNodes) {
-                nodesArray.sort((a, b) => (b.connections || 0) - (a.connections || 0));
                 nodesArray = nodesArray.slice(0, this.maxNodes);
                 const nodeIds = new Set(nodesArray.map(n => n.id));
+                // Filter links to only include connections between kept nodes
                 links = links.filter(link => 
                     nodeIds.has(link.source.id) && nodeIds.has(link.target.id)
-                ).slice(0, this.maxLinks);
+                );
             }
+
+            // Limit links if necessary
+            if (links.length > this.maxLinks) {
+                links = links.slice(0, this.maxLinks);
+            }
+
+            console.log('Extracted graph data:', {
+                originalNodes: nodes.size,
+                finalNodes: nodesArray.length,
+                originalLinks: links.length,
+                finalLinks: links.length
+            });
 
             return { nodes: nodesArray, links };
         } catch (error) {

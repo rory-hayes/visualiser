@@ -686,7 +686,7 @@ export class SnapshotVisualizer {
         });
 
         // Create SVG content with improved visualization
-        let svg = `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.width} ${this.height}">`;
+        let svg = `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">`;
         
         // Add white background
         svg += `<rect width="100%" height="100%" fill="#fff"/>`;
@@ -699,54 +699,79 @@ export class SnapshotVisualizer {
             linksCount: links.length
         });
 
+        if (nodes.length === 0) {
+            // If no nodes, show "No data available" message
+            svg += `<text 
+                x="${this.width/2}" 
+                y="${this.height/2}" 
+                text-anchor="middle" 
+                font-size="24" 
+                fill="#666"
+            >No data available</text>`;
+            svg += '</svg>';
+            return svg;
+        }
+
         // Set up force simulation with improved parameters
         const simulation = forceSimulation(nodes)
-            .force('charge', forceManyBody().strength(this.GRAPH_CONFIG.simulation.charge))
-            .force('center', forceCenter(this.width / 2, this.height / 2).strength(this.GRAPH_CONFIG.simulation.centerForce))
-            .force('link', forceLink(links).distance(this.GRAPH_CONFIG.simulation.linkDistance))
+            .force('charge', forceManyBody().strength(-300))
+            .force('center', forceCenter(this.width / 2, this.height / 2))
+            .force('link', forceLink(links).id(d => d.id).distance(100))
             .force('collide', forceCollide(30));
 
         // Run simulation synchronously
-        for (let i = 0; i < 100; ++i) simulation.tick();
+        for (let i = 0; i < 300; ++i) simulation.tick();
 
-        // Add links
+        // Create a group for the visualization
+        svg += `<g class="visualization">`;
+
+        // Add links first (so they're behind nodes)
         links.forEach(link => {
-            svg += `<line 
-                x1="${Math.round(link.source.x)}" 
-                y1="${Math.round(link.source.y)}" 
-                x2="${Math.round(link.target.x)}" 
-                y2="${Math.round(link.target.y)}" 
-                stroke="#999" 
-                stroke-width="1"
-            />`;
+            const sourceNode = nodes.find(n => n.id === link.source.id);
+            const targetNode = nodes.find(n => n.id === link.target.id);
+            
+            if (sourceNode && targetNode) {
+                svg += `<line 
+                    x1="${Math.round(sourceNode.x)}" 
+                    y1="${Math.round(sourceNode.y)}" 
+                    x2="${Math.round(targetNode.x)}" 
+                    y2="${Math.round(targetNode.y)}" 
+                    stroke="#999" 
+                    stroke-width="1"
+                    stroke-opacity="0.6"
+                />`;
+            }
         });
 
         // Add nodes with improved visualization
         nodes.forEach(node => {
-            const radius = this.calculateNodeRadius(node);
+            const radius = Math.max(5, Math.min(20, 5 + node.connections));
             const color = this.getNodeColor(node.type);
             
             // Add node circle
-            svg += `<circle 
-                cx="${Math.round(node.x)}" 
-                cy="${Math.round(node.y)}" 
-                r="${radius}" 
-                fill="${color}"
-                stroke="#fff"
-                stroke-width="1.5"
-            />`;
+            svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">
+                <circle 
+                    r="${radius}" 
+                    fill="${color}"
+                    stroke="#fff"
+                    stroke-width="1.5"
+                />`;
 
             // Add node label if it's a collection or has many connections
-            if (node.type === 'collection' || node.connections > 5) {
+            if (node.type === 'collection' || node.connections > 3) {
                 svg += `<text 
-                    x="${Math.round(node.x)}" 
-                    y="${Math.round(node.y + radius + 10)}"
+                    y="${radius + 8}"
                     text-anchor="middle" 
                     font-size="8" 
                     fill="#666"
-                >${node.title || node.type}</text>`;
+                    dy=".35em"
+                >${node.title.substring(0, 20)}</text>`;
             }
+
+            svg += '</g>';
         });
+
+        svg += '</g>';
 
         // Add title with better styling
         svg += `
@@ -763,6 +788,16 @@ export class SnapshotVisualizer {
         // Add legend
         svg += this.generateLegend();
 
+        // Add node count
+        svg += `
+            <text 
+                x="10" 
+                y="${this.height - 10}" 
+                font-size="12" 
+                fill="#666"
+            >Nodes: ${nodes.length} | Links: ${links.length}</text>
+        `;
+
         svg += '</svg>';
         return svg;
     }
@@ -772,12 +807,8 @@ export class SnapshotVisualizer {
         const links = [];
         const nodeMap = new Map();
 
-        console.log('Starting node and link extraction from data:', {
-            dataLength: data?.length || 0
-        });
-
         try {
-            // First pass: Create nodes from pages
+            // First pass: Create nodes
             data.forEach(item => {
                 if (!item.ID) return;
 
@@ -795,7 +826,7 @@ export class SnapshotVisualizer {
                     nodeMap.set(item.ID, node);
                 }
 
-                // Create parent node if it exists and doesn't already exist
+                // Create parent node if it exists
                 if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && !nodeMap.has(item.PARENT_ID)) {
                     const parentNode = {
                         id: item.PARENT_ID,
@@ -808,63 +839,38 @@ export class SnapshotVisualizer {
                     nodes.push(parentNode);
                     nodeMap.set(item.PARENT_ID, parentNode);
                 }
-
-                // Create collection node if it exists and doesn't already exist
-                if (item.COLLECTION_ID && !nodeMap.has(item.COLLECTION_ID)) {
-                    const collectionNode = {
-                        id: item.COLLECTION_ID,
-                        type: 'collection',
-                        title: 'Collection',
-                        connections: 0,
-                        x: Math.random() * this.width,
-                        y: Math.random() * this.height
-                    };
-                    nodes.push(collectionNode);
-                    nodeMap.set(item.COLLECTION_ID, collectionNode);
-                }
             });
 
             // Second pass: Create links
             data.forEach(item => {
                 if (!item.ID) return;
 
-                // Create parent-child link
+                // Add parent-child link
                 if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && 
                     nodeMap.has(item.PARENT_ID) && nodeMap.has(item.ID)) {
                     links.push({
-                        source: item.PARENT_ID,
-                        target: item.ID,
+                        source: nodeMap.get(item.PARENT_ID),
+                        target: nodeMap.get(item.ID),
                         value: 1
                     });
                     nodeMap.get(item.ID).connections++;
                     nodeMap.get(item.PARENT_ID).connections++;
                 }
 
-                // Create collection link
-                if (item.COLLECTION_ID && nodeMap.has(item.COLLECTION_ID) && nodeMap.has(item.ID)) {
-                    links.push({
-                        source: item.COLLECTION_ID,
-                        target: item.ID,
-                        value: 1
-                    });
-                    nodeMap.get(item.ID).connections++;
-                    nodeMap.get(item.COLLECTION_ID).connections++;
-                }
-
-                // Create links from child IDs if they exist
+                // Add links from child IDs if they exist
                 if (item.CHILD_IDS) {
                     let childIds = [];
                     try {
                         childIds = JSON.parse(item.CHILD_IDS);
                     } catch (e) {
-                        console.warn('Could not parse CHILD_IDS:', item.CHILD_IDS);
+                        // Skip if can't parse child IDs
                     }
                     
                     childIds.forEach(childId => {
                         if (nodeMap.has(childId) && nodeMap.has(item.ID)) {
                             links.push({
-                                source: item.ID,
-                                target: childId,
+                                source: nodeMap.get(item.ID),
+                                target: nodeMap.get(childId),
                                 value: 1
                             });
                             nodeMap.get(item.ID).connections++;
@@ -874,22 +880,16 @@ export class SnapshotVisualizer {
                 }
             });
 
-            console.log('Extracted graph data:', {
-                nodesCount: nodes.length,
-                linksCount: links.length,
-                nodeTypes: [...new Set(nodes.map(n => n.type))]
-            });
-
             // Limit nodes and links if necessary
             if (nodes.length > this.maxNodes) {
                 // Sort nodes by connections and keep the most connected ones
                 nodes.sort((a, b) => b.connections - a.connections);
-                const keptNodeIds = new Set(nodes.slice(0, this.maxNodes).map(n => n.id));
+                const keptNodes = new Set(nodes.slice(0, this.maxNodes));
                 nodes.length = this.maxNodes;
 
                 // Keep only links between kept nodes
                 links = links.filter(link => 
-                    keptNodeIds.has(link.source) && keptNodeIds.has(link.target)
+                    keptNodes.has(link.source) && keptNodes.has(link.target)
                 ).slice(0, this.maxLinks);
             }
 

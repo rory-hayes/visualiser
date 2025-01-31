@@ -777,92 +777,119 @@ export class SnapshotVisualizer {
         });
 
         try {
-            // First pass: Create all nodes
+            // First pass: Create nodes from pages
             data.forEach(item => {
+                if (!item.ID) return;
+
+                // Create node if it doesn't exist
                 if (!nodeMap.has(item.ID)) {
                     const node = {
                         id: item.ID,
                         type: item.TYPE || 'page',
-                        title: item.TITLE,
+                        title: item.TITLE || item.TEXT || 'Untitled',
                         connections: 0,
-                        x: 0,
-                        y: 0
+                        x: Math.random() * this.width,
+                        y: Math.random() * this.height
                     };
                     nodes.push(node);
                     nodeMap.set(item.ID, node);
                 }
 
-                // Also create nodes for parents and collections if they don't exist
-                if (item.PARENT_ID && !nodeMap.has(item.PARENT_ID)) {
+                // Create parent node if it exists and doesn't already exist
+                if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && !nodeMap.has(item.PARENT_ID)) {
                     const parentNode = {
                         id: item.PARENT_ID,
-                        type: 'page', // Default type for parent
+                        type: 'page',
                         title: 'Parent Page',
                         connections: 0,
-                        x: 0,
-                        y: 0
+                        x: Math.random() * this.width,
+                        y: Math.random() * this.height
                     };
                     nodes.push(parentNode);
                     nodeMap.set(item.PARENT_ID, parentNode);
                 }
 
+                // Create collection node if it exists and doesn't already exist
                 if (item.COLLECTION_ID && !nodeMap.has(item.COLLECTION_ID)) {
                     const collectionNode = {
                         id: item.COLLECTION_ID,
                         type: 'collection',
                         title: 'Collection',
                         connections: 0,
-                        x: 0,
-                        y: 0
+                        x: Math.random() * this.width,
+                        y: Math.random() * this.height
                     };
                     nodes.push(collectionNode);
                     nodeMap.set(item.COLLECTION_ID, collectionNode);
                 }
             });
 
-            console.log('Created nodes:', {
-                nodeCount: nodes.length,
-                uniqueNodeTypes: [...new Set(nodes.map(n => n.type))]
-            });
-
-            // Second pass: Create links only between existing nodes
+            // Second pass: Create links
             data.forEach(item => {
-                // Add parent-child relationship
-                if (item.PARENT_ID && nodeMap.has(item.PARENT_ID) && nodeMap.has(item.ID)) {
+                if (!item.ID) return;
+
+                // Create parent-child link
+                if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && 
+                    nodeMap.has(item.PARENT_ID) && nodeMap.has(item.ID)) {
                     links.push({
-                        source: nodeMap.get(item.PARENT_ID),
-                        target: nodeMap.get(item.ID)
+                        source: item.PARENT_ID,
+                        target: item.ID,
+                        value: 1
                     });
                     nodeMap.get(item.ID).connections++;
                     nodeMap.get(item.PARENT_ID).connections++;
                 }
 
-                // Add collection relationship
+                // Create collection link
                 if (item.COLLECTION_ID && nodeMap.has(item.COLLECTION_ID) && nodeMap.has(item.ID)) {
                     links.push({
-                        source: nodeMap.get(item.COLLECTION_ID),
-                        target: nodeMap.get(item.ID)
+                        source: item.COLLECTION_ID,
+                        target: item.ID,
+                        value: 1
                     });
                     nodeMap.get(item.ID).connections++;
                     nodeMap.get(item.COLLECTION_ID).connections++;
                 }
+
+                // Create links from child IDs if they exist
+                if (item.CHILD_IDS) {
+                    let childIds = [];
+                    try {
+                        childIds = JSON.parse(item.CHILD_IDS);
+                    } catch (e) {
+                        console.warn('Could not parse CHILD_IDS:', item.CHILD_IDS);
+                    }
+                    
+                    childIds.forEach(childId => {
+                        if (nodeMap.has(childId) && nodeMap.has(item.ID)) {
+                            links.push({
+                                source: item.ID,
+                                target: childId,
+                                value: 1
+                            });
+                            nodeMap.get(item.ID).connections++;
+                            nodeMap.get(childId).connections++;
+                        }
+                    });
+                }
             });
 
-            console.log('Created links:', {
-                linkCount: links.length,
-                nodesWithConnections: nodes.filter(n => n.connections > 0).length
+            console.log('Extracted graph data:', {
+                nodesCount: nodes.length,
+                linksCount: links.length,
+                nodeTypes: [...new Set(nodes.map(n => n.type))]
             });
 
-            // Limit the number of nodes and links if necessary
+            // Limit nodes and links if necessary
             if (nodes.length > this.maxNodes) {
                 // Sort nodes by connections and keep the most connected ones
                 nodes.sort((a, b) => b.connections - a.connections);
-                const keptNodes = new Set(nodes.slice(0, this.maxNodes).map(n => n.id));
+                const keptNodeIds = new Set(nodes.slice(0, this.maxNodes).map(n => n.id));
                 nodes.length = this.maxNodes;
-                
-                // Filter links to only include kept nodes
+
+                // Keep only links between kept nodes
                 links = links.filter(link => 
-                    keptNodes.has(link.source.id) && keptNodes.has(link.target.id)
+                    keptNodeIds.has(link.source) && keptNodeIds.has(link.target)
                 ).slice(0, this.maxLinks);
             }
 

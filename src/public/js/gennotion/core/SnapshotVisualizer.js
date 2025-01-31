@@ -681,163 +681,163 @@ export class SnapshotVisualizer {
 
     generateSVG(data, connections, title) {
         console.log('Generating SVG with:', {
-            nodesCount: data?.length || 0,
+            dataLength: data?.length || 0,
+            connectionsLength: connections?.length || 0,
             title
         });
 
-        // Create SVG content with improved visualization
+        // Create SVG content
         let svg = `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">`;
         
         // Add white background
         svg += `<rect width="100%" height="100%" fill="#fff"/>`;
 
-        // Extract nodes and links from dataframe_2
-        const { nodes, links } = this.extractNodesAndLinks(data);
+        try {
+            // Extract nodes and links
+            const { nodes, links } = this.extractNodesAndLinks(data);
 
-        console.log('Extracted graph data:', {
-            nodesCount: nodes.length,
-            linksCount: links.length
-        });
+            console.log('Extracted graph data:', {
+                nodesCount: nodes.length,
+                linksCount: links.length
+            });
 
-        if (nodes.length === 0) {
-            // If no nodes, show "No data available" message
+            if (nodes.length === 0) {
+                svg += this.addNoDataMessage();
+                svg += '</svg>';
+                return svg;
+            }
+
+            // Create force simulation
+            const simulation = forceSimulation(nodes)
+                .force('charge', forceManyBody().strength(-300))
+                .force('center', forceCenter(this.width / 2, this.height / 2))
+                .force('link', forceLink(links).distance(100))
+                .force('collide', forceCollide(30));
+
+            // Run simulation manually
+            for (let i = 0; i < 300; ++i) {
+                simulation.tick();
+            }
+
+            // Stop simulation
+            simulation.stop();
+
+            // Draw links
+            links.forEach(link => {
+                if (link.source && link.target) {
+                    svg += `<line 
+                        x1="${Math.round(link.source.x)}" 
+                        y1="${Math.round(link.source.y)}" 
+                        x2="${Math.round(link.target.x)}" 
+                        y2="${Math.round(link.target.y)}" 
+                        stroke="#999" 
+                        stroke-width="1.5"
+                        stroke-opacity="0.6"
+                    />`;
+                }
+            });
+
+            // Draw nodes
+            nodes.forEach(node => {
+                const radius = Math.max(5, Math.min(20, 5 + (node.connections || 0)));
+                const color = this.getNodeColor(node.type);
+                
+                svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">
+                    <circle 
+                        r="${radius}" 
+                        fill="${color}"
+                        stroke="#fff"
+                        stroke-width="1.5"
+                    />`;
+
+                if (node.type === 'collection' || (node.connections || 0) > 3) {
+                    svg += `<text 
+                        y="${radius + 8}"
+                        text-anchor="middle" 
+                        font-size="10" 
+                        fill="#666"
+                    >${(node.title || '').substring(0, 20)}</text>`;
+                }
+
+                svg += '</g>';
+            });
+
+            // Add title
             svg += `<text 
-                x="${this.width/2}" 
-                y="${this.height/2}" 
-                text-anchor="middle" 
-                font-size="24" 
-                fill="#666"
-            >No data available</text>`;
-            svg += '</svg>';
-            return svg;
-        }
-
-        // Set up force simulation with improved parameters
-        const simulation = forceSimulation(nodes)
-            .force('charge', forceManyBody().strength(-300))
-            .force('center', forceCenter(this.width / 2, this.height / 2))
-            .force('link', forceLink(links).id(d => d.id).distance(100))
-            .force('collide', forceCollide(30));
-
-        // Run simulation synchronously
-        for (let i = 0; i < 300; ++i) simulation.tick();
-
-        // Create a group for the visualization
-        svg += `<g class="visualization">`;
-
-        // Add links first (so they're behind nodes)
-        links.forEach(link => {
-            const sourceNode = nodes.find(n => n.id === link.source.id);
-            const targetNode = nodes.find(n => n.id === link.target.id);
-            
-            if (sourceNode && targetNode) {
-                svg += `<line 
-                    x1="${Math.round(sourceNode.x)}" 
-                    y1="${Math.round(sourceNode.y)}" 
-                    x2="${Math.round(targetNode.x)}" 
-                    y2="${Math.round(targetNode.y)}" 
-                    stroke="#999" 
-                    stroke-width="1"
-                    stroke-opacity="0.6"
-                />`;
-            }
-        });
-
-        // Add nodes with improved visualization
-        nodes.forEach(node => {
-            const radius = Math.max(5, Math.min(20, 5 + node.connections));
-            const color = this.getNodeColor(node.type);
-            
-            // Add node circle
-            svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">
-                <circle 
-                    r="${radius}" 
-                    fill="${color}"
-                    stroke="#fff"
-                    stroke-width="1.5"
-                />`;
-
-            // Add node label if it's a collection or has many connections
-            if (node.type === 'collection' || node.connections > 3) {
-                svg += `<text 
-                    y="${radius + 8}"
-                    text-anchor="middle" 
-                    font-size="8" 
-                    fill="#666"
-                    dy=".35em"
-                >${node.title.substring(0, 20)}</text>`;
-            }
-
-            svg += '</g>';
-        });
-
-        svg += '</g>';
-
-        // Add title with better styling
-        svg += `
-            <text 
                 x="${this.width/2}" 
                 y="30" 
                 text-anchor="middle" 
                 font-size="20" 
                 font-weight="bold" 
                 fill="#333"
-            >${title}</text>
-        `;
+            >${title}</text>`;
 
-        // Add legend
-        svg += this.generateLegend();
+            // Add legend
+            svg += this.generateLegend();
 
-        // Add node count
-        svg += `
-            <text 
+            // Add stats
+            svg += `<text 
                 x="10" 
                 y="${this.height - 10}" 
                 font-size="12" 
                 fill="#666"
-            >Nodes: ${nodes.length} | Links: ${links.length}</text>
-        `;
+            >Nodes: ${nodes.length} | Links: ${links.length}</text>`;
+
+        } catch (error) {
+            console.error('Error generating SVG:', error);
+            svg += this.addNoDataMessage();
+        }
 
         svg += '</svg>';
         return svg;
     }
 
+    addNoDataMessage() {
+        return `<text 
+            x="${this.width/2}" 
+            y="${this.height/2}" 
+            text-anchor="middle" 
+            font-size="24" 
+            fill="#666"
+        >No data available</text>`;
+    }
+
     extractNodesAndLinks(data) {
-        const nodes = [];
+        if (!Array.isArray(data)) {
+            console.error('Invalid data format:', data);
+            return { nodes: [], links: [] };
+        }
+
+        const nodes = new Map();
         const links = [];
-        const nodeMap = new Map();
 
         try {
             // First pass: Create nodes
             data.forEach(item => {
                 if (!item.ID) return;
 
-                // Create node if it doesn't exist
-                if (!nodeMap.has(item.ID)) {
-                    const node = {
+                // Add main node
+                if (!nodes.has(item.ID)) {
+                    nodes.set(item.ID, {
                         id: item.ID,
                         type: item.TYPE || 'page',
                         title: item.TITLE || item.TEXT || 'Untitled',
                         connections: 0,
                         x: Math.random() * this.width,
                         y: Math.random() * this.height
-                    };
-                    nodes.push(node);
-                    nodeMap.set(item.ID, node);
+                    });
                 }
 
-                // Create parent node if it exists
-                if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && !nodeMap.has(item.PARENT_ID)) {
-                    const parentNode = {
+                // Add parent node if needed
+                if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && !nodes.has(item.PARENT_ID)) {
+                    nodes.set(item.PARENT_ID, {
                         id: item.PARENT_ID,
                         type: 'page',
                         title: 'Parent Page',
                         connections: 0,
                         x: Math.random() * this.width,
                         y: Math.random() * this.height
-                    };
-                    nodes.push(parentNode);
-                    nodeMap.set(item.PARENT_ID, parentNode);
+                    });
                 }
             });
 
@@ -845,55 +845,47 @@ export class SnapshotVisualizer {
             data.forEach(item => {
                 if (!item.ID) return;
 
-                // Add parent-child link
+                // Parent-child link
                 if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && 
-                    nodeMap.has(item.PARENT_ID) && nodeMap.has(item.ID)) {
-                    links.push({
-                        source: nodeMap.get(item.PARENT_ID),
-                        target: nodeMap.get(item.ID),
-                        value: 1
-                    });
-                    nodeMap.get(item.ID).connections++;
-                    nodeMap.get(item.PARENT_ID).connections++;
+                    nodes.has(item.PARENT_ID) && nodes.has(item.ID)) {
+                    const source = nodes.get(item.PARENT_ID);
+                    const target = nodes.get(item.ID);
+                    links.push({ source, target });
+                    source.connections = (source.connections || 0) + 1;
+                    target.connections = (target.connections || 0) + 1;
                 }
 
-                // Add links from child IDs if they exist
+                // Child links
                 if (item.CHILD_IDS) {
-                    let childIds = [];
                     try {
-                        childIds = JSON.parse(item.CHILD_IDS);
+                        const childIds = JSON.parse(item.CHILD_IDS);
+                        childIds.forEach(childId => {
+                            if (nodes.has(childId)) {
+                                const source = nodes.get(item.ID);
+                                const target = nodes.get(childId);
+                                links.push({ source, target });
+                                source.connections = (source.connections || 0) + 1;
+                                target.connections = (target.connections || 0) + 1;
+                            }
+                        });
                     } catch (e) {
-                        // Skip if can't parse child IDs
+                        console.warn('Could not parse CHILD_IDS:', item.CHILD_IDS);
                     }
-                    
-                    childIds.forEach(childId => {
-                        if (nodeMap.has(childId) && nodeMap.has(item.ID)) {
-                            links.push({
-                                source: nodeMap.get(item.ID),
-                                target: nodeMap.get(childId),
-                                value: 1
-                            });
-                            nodeMap.get(item.ID).connections++;
-                            nodeMap.get(childId).connections++;
-                        }
-                    });
                 }
             });
 
-            // Limit nodes and links if necessary
-            if (nodes.length > this.maxNodes) {
-                // Sort nodes by connections and keep the most connected ones
-                nodes.sort((a, b) => b.connections - a.connections);
-                const keptNodes = new Set(nodes.slice(0, this.maxNodes));
-                nodes.length = this.maxNodes;
-
-                // Keep only links between kept nodes
+            // Convert nodes Map to array and limit if necessary
+            let nodesArray = Array.from(nodes.values());
+            if (nodesArray.length > this.maxNodes) {
+                nodesArray.sort((a, b) => (b.connections || 0) - (a.connections || 0));
+                nodesArray = nodesArray.slice(0, this.maxNodes);
+                const nodeIds = new Set(nodesArray.map(n => n.id));
                 links = links.filter(link => 
-                    keptNodes.has(link.source) && keptNodes.has(link.target)
+                    nodeIds.has(link.source.id) && nodeIds.has(link.target.id)
                 ).slice(0, this.maxLinks);
             }
 
-            return { nodes, links };
+            return { nodes: nodesArray, links };
         } catch (error) {
             console.error('Error in extractNodesAndLinks:', error);
             return { nodes: [], links: [] };

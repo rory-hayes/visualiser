@@ -840,101 +840,112 @@ export class SnapshotVisualizer {
         let links = [];
 
         try {
-            // First pass: Create all nodes
+            // First pass: Create nodes
+            console.log('First pass: Creating nodes from data length:', data.length);
             data.forEach(item => {
-                if (!item.ID) return;
+                // Skip items without ID
+                if (!item.ID) {
+                    console.log('Skipping item without ID:', item);
+                    return;
+                }
 
-                // Add the main node
+                // Create the main node if it doesn't exist
                 if (!nodes.has(item.ID)) {
+                    const nodeType = this.determineNodeType(item);
                     nodes.set(item.ID, {
                         id: item.ID,
-                        type: this.determineNodeType(item),
+                        type: nodeType,
                         title: item.TITLE || item.TEXT || 'Untitled',
                         connections: 0,
-                        depth: item.DEPTH || 0,
-                        hasChildren: item.CHILD_IDS ? JSON.parse(item.CHILD_IDS || '[]').length > 0 : false
+                        depth: parseInt(item.DEPTH) || 0,
+                        x: Math.random() * this.width,  // Random initial position
+                        y: Math.random() * this.height,
+                        hasChildren: false,
+                        parentId: item.PARENT_ID,
+                        collectionId: item.COLLECTION_ID,
+                        childIds: item.CHILD_IDS ? JSON.parse(item.CHILD_IDS || '[]') : []
                     });
                 }
 
-                // Add parent node if it exists
-                if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && !nodes.has(item.PARENT_ID)) {
-                    nodes.set(item.PARENT_ID, {
-                        id: item.PARENT_ID,
-                        type: 'page',
-                        title: 'Parent Page',
+                // Create collection node if it exists and doesn't already exist
+                if (item.COLLECTION_ID && !nodes.has(item.COLLECTION_ID)) {
+                    nodes.set(item.COLLECTION_ID, {
+                        id: item.COLLECTION_ID,
+                        type: 'collection',
+                        title: 'Collection',
                         connections: 0,
-                        depth: (item.DEPTH || 0) - 1,
-                        hasChildren: true
+                        depth: (parseInt(item.DEPTH) || 0) - 1,
+                        x: Math.random() * this.width,
+                        y: Math.random() * this.height
                     });
                 }
             });
 
-            // Second pass: Create hierarchical links
+            // Second pass: Create links
+            console.log('Second pass: Creating links');
             data.forEach(item => {
-                if (!item.ID) return;
+                const sourceNode = nodes.get(item.ID);
+                if (!sourceNode) return;
 
-                // Parent-child relationships
-                if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && 
-                    nodes.has(item.PARENT_ID) && nodes.has(item.ID)) {
-                    const source = nodes.get(item.PARENT_ID);
-                    const target = nodes.get(item.ID);
-                    links.push({ 
-                        source, 
-                        target,
+                // Parent-child relationship
+                if (item.PARENT_ID && item.PARENT_ID !== item.SPACE_ID && nodes.has(item.PARENT_ID)) {
+                    const parentNode = nodes.get(item.PARENT_ID);
+                    links.push({
+                        source: parentNode,
+                        target: sourceNode,
                         type: 'parent-child'
                     });
-                    source.connections++;
-                    target.connections++;
+                    parentNode.connections++;
+                    sourceNode.connections++;
                 }
 
-                // Collection relationships
+                // Collection relationship
                 if (item.COLLECTION_ID && nodes.has(item.COLLECTION_ID)) {
-                    const source = nodes.get(item.ID);
-                    const target = nodes.get(item.COLLECTION_ID);
-                    links.push({ 
-                        source, 
-                        target,
+                    const collectionNode = nodes.get(item.COLLECTION_ID);
+                    links.push({
+                        source: sourceNode,
+                        target: collectionNode,
                         type: 'collection'
                     });
-                    source.connections++;
-                    target.connections++;
+                    sourceNode.connections++;
+                    collectionNode.connections++;
                 }
 
-                // Child relationships
+                // Process child IDs
                 if (item.CHILD_IDS) {
                     try {
                         const childIds = JSON.parse(item.CHILD_IDS);
                         childIds.forEach(childId => {
                             if (nodes.has(childId)) {
-                                const source = nodes.get(item.ID);
-                                const target = nodes.get(childId);
-                                links.push({ 
-                                    source, 
-                                    target,
+                                const childNode = nodes.get(childId);
+                                links.push({
+                                    source: sourceNode,
+                                    target: childNode,
                                     type: 'parent-child'
                                 });
-                                source.connections++;
-                                target.connections++;
+                                sourceNode.connections++;
+                                childNode.connections++;
                             }
                         });
                     } catch (e) {
-                        console.warn('Could not parse CHILD_IDS:', item.CHILD_IDS);
+                        console.warn('Could not parse CHILD_IDS for item:', item.ID);
                     }
                 }
             });
 
-            // Convert nodes Map to array and limit if necessary
+            // Convert nodes Map to array and sort by importance
             let nodesArray = Array.from(nodes.values());
             
-            // Sort nodes by importance (connections and type)
+            // Sort nodes by connections and type
             nodesArray.sort((a, b) => {
                 const aImportance = a.connections * (a.type === 'database' ? 2 : 1);
                 const bImportance = b.connections * (b.type === 'database' ? 2 : 1);
                 return bImportance - aImportance;
             });
-            
-            // Limit nodes and their connections
+
+            // Limit nodes if necessary
             if (nodesArray.length > this.maxNodes) {
+                console.log(`Limiting nodes from ${nodesArray.length} to ${this.maxNodes}`);
                 nodesArray = nodesArray.slice(0, this.maxNodes);
                 const nodeIds = new Set(nodesArray.map(n => n.id));
                 links = links.filter(link => 
@@ -942,8 +953,9 @@ export class SnapshotVisualizer {
                 );
             }
 
-            // Limit total number of links
+            // Limit links if necessary
             if (links.length > this.maxLinks) {
+                console.log(`Limiting links from ${links.length} to ${this.maxLinks}`);
                 links.sort((a, b) => {
                     const aImportance = (a.source.connections + a.target.connections) * 
                                       (a.type === 'parent-child' ? 2 : 1);
@@ -954,7 +966,13 @@ export class SnapshotVisualizer {
                 links = links.slice(0, this.maxLinks);
             }
 
+            console.log('Final graph data:', {
+                nodes: nodesArray.length,
+                links: links.length
+            });
+
             return { nodes: nodesArray, links };
+
         } catch (error) {
             console.error('Error in extractNodesAndLinks:', error);
             return { nodes: [], links: [] };
@@ -962,10 +980,24 @@ export class SnapshotVisualizer {
     }
 
     determineNodeType(item) {
-        if (item.TYPE === 'collection_view') return 'database';
+        if (!item) return 'page';
+        
+        // Check for specific types first
+        if (item.TYPE === 'collection_view' || item.TYPE === 'collection_view_page') return 'database';
         if (item.TYPE === 'collection') return 'collection';
         if (item.TYPE === 'template') return 'template';
-        if (item.CHILD_IDS && JSON.parse(item.CHILD_IDS || '[]').length > 0) return 'page';
+        
+        // Check for pages with children
+        if (item.CHILD_IDS) {
+            try {
+                const childIds = JSON.parse(item.CHILD_IDS);
+                if (Array.isArray(childIds) && childIds.length > 0) return 'page';
+            } catch (e) {
+                console.warn('Could not parse CHILD_IDS for type determination:', item.ID);
+            }
+        }
+        
+        // Default to page
         return 'page';
     }
 

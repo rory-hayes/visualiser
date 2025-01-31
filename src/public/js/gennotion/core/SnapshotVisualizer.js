@@ -686,12 +686,6 @@ export class SnapshotVisualizer {
             title
         });
 
-        // Create SVG content
-        let svg = `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">`;
-        
-        // Add white background
-        svg += `<rect width="100%" height="100%" fill="#fff"/>`;
-
         try {
             // Extract nodes and links with proper hierarchy
             const { nodes, links } = this.extractNodesAndLinks(data);
@@ -700,6 +694,16 @@ export class SnapshotVisualizer {
                 nodesCount: nodes.length,
                 linksCount: links.length
             });
+
+            // Start SVG with proper XML structure and namespace
+            let svg = '<?xml version="1.0" encoding="UTF-8"?>\n';
+            svg += `<svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg" version="1.1">`;
+
+            // Add filters first
+            svg += this.addSVGFilters();
+            
+            // Add white background
+            svg += `<rect width="100%" height="100%" fill="#fff"/>`;
 
             if (nodes.length === 0) {
                 svg += this.addNoDataMessage();
@@ -714,14 +718,20 @@ export class SnapshotVisualizer {
                 .force('link', forceLink(links).distance(100))
                 .force('collide', forceCollide().radius(d => this.calculateNodeRadius(d) * 2));
 
-            // Run simulation
-            for (let i = 0; i < 300; ++i) {
-                simulation.tick();
-            }
+            // Run simulation synchronously
+            for (let i = 0; i < 300; ++i) simulation.tick();
 
-            // Draw links with different styles based on type
+            // Create a group for all visualization elements
+            svg += '<g class="visualization">';
+
+            // Draw links first (they should be behind nodes)
             links.forEach(link => {
-                if (link.source && link.target) {
+                if (link.source && link.target && 
+                    typeof link.source.x === 'number' && 
+                    typeof link.source.y === 'number' && 
+                    typeof link.target.x === 'number' && 
+                    typeof link.target.y === 'number') {
+                    
                     const strokeWidth = link.type === 'parent-child' ? 2 : 1;
                     const strokeDash = link.type === 'reference' ? '5,5' : 'none';
                     const strokeOpacity = link.type === 'parent-child' ? 0.8 : 0.4;
@@ -739,41 +749,40 @@ export class SnapshotVisualizer {
                 }
             });
 
-            // Draw nodes with different styles based on type
+            // Draw nodes
             nodes.forEach(node => {
-                const radius = this.calculateNodeRadius(node);
-                const color = this.getNodeColor(node.type);
-                
-                svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">`;
-                
-                // Node circle with shadow
-                svg += `<circle 
-                    r="${radius}" 
-                    fill="${color}"
-                    stroke="#fff"
-                    stroke-width="2"
-                    filter="url(#shadow)"
-                />`;
+                if (typeof node.x === 'number' && typeof node.y === 'number') {
+                    const radius = this.calculateNodeRadius(node);
+                    const color = this.getNodeColor(node.type);
+                    const safeTitle = (node.title || '').replace(/[<>&"']/g, '').substring(0, 20);
+                    
+                    svg += `<g transform="translate(${Math.round(node.x)},${Math.round(node.y)})">`;
+                    svg += `<circle 
+                        r="${radius}" 
+                        fill="${color}"
+                        stroke="#fff"
+                        stroke-width="2"
+                        filter="url(#shadow)"
+                    />`;
 
-                // Add label if it's an important node
-                if (node.type === 'collection' || node.type === 'database' || node.connections > 3) {
-                    const fontSize = Math.max(8, Math.min(12, radius / 2));
-                    svg += `<text 
-                        y="${radius + fontSize}"
-                        text-anchor="middle" 
-                        font-size="${fontSize}"
-                        font-weight="${node.type === 'database' ? 'bold' : 'normal'}"
-                        fill="#666"
-                    >${(node.title || '').substring(0, 20)}</text>`;
+                    if (node.type === 'collection' || node.type === 'database' || node.connections > 3) {
+                        const fontSize = Math.max(8, Math.min(12, radius / 2));
+                        svg += `<text 
+                            y="${radius + fontSize}"
+                            text-anchor="middle" 
+                            font-size="${fontSize}"
+                            font-weight="${node.type === 'database' ? 'bold' : 'normal'}"
+                            fill="#666"
+                        >${safeTitle}</text>`;
+                    }
+                    svg += '</g>';
                 }
-
-                svg += '</g>';
             });
 
-            // Add filters for shadows
-            svg = this.addSVGFilters() + svg;
+            svg += '</g>'; // Close visualization group
 
-            // Add title
+            // Add title with proper escaping
+            const safeTitle = (title || 'Workspace Visualization').replace(/[<>&"']/g, '');
             svg += `<text 
                 x="${this.width/2}" 
                 y="30" 
@@ -781,7 +790,7 @@ export class SnapshotVisualizer {
                 font-size="20" 
                 font-weight="bold" 
                 fill="#333"
-            >${title || 'Workspace Visualization'}</text>`;
+            >${safeTitle}</text>`;
 
             // Add legend
             svg += this.generateLegend();
@@ -794,13 +803,21 @@ export class SnapshotVisualizer {
                 fill="#666"
             >Nodes: ${nodes.length} | Links: ${links.length}</text>`;
 
+            // Close SVG tag
+            svg += '</svg>';
+            
+            // Validate basic XML structure
+            if (!svg.includes('</svg>') || (svg.match(/<svg/g) || []).length !== 1) {
+                console.error('Invalid SVG structure generated');
+                return this.generateEmptySVG();
+            }
+
+            return svg;
+
         } catch (error) {
             console.error('Error generating SVG:', error);
-            svg += this.addNoDataMessage();
+            return this.generateEmptySVG();
         }
-
-        svg += '</svg>';
-        return svg;
     }
 
     addNoDataMessage() {

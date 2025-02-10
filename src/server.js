@@ -1060,6 +1060,7 @@ app.post('/api/create-notion-page', async (req, res) => {
 
         // Add title and workspace ID
         pageContent.push({
+            object: 'block',
             type: 'heading_1',
             heading_1: {
                 rich_text: [{
@@ -1070,6 +1071,7 @@ app.post('/api/create-notion-page', async (req, res) => {
         });
 
         pageContent.push({
+            object: 'block',
             type: 'paragraph',
             paragraph: {
                 rich_text: [{
@@ -1083,6 +1085,7 @@ app.post('/api/create-notion-page', async (req, res) => {
         if (metrics) {
             // Structure & Evolution Metrics
             pageContent.push({
+                object: 'block',
                 type: 'heading_2',
                 heading_2: {
                     rich_text: [{
@@ -1103,17 +1106,19 @@ app.post('/api/create-notion-page', async (req, res) => {
             ];
 
             pageContent.push({
+                object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: [{
+                    rich_text: structureMetrics.map(metric => ({
                         type: 'text',
-                        text: { content: structureMetrics.join('\n') }
-                    }]
+                        text: { content: metric }
+                    }))
                 }
             });
 
             // Usage & Team Metrics
             pageContent.push({
+                object: 'block',
                 type: 'heading_2',
                 heading_2: {
                     rich_text: [{
@@ -1131,17 +1136,19 @@ app.post('/api/create-notion-page', async (req, res) => {
             ];
 
             pageContent.push({
+                object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: [{
+                    rich_text: usageMetrics.map(metric => ({
                         type: 'text',
-                        text: { content: usageMetrics.join('\n') }
-                    }]
+                        text: { content: metric }
+                    }))
                 }
             });
 
             // Growth & Projections
             pageContent.push({
+                object: 'block',
                 type: 'heading_2',
                 heading_2: {
                     rich_text: [{
@@ -1159,17 +1166,19 @@ app.post('/api/create-notion-page', async (req, res) => {
             ];
 
             pageContent.push({
+                object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: [{
+                    rich_text: growthMetrics.map(metric => ({
                         type: 'text',
-                        text: { content: growthMetrics.join('\n') }
-                    }]
+                        text: { content: metric }
+                    }))
                 }
             });
 
             // Organization Scores
             pageContent.push({
+                object: 'block',
                 type: 'heading_2',
                 heading_2: {
                     rich_text: [{
@@ -1188,17 +1197,19 @@ app.post('/api/create-notion-page', async (req, res) => {
             ];
 
             pageContent.push({
+                object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: [{
+                    rich_text: organizationMetrics.map(metric => ({
                         type: 'text',
-                        text: { content: organizationMetrics.join('\n') }
-                    }]
+                        text: { content: metric }
+                    }))
                 }
             });
 
             // ROI Analysis
             pageContent.push({
+                object: 'block',
                 type: 'heading_2',
                 heading_2: {
                     rich_text: [{
@@ -1218,12 +1229,13 @@ app.post('/api/create-notion-page', async (req, res) => {
             ];
 
             pageContent.push({
+                object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: [{
+                    rich_text: roiMetrics.map(metric => ({
                         type: 'text',
-                        text: { content: roiMetrics.join('\n') }
-                    }]
+                        text: { content: metric }
+                    }))
                 }
             });
         }
@@ -1231,6 +1243,7 @@ app.post('/api/create-notion-page', async (req, res) => {
         // Add visualizations if available
         if (snapshots) {
             pageContent.push({
+                object: 'block',
                 type: 'heading_2',
                 heading_2: {
                     rich_text: [{
@@ -1241,10 +1254,12 @@ app.post('/api/create-notion-page', async (req, res) => {
             });
 
             // Helper function to add visualization section
-            const addVisualizationSection = (title, snapshot) => {
+            const addVisualizationSection = async (title, snapshot) => {
                 if (!snapshot?.visualization) return;
 
+                // Add section title
                 pageContent.push({
+                    object: 'block',
                     type: 'heading_3',
                     heading_3: {
                         rich_text: [{
@@ -1265,12 +1280,13 @@ app.post('/api/create-notion-page', async (req, res) => {
                     ];
 
                     pageContent.push({
+                        object: 'block',
                         type: 'bulleted_list_item',
                         bulleted_list_item: {
-                            rich_text: [{
+                            rich_text: metrics.map(metric => ({
                                 type: 'text',
-                                text: { content: metrics.join('\n') }
-                            }]
+                                text: { content: metric }
+                            }))
                         }
                     });
                 }
@@ -1281,6 +1297,7 @@ app.post('/api/create-notion-page', async (req, res) => {
                     : `https://visualiser-xhjh.onrender.com${snapshot.visualization}`;
 
                 pageContent.push({
+                    object: 'block',
                     type: 'image',
                     image: {
                         type: 'external',
@@ -1292,29 +1309,45 @@ app.post('/api/create-notion-page', async (req, res) => {
             };
 
             // Add each visualization section
-            addVisualizationSection('Past State (60 days ago)', snapshots.past);
-            addVisualizationSection('Current State', snapshots.present);
-            addVisualizationSection('Projected Future (90 days)', snapshots.future);
+            await addVisualizationSection('Past State (60 days ago)', snapshots.past);
+            await addVisualizationSection('Current State', snapshots.present);
+            await addVisualizationSection('Projected Future (90 days)', snapshots.future);
         }
 
         // Create the page in Notion
+        console.log('Creating Notion page with content:', {
+            contentLength: pageContent.length,
+            firstBlock: pageContent[0],
+            lastBlock: pageContent[pageContent.length - 1]
+        });
+
         const page = await notion.pages.create({
-            parent: { type: 'page_id', page_id: workspaceId },
+            parent: { 
+                type: 'page_id', 
+                page_id: workspaceId 
+            },
             properties: {
                 title: {
+                    type: 'title',
                     title: [
                         {
+                            type: 'text',
                             text: {
                                 content: 'Workspace Analysis Report'
                             }
                         }
                     ]
                 }
-            },
+            }
+        });
+
+        // Add content blocks to the created page
+        await notion.blocks.children.append({
+            block_id: page.id,
             children: pageContent
         });
 
-        console.log('Created Notion page:', page.id);
+        console.log('Successfully created Notion page:', page.id);
         res.json({ success: true, pageId: page.id });
 
     } catch (error) {

@@ -863,65 +863,80 @@ export class MetricsCalculator {
     async createNotionEntry(workspaceId, metrics) {
         try {
             console.log('Creating Notion entry for workspace:', workspaceId);
-            console.log('Metrics to include:', metrics);
+            
+            // Ensure we have the required data
+            if (!workspaceId) {
+                throw new Error('Workspace ID is required');
+            }
+
+            // Format metrics for Notion
+            const formattedMetrics = {
+                // Structure metrics
+                totalPages: metrics.total_pages || 0,
+                activePages: metrics.num_alive_pages || 0,
+                maxDepth: metrics.max_depth || 0,
+                avgDepth: metrics.avg_depth || 0,
+                deepPagesCount: metrics.deep_pages_count || 0,
+                totalConnections: metrics.total_connections || 0,
+                collectionsCount: metrics.collections_count || 0,
+                
+                // Usage metrics
+                totalMembers: metrics.total_num_members || 0,
+                totalGuests: metrics.total_num_guests || 0,
+                totalTeamspaces: metrics.total_num_teamspaces || 0,
+                averageTeamspaceMembers: metrics.average_teamspace_members || 0,
+                
+                // Growth metrics
+                monthlyMemberGrowthRate: metrics.monthly_member_growth_rate || 0,
+                monthlyContentGrowthRate: metrics.monthly_content_growth_rate || 0,
+                growthCapacity: metrics.growth_capacity || 0,
+                expectedMembersNextYear: metrics.expected_members_in_next_year || 0,
+                
+                // Organization metrics
+                currentVisibilityScore: metrics.current_visibility_score || 0,
+                currentCollaborationScore: metrics.current_collaboration_score || 0,
+                currentProductivityScore: metrics.current_productivity_score || 0,
+                currentOrganizationScore: metrics.current_organization_score || 0,
+                projectedOrganisationScore: metrics.projected_organisation_score || 0,
+                
+                // ROI metrics
+                currentPlan: metrics.current_plan || 0,
+                enterprisePlanRoi: metrics.enterprise_plan_roi || 0,
+                enterprisePlanWithAiRoi: metrics.enterprise_plan_w_ai_roi || 0,
+                tenPercentIncrease: metrics['10_percent_increase'] || 0,
+                twentyPercentIncrease: metrics['20_percent_increase'] || 0,
+                fiftyPercentIncrease: metrics['50_percent_increase'] || 0
+            };
 
             // Make API call to create Notion page
             const response = await fetch('/api/create-notion-page', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                 },
+                credentials: 'include', // Important: Include credentials for session cookie
                 body: JSON.stringify({
                     workspaceId,
-                    metrics: {
-                        // Structure metrics
-                        totalPages: metrics.total_pages || 0,
-                        activePages: metrics.num_alive_pages || 0,
-                        maxDepth: metrics.max_depth || 0,
-                        totalConnections: metrics.total_connections || 0,
-                        avgDepth: metrics.avg_depth || 0,
-                        deepPagesCount: metrics.deep_pages_count || 0,
-                        collectionsCount: metrics.collections_count || 0,
-                        
-                        // Usage metrics
-                        totalMembers: metrics.total_num_members || 0,
-                        totalGuests: metrics.total_num_guests || 0,
-                        totalTeamspaces: metrics.total_num_teamspaces || 0,
-                        averageTeamspaceMembers: metrics.average_teamspace_members || 0,
-                        
-                        // Growth metrics
-                        monthlyMemberGrowthRate: metrics.monthly_member_growth_rate || 0,
-                        monthlyContentGrowthRate: metrics.monthly_content_growth_rate || 0,
-                        growthCapacity: metrics.growth_capacity || 0,
-                        expectedMembersNextYear: metrics.expected_members_in_next_year || 0,
-                        
-                        // Organization metrics
-                        currentVisibilityScore: metrics.current_visibility_score || 0,
-                        currentCollaborationScore: metrics.current_collaboration_score || 0,
-                        currentProductivityScore: metrics.current_productivity_score || 0,
-                        currentOrganizationScore: metrics.current_organization_score || 0,
-                        projectedOrganisationScore: metrics.projected_organisation_score || 0,
-                        
-                        // ROI metrics
-                        currentPlan: metrics.current_plan || 0,
-                        enterprisePlanRoi: metrics.enterprise_plan_roi || 0,
-                        enterprisePlanWithAiRoi: metrics.enterprise_plan_w_ai_roi || 0,
-                        tenPercentIncrease: metrics['10_percent_increase'] || 0,
-                        twentyPercentIncrease: metrics['20_percent_increase'] || 0,
-                        fiftyPercentIncrease: metrics['50_percent_increase'] || 0
-                    },
+                    metrics: formattedMetrics,
                     snapshots: metrics.snapshots || null
                 })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(`Failed to create Notion page: ${errorData.error}`);
+                console.error('Failed to create Notion page:', errorData);
+                throw new Error(`Failed to create Notion page: ${errorData.error || 'Unknown error'}`);
             }
 
             const result = await response.json();
-            console.log('Successfully created Notion page:', result);
-            return result;
+            
+            if (!result.success || !result.pageId) {
+                throw new Error('Invalid response from server when creating Notion page');
+            }
+
+            console.log('Successfully created Notion page:', result.pageId);
+            return result.pageId;
 
         } catch (error) {
             console.error('Error in createNotionEntry:', error);

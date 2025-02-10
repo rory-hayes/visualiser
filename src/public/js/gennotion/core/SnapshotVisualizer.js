@@ -50,11 +50,33 @@ export class SnapshotVisualizer {
         this.height = this.GRAPH_CONFIG.height;
         this.maxNodes = 10000;  // Increased to handle full dataset
         this.maxLinks = 20000;  // Increased for more connections
-        this.visualizationsDir = path.join(__dirname, '..', '..', '..', '..', 'public', 'visualizations');
+
+        // Update visualization directory path to be relative to public
+        const publicDir = path.join(process.cwd(), 'src', 'public');
+        this.visualizationsDir = path.join(publicDir, 'visualizations');
         
-        // Ensure visualizations directory exists
-        if (!fs.existsSync(this.visualizationsDir)) {
-            fs.mkdirSync(this.visualizationsDir, { recursive: true });
+        // Ensure visualizations directory exists with proper permissions
+        try {
+            if (!fs.existsSync(publicDir)) {
+                fs.mkdirSync(publicDir, { recursive: true });
+                console.log('Created public directory:', publicDir);
+            }
+            
+            if (!fs.existsSync(this.visualizationsDir)) {
+                fs.mkdirSync(this.visualizationsDir, { recursive: true, mode: 0o755 });
+                console.log('Created visualizations directory:', this.visualizationsDir);
+            }
+            
+            // Ensure directory has correct permissions
+            fs.chmodSync(this.visualizationsDir, 0o755);
+            console.log('Set permissions on visualizations directory');
+            
+            // Log directory contents
+            const files = fs.readdirSync(this.visualizationsDir);
+            console.log('Visualization directory contents:', files);
+            
+        } catch (error) {
+            console.error('Error setting up visualization directories:', error);
         }
 
         // Initialize virtual DOM for server-side rendering
@@ -134,25 +156,44 @@ export class SnapshotVisualizer {
             // Generate SVG content
             const svg = this.generateSVG(snapshot.data, snapshot.connections, title);
             
-            // Create a unique filename
+            // Create a unique filename with timestamp and sanitize it
             const timestamp = Date.now();
-            const filename = `${type}_${timestamp}.svg`;
+            const sanitizedType = type.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            const filename = `${sanitizedType}_${timestamp}.svg`;
             const filePath = path.join(this.visualizationsDir, filename);
             
-            // Log the file path and SVG content
-            console.log(`Saving visualization to: ${filePath}`);
-            console.log(`SVG content length: ${svg.length}`);
+            // Log detailed path information
+            console.log('Visualization paths:', {
+                visualizationsDir: this.visualizationsDir,
+                filename: filename,
+                fullPath: filePath,
+                exists: fs.existsSync(this.visualizationsDir)
+            });
             
-            // Save SVG to file
-            await fs.promises.writeFile(filePath, svg, 'utf8');
+            // Save SVG to file with error handling
+            try {
+                await fs.promises.writeFile(filePath, svg, 'utf8');
+                await fs.promises.chmod(filePath, 0o644); // Ensure file is readable
+                console.log(`Successfully wrote SVG file: ${filePath}`);
+                
+                // Verify file was written correctly
+                if (fs.existsSync(filePath)) {
+                    const stats = fs.statSync(filePath);
+                    console.log('File stats:', {
+                        size: stats.size,
+                        created: stats.birthtime,
+                        path: filePath,
+                        mode: stats.mode.toString(8)
+                    });
+                }
+            } catch (writeError) {
+                console.error('Error writing SVG file:', writeError);
+                throw writeError;
+            }
             
-            // Verify file was saved
-            const exists = await fs.promises.access(filePath).then(() => true).catch(() => false);
-            console.log(`File saved successfully: ${exists}`);
-            
-            // Return the snapshot with the URL (using just the path)
+            // Return the visualization URL using the correct path
             const visualizationUrl = `/visualizations/${filename}`;
-            console.log(`Visualization URL: ${visualizationUrl}`);
+            console.log('Generated visualization URL:', visualizationUrl);
             
             return {
                 ...snapshot,

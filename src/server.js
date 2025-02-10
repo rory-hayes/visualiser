@@ -261,15 +261,21 @@ const hexResultsStore = new Map(); // Rename the store to avoid conflict
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Serve static files (HTML, CSS, JS)
+// Configure static file serving
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/visualizations', express.static(path.join(__dirname, 'public', 'visualizations')));
 app.use(express.static(path.join(__dirname))); // This will serve files from the src directory
 
-// Add specific route for visualizations with proper MIME type
+// Add logging middleware for visualization requests
 app.use('/visualizations', (req, res, next) => {
-    res.set('Content-Type', 'image/svg+xml');
+    console.log('Visualization request:', {
+        path: req.path,
+        fullUrl: req.url,
+        method: req.method,
+        exists: fs.existsSync(path.join(__dirname, 'public', 'visualizations', req.path))
+    });
     next();
-}, express.static(path.join(__dirname, 'public', 'visualizations')));
+});
 
 // Add MIME type for ES modules
 app.use((req, res, next) => {

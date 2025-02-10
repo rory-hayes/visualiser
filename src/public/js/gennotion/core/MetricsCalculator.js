@@ -25,10 +25,18 @@ export class MetricsCalculator {
         // Debug workspaceId
         console.log('DEBUG - calculateAllMetrics workspaceId:', workspaceId);
         
-        // Generate snapshots and visualizations
-        console.log('Generating snapshots and visualizations...');
-        const snapshotResults = await this.snapshotVisualizer.generateSnapshots(dataframe_2, dataframe_3, dataframe_5);
-        console.log('Generated snapshots:', snapshotResults);
+        let snapshotResults = { snapshots: null };
+        
+        // Try to generate snapshots but don't let it block the whole process
+        try {
+            // Generate snapshots and visualizations
+            console.log('Generating snapshots and visualizations...');
+            snapshotResults = await this.snapshotVisualizer.generateSnapshots(dataframe_2, dataframe_3, dataframe_5);
+            console.log('Generated snapshots:', snapshotResults);
+        } catch (error) {
+            console.error('Error generating snapshots:', error);
+            // Continue with metrics calculation even if snapshots fail
+        }
 
         // Calculate workspace age first
         const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
@@ -98,7 +106,8 @@ export class MetricsCalculator {
         } catch (error) {
             console.error('Error creating Notion entry:', error);
             console.error('Error stack:', error.stack);
-            throw error;
+            // Don't throw the error here, just log it and continue
+            // This ensures the metrics are still returned even if Notion page creation fails
         }
 
         return allMetrics;

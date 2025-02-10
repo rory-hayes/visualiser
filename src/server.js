@@ -1045,15 +1045,24 @@ async function triggerHexRun(workspaceId) {
 // Add Notion page creation endpoint
 app.post('/api/create-notion-page', async (req, res) => {
     try {
+        console.log('DEBUG - Received request to create Notion page');
+        console.log('DEBUG - Request headers:', req.headers);
+        console.log('DEBUG - Session data:', req.session);
+
         const { workspaceId, metrics, snapshots } = req.body;
-        console.log('Received request to create Notion page:', { workspaceId, hasMetrics: !!metrics, hasSnapshots: !!snapshots });
+        console.log('DEBUG - Request body:', {
+            hasWorkspaceId: !!workspaceId,
+            hasMetrics: !!metrics,
+            hasSnapshots: !!snapshots,
+            metricsKeys: metrics ? Object.keys(metrics) : []
+        });
         
         if (!req.session?.notionToken) {
-            console.error('No Notion token found in session');
+            console.error('DEBUG - No Notion token found in session');
             return res.status(401).json({ error: 'No Notion authentication token found' });
         }
 
-        console.log('Using Notion token from session');
+        console.log('DEBUG - Using Notion token from session');
         const notion = new Client({
             auth: req.session.notionToken
         });
@@ -1061,15 +1070,15 @@ app.post('/api/create-notion-page', async (req, res) => {
         // Verify token by getting user info
         try {
             const user = await notion.users.me();
-            console.log('Notion token verified for user:', user.name);
+            console.log('DEBUG - Notion token verified for user:', user.name);
         } catch (error) {
-            console.error('Failed to verify Notion token:', error);
+            console.error('DEBUG - Failed to verify Notion token:', error);
             return res.status(401).json({ error: 'Invalid Notion token' });
         }
 
         // Create page content
         const pageContent = [];
-        console.log('Creating page content...');
+        console.log('DEBUG - Creating page content...');
 
         // Add title and workspace ID
         pageContent.push({
@@ -1096,7 +1105,7 @@ app.post('/api/create-notion-page', async (req, res) => {
 
         // Add metrics sections
         if (metrics) {
-            console.log('Adding metrics sections...');
+            console.log('DEBUG - Adding metrics sections...');
             
             // Structure & Evolution Metrics
             pageContent.push({
@@ -1264,7 +1273,7 @@ app.post('/api/create-notion-page', async (req, res) => {
 
         // Add visualizations if available
         if (snapshots) {
-            console.log('Adding visualization sections...');
+            console.log('DEBUG - Adding visualization sections...');
             pageContent.push({
                 object: 'block',
                 type: 'heading_2',
@@ -1345,10 +1354,11 @@ app.post('/api/create-notion-page', async (req, res) => {
         }
 
         // Create the page in Notion
-        console.log('Creating Notion page...');
+        console.log('DEBUG - Creating Notion page...');
         
         try {
             // First try to get the workspace root page
+            console.log('DEBUG - Searching for root page...');
             const search = await notion.search({
                 filter: {
                     property: 'object',
@@ -1358,11 +1368,13 @@ app.post('/api/create-notion-page', async (req, res) => {
             
             const rootPage = search.results[0]?.id;
             if (!rootPage) {
+                console.error('DEBUG - Could not find a root page');
                 throw new Error('Could not find a root page to create the report in');
             }
             
-            console.log('Found root page:', rootPage);
+            console.log('DEBUG - Found root page:', rootPage);
 
+            console.log('DEBUG - Creating new page...');
             const page = await notion.pages.create({
                 parent: { 
                     type: 'page_id', 
@@ -1383,24 +1395,27 @@ app.post('/api/create-notion-page', async (req, res) => {
                 }
             });
 
-            console.log('Created page:', page.id);
+            console.log('DEBUG - Created page:', page.id);
 
             // Add content blocks to the created page
+            console.log('DEBUG - Adding content blocks...');
             await notion.blocks.children.append({
                 block_id: page.id,
                 children: pageContent
             });
 
-            console.log('Successfully added content to page');
+            console.log('DEBUG - Successfully added content to page');
             res.json({ success: true, pageId: page.id });
 
         } catch (error) {
-            console.error('Error creating Notion page:', error);
+            console.error('DEBUG - Error creating Notion page:', error);
+            console.error('DEBUG - Error stack:', error.stack);
             throw new Error(`Failed to create Notion page: ${error.message}`);
         }
 
     } catch (error) {
-        console.error('Error in create-notion-page endpoint:', error);
+        console.error('DEBUG - Error in create-notion-page endpoint:', error);
+        console.error('DEBUG - Error stack:', error.stack);
         res.status(500).json({ 
             error: 'Failed to create Notion page',
             details: error.message

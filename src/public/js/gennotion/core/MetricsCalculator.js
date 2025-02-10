@@ -74,6 +74,7 @@ export class MetricsCalculator {
         };
 
         // Log metrics with placeholders
+        console.log('DEBUG - Preparing metrics for Notion page creation...');
         const placeholderMetrics = this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3, dataframe_5);
 
         // Create Notion entry with all metrics
@@ -83,9 +84,20 @@ export class MetricsCalculator {
                 throw new Error('workspaceId is required');
             }
             console.log('DEBUG - About to create Notion entry with workspaceId:', workspaceId);
-            await this.createNotionEntry(workspaceId, { ...placeholderMetrics, snapshots: snapshotResults.snapshots });
+            console.log('DEBUG - Metrics being sent to createNotionEntry:', {
+                metricsKeys: Object.keys(placeholderMetrics),
+                hasSnapshots: !!snapshotResults.snapshots,
+                snapshotKeys: snapshotResults.snapshots ? Object.keys(snapshotResults.snapshots) : []
+            });
+            
+            const notionPageId = await this.createNotionEntry(workspaceId, { 
+                ...placeholderMetrics, 
+                snapshots: snapshotResults.snapshots 
+            });
+            console.log('DEBUG - Successfully created Notion page with ID:', notionPageId);
         } catch (error) {
             console.error('Error creating Notion entry:', error);
+            console.error('Error stack:', error.stack);
             throw error;
         }
 
@@ -862,8 +874,11 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
-            console.log('Creating Notion entry for workspace:', workspaceId);
-            console.log('Metrics received:', metrics);
+            console.log('DEBUG - createNotionEntry called with:', {
+                workspaceId,
+                metricsKeys: Object.keys(metrics),
+                hasSnapshots: !!metrics.snapshots
+            });
             
             // Ensure we have the required data
             if (!workspaceId) {
@@ -919,9 +934,17 @@ export class MetricsCalculator {
                 growthPotentialScore: parseFloat(metrics['[[growth_potential_score]]']) || 0
             };
 
-            console.log('Formatted metrics:', formattedMetrics);
+            console.log('DEBUG - Formatted metrics:', formattedMetrics);
+            console.log('DEBUG - Preparing API request to /api/create-notion-page');
 
             // Make API call to create Notion page
+            const requestBody = {
+                workspaceId,
+                metrics: formattedMetrics,
+                snapshots: metrics.snapshots || null
+            };
+            console.log('DEBUG - Request body:', JSON.stringify(requestBody, null, 2));
+
             const response = await fetch('/api/create-notion-page', {
                 method: 'POST',
                 headers: {
@@ -929,14 +952,11 @@ export class MetricsCalculator {
                     'Accept': 'application/json'
                 },
                 credentials: 'include', // Important: Include credentials for session cookie
-                body: JSON.stringify({
-                    workspaceId,
-                    metrics: formattedMetrics,
-                    snapshots: metrics.snapshots || null
-                })
+                body: JSON.stringify(requestBody)
             });
 
-            console.log('Notion API response status:', response.status);
+            console.log('DEBUG - Notion API response status:', response.status);
+            console.log('DEBUG - Notion API response headers:', Object.fromEntries(response.headers.entries()));
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -945,6 +965,7 @@ export class MetricsCalculator {
             }
 
             const result = await response.json();
+            console.log('DEBUG - Notion API response body:', result);
             
             if (!result.success || !result.pageId) {
                 throw new Error('Invalid response from server when creating Notion page');

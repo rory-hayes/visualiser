@@ -863,50 +863,63 @@ export class MetricsCalculator {
     async createNotionEntry(workspaceId, metrics) {
         try {
             console.log('Creating Notion entry for workspace:', workspaceId);
+            console.log('Metrics received:', metrics);
             
             // Ensure we have the required data
             if (!workspaceId) {
                 throw new Error('Workspace ID is required');
             }
 
-            // Format metrics for Notion
+            // Format metrics for Notion - handle placeholder format
             const formattedMetrics = {
                 // Structure metrics
-                totalPages: metrics.total_pages || 0,
-                activePages: metrics.num_alive_pages || 0,
-                maxDepth: metrics.max_depth || 0,
-                avgDepth: metrics.avg_depth || 0,
-                deepPagesCount: metrics.deep_pages_count || 0,
-                totalConnections: metrics.total_connections || 0,
-                collectionsCount: metrics.collections_count || 0,
+                totalPages: parseInt(metrics['[[total_pages]]']) || 0,
+                activePages: parseInt(metrics['[[active_pages]]']) || 0,
+                maxDepth: parseInt(metrics['[[max_depth]]']) || 0,
+                avgDepth: parseFloat(metrics['[[avg_depth]]']) || 0,
+                deepPagesCount: parseInt(metrics['[[deep_pages_count]]']) || 0,
+                totalConnections: parseInt(metrics['[[total_connections]]']) || 0,
+                collectionsCount: parseInt(metrics['[[collections_count]]']) || 0,
                 
                 // Usage metrics
-                totalMembers: metrics.total_num_members || 0,
-                totalGuests: metrics.total_num_guests || 0,
-                totalTeamspaces: metrics.total_num_teamspaces || 0,
-                averageTeamspaceMembers: metrics.average_teamspace_members || 0,
+                totalMembers: parseInt(metrics['[[key_metrics_insight_4]]']) || 0,
+                totalGuests: parseInt(metrics['[[total_guests]]']) || 0,
+                totalTeamspaces: parseInt(metrics['[[total_teamspaces]]']) || 0,
+                averageTeamspaceMembers: parseFloat(metrics['[[key_metrics_insight_5]]']) || 0,
                 
                 // Growth metrics
-                monthlyMemberGrowthRate: metrics.monthly_member_growth_rate || 0,
-                monthlyContentGrowthRate: metrics.monthly_content_growth_rate || 0,
-                growthCapacity: metrics.growth_capacity || 0,
-                expectedMembersNextYear: metrics.expected_members_in_next_year || 0,
+                monthlyMemberGrowthRate: parseFloat(metrics['[[key_metrics_insight_2]]']) || 0,
+                monthlyContentGrowthRate: parseFloat(metrics['[[key_metrics_insight_1]]']) || 0,
+                growthCapacity: parseFloat(metrics['[[growth_capacity]]']) || 0,
+                expectedMembersNextYear: parseInt(metrics['[[projected_members]]']) || 0,
                 
                 // Organization metrics
-                currentVisibilityScore: metrics.current_visibility_score || 0,
-                currentCollaborationScore: metrics.current_collaboration_score || 0,
-                currentProductivityScore: metrics.current_productivity_score || 0,
-                currentOrganizationScore: metrics.current_organization_score || 0,
-                projectedOrganisationScore: metrics.projected_organisation_score || 0,
+                currentVisibilityScore: parseFloat(metrics['[[visibility_score]]']) || 0,
+                currentCollaborationScore: parseFloat(metrics['[[collab_score]]']) || 0,
+                currentProductivityScore: parseFloat(metrics['[[prod_score]]']) || 0,
+                currentOrganizationScore: parseFloat(metrics['[[org_score]]']) || 0,
                 
-                // ROI metrics
-                currentPlan: metrics.current_plan || 0,
-                enterprisePlanRoi: metrics.enterprise_plan_roi || 0,
-                enterprisePlanWithAiRoi: metrics.enterprise_plan_w_ai_roi || 0,
-                tenPercentIncrease: metrics['10_percent_increase'] || 0,
-                twentyPercentIncrease: metrics['20_percent_increase'] || 0,
-                fiftyPercentIncrease: metrics['50_percent_increase'] || 0
+                // Advanced metrics
+                contentMaturityScore: parseFloat(metrics['[[content_maturity_score]]']) || 0,
+                workspaceComplexityScore: parseFloat(metrics['[[workspace_complexity_score]]']) || 0,
+                knowledgeStructureScore: parseFloat(metrics['[[knowledge_structure_score]]']) || 0,
+                teamAdoptionScore: parseFloat(metrics['[[team_adoption_score]]']) || 0,
+                collaborationDensity: parseFloat(metrics['[[collaboration_density]]']) || 0,
+                knowledgeSharingIndex: parseFloat(metrics['[[knowledge_sharing_index]]']) || 0,
+                contentFreshnessScore: parseFloat(metrics['[[content_freshness_score]]']) || 0,
+                structureQualityIndex: parseFloat(metrics['[[structure_quality_index]]']) || 0,
+                knowledgeBaseHealth: parseFloat(metrics['[[knowledge_base_health]]']) || 0,
+                documentationCoverage: parseFloat(metrics['[[documentation_coverage]]']) || 0,
+                automationEffectiveness: parseFloat(metrics['[[automation_effectiveness]]']) || 0,
+                integrationImpactScore: parseFloat(metrics['[[integration_impact_score]]']) || 0,
+                featureUtilizationIndex: parseFloat(metrics['[[feature_utilization_index]]']) || 0,
+                advancedFeaturesAdoption: parseFloat(metrics['[[advanced_features_adoption]]']) || 0,
+                growthTrajectory: parseFloat(metrics['[[growth_trajectory]]']) || 0,
+                scalingReadinessScore: parseFloat(metrics['[[scaling_readiness_score]]']) || 0,
+                growthPotentialScore: parseFloat(metrics['[[growth_potential_score]]']) || 0
             };
+
+            console.log('Formatted metrics:', formattedMetrics);
 
             // Make API call to create Notion page
             const response = await fetch('/api/create-notion-page', {
@@ -922,6 +935,8 @@ export class MetricsCalculator {
                     snapshots: metrics.snapshots || null
                 })
             });
+
+            console.log('Notion API response status:', response.status);
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -940,6 +955,7 @@ export class MetricsCalculator {
 
         } catch (error) {
             console.error('Error in createNotionEntry:', error);
+            console.error('Error stack:', error.stack);
             throw error;
         }
     }

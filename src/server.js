@@ -1046,17 +1046,30 @@ async function triggerHexRun(workspaceId) {
 app.post('/api/create-notion-page', async (req, res) => {
     try {
         const { workspaceId, metrics, snapshots } = req.body;
+        console.log('Received request to create Notion page:', { workspaceId, hasMetrics: !!metrics, hasSnapshots: !!snapshots });
         
         if (!req.session?.notionToken) {
-            throw new Error('No Notion authentication token found');
+            console.error('No Notion token found in session');
+            return res.status(401).json({ error: 'No Notion authentication token found' });
         }
 
+        console.log('Using Notion token from session');
         const notion = new Client({
             auth: req.session.notionToken
         });
 
+        // Verify token by getting user info
+        try {
+            const user = await notion.users.me();
+            console.log('Notion token verified for user:', user.name);
+        } catch (error) {
+            console.error('Failed to verify Notion token:', error);
+            return res.status(401).json({ error: 'Invalid Notion token' });
+        }
+
         // Create page content
         const pageContent = [];
+        console.log('Creating page content...');
 
         // Add title and workspace ID
         pageContent.push({
@@ -1083,6 +1096,8 @@ app.post('/api/create-notion-page', async (req, res) => {
 
         // Add metrics sections
         if (metrics) {
+            console.log('Adding metrics sections...');
+            
             // Structure & Evolution Metrics
             pageContent.push({
                 object: 'block',
@@ -1099,7 +1114,7 @@ app.post('/api/create-notion-page', async (req, res) => {
                 `Total Pages: ${metrics.totalPages}`,
                 `Active Pages: ${metrics.activePages}`,
                 `Max Depth: ${metrics.maxDepth}`,
-                `Average Depth: ${metrics.avgDepth.toFixed(2)}`,
+                `Average Depth: ${metrics.avgDepth?.toFixed(2) || 0}`,
                 `Deep Pages: ${metrics.deepPagesCount}`,
                 `Total Connections: ${metrics.totalConnections}`,
                 `Collections: ${metrics.collectionsCount}`
@@ -1109,10 +1124,10 @@ app.post('/api/create-notion-page', async (req, res) => {
                 object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: structureMetrics.map(metric => ({
+                    rich_text: [{
                         type: 'text',
-                        text: { content: metric }
-                    }))
+                        text: { content: structureMetrics.join('\n') }
+                    }]
                 }
             });
 
@@ -1132,17 +1147,17 @@ app.post('/api/create-notion-page', async (req, res) => {
                 `Total Members: ${metrics.totalMembers}`,
                 `Total Guests: ${metrics.totalGuests}`,
                 `Total Teamspaces: ${metrics.totalTeamspaces}`,
-                `Average Members per Teamspace: ${metrics.averageTeamspaceMembers.toFixed(2)}`
+                `Average Members per Teamspace: ${metrics.averageTeamspaceMembers?.toFixed(2) || 0}`
             ];
 
             pageContent.push({
                 object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: usageMetrics.map(metric => ({
+                    rich_text: [{
                         type: 'text',
-                        text: { content: metric }
-                    }))
+                        text: { content: usageMetrics.join('\n') }
+                    }]
                 }
             });
 
@@ -1159,20 +1174,20 @@ app.post('/api/create-notion-page', async (req, res) => {
             });
 
             const growthMetrics = [
-                `Monthly Member Growth Rate: ${metrics.monthlyMemberGrowthRate.toFixed(2)}%`,
-                `Monthly Content Growth Rate: ${metrics.monthlyContentGrowthRate.toFixed(2)}%`,
-                `Growth Capacity: ${metrics.growthCapacity.toFixed(2)}%`,
-                `Expected Members Next Year: ${Math.round(metrics.expectedMembersNextYear)}`
+                `Monthly Member Growth Rate: ${metrics.monthlyMemberGrowthRate?.toFixed(2) || 0}%`,
+                `Monthly Content Growth Rate: ${metrics.monthlyContentGrowthRate?.toFixed(2) || 0}%`,
+                `Growth Capacity: ${metrics.growthCapacity?.toFixed(2) || 0}%`,
+                `Expected Members Next Year: ${Math.round(metrics.expectedMembersNextYear || 0)}`
             ];
 
             pageContent.push({
                 object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: growthMetrics.map(metric => ({
+                    rich_text: [{
                         type: 'text',
-                        text: { content: metric }
-                    }))
+                        text: { content: growthMetrics.join('\n') }
+                    }]
                 }
             });
 
@@ -1189,59 +1204,67 @@ app.post('/api/create-notion-page', async (req, res) => {
             });
 
             const organizationMetrics = [
-                `Visibility Score: ${metrics.currentVisibilityScore.toFixed(2)}%`,
-                `Collaboration Score: ${metrics.currentCollaborationScore.toFixed(2)}%`,
-                `Productivity Score: ${metrics.currentProductivityScore.toFixed(2)}%`,
-                `Overall Organization Score: ${metrics.currentOrganizationScore.toFixed(2)}%`,
-                `Projected Organization Score: ${metrics.projectedOrganisationScore.toFixed(2)}%`
+                `Visibility Score: ${metrics.currentVisibilityScore?.toFixed(2) || 0}%`,
+                `Collaboration Score: ${metrics.currentCollaborationScore?.toFixed(2) || 0}%`,
+                `Productivity Score: ${metrics.currentProductivityScore?.toFixed(2) || 0}%`,
+                `Overall Organization Score: ${metrics.currentOrganizationScore?.toFixed(2) || 0}%`
             ];
 
             pageContent.push({
                 object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: organizationMetrics.map(metric => ({
+                    rich_text: [{
                         type: 'text',
-                        text: { content: metric }
-                    }))
+                        text: { content: organizationMetrics.join('\n') }
+                    }]
                 }
             });
 
-            // ROI Analysis
+            // Advanced Metrics
             pageContent.push({
                 object: 'block',
                 type: 'heading_2',
                 heading_2: {
                     rich_text: [{
                         type: 'text',
-                        text: { content: 'ROI Analysis' }
+                        text: { content: 'Advanced Metrics' }
                     }]
                 }
             });
 
-            const roiMetrics = [
-                `Current Plan Cost: $${metrics.currentPlan.toLocaleString()}`,
-                `Enterprise Plan ROI: ${metrics.enterprisePlanRoi.toFixed(2)}%`,
-                `Enterprise Plan with AI ROI: ${metrics.enterprisePlanWithAiRoi.toFixed(2)}%`,
-                `Value at 10% Productivity Increase: $${metrics.tenPercentIncrease.toLocaleString()}`,
-                `Value at 20% Productivity Increase: $${metrics.twentyPercentIncrease.toLocaleString()}`,
-                `Value at 50% Productivity Increase: $${metrics.fiftyPercentIncrease.toLocaleString()}`
+            const advancedMetrics = [
+                `Content Maturity Score: ${metrics.contentMaturityScore?.toFixed(2) || 0}`,
+                `Workspace Complexity Score: ${metrics.workspaceComplexityScore?.toFixed(2) || 0}`,
+                `Knowledge Structure Score: ${metrics.knowledgeStructureScore?.toFixed(2) || 0}`,
+                `Team Adoption Score: ${metrics.teamAdoptionScore?.toFixed(2) || 0}`,
+                `Knowledge Sharing Index: ${metrics.knowledgeSharingIndex?.toFixed(2) || 0}`,
+                `Content Freshness Score: ${metrics.contentFreshnessScore?.toFixed(2) || 0}`,
+                `Structure Quality Index: ${metrics.structureQualityIndex?.toFixed(2) || 0}`,
+                `Documentation Coverage: ${metrics.documentationCoverage?.toFixed(2) || 0}%`,
+                `Automation Effectiveness: ${metrics.automationEffectiveness?.toFixed(2) || 0}%`,
+                `Integration Impact Score: ${metrics.integrationImpactScore?.toFixed(2) || 0}`,
+                `Feature Utilization Index: ${metrics.featureUtilizationIndex?.toFixed(2) || 0}`,
+                `Growth Trajectory: ${metrics.growthTrajectory?.toFixed(2) || 0}`,
+                `Scaling Readiness Score: ${metrics.scalingReadinessScore?.toFixed(2) || 0}`,
+                `Growth Potential Score: ${metrics.growthPotentialScore?.toFixed(2) || 0}`
             ];
 
             pageContent.push({
                 object: 'block',
                 type: 'bulleted_list_item',
                 bulleted_list_item: {
-                    rich_text: roiMetrics.map(metric => ({
+                    rich_text: [{
                         type: 'text',
-                        text: { content: metric }
-                    }))
+                        text: { content: advancedMetrics.join('\n') }
+                    }]
                 }
             });
         }
 
         // Add visualizations if available
         if (snapshots) {
+            console.log('Adding visualization sections...');
             pageContent.push({
                 object: 'block',
                 type: 'heading_2',
@@ -1255,7 +1278,12 @@ app.post('/api/create-notion-page', async (req, res) => {
 
             // Helper function to add visualization section
             const addVisualizationSection = async (title, snapshot) => {
-                if (!snapshot?.visualization) return;
+                if (!snapshot?.visualization) {
+                    console.log(`No visualization found for ${title}`);
+                    return;
+                }
+
+                console.log(`Adding visualization section for ${title}`);
 
                 // Add section title
                 pageContent.push({
@@ -1283,10 +1311,10 @@ app.post('/api/create-notion-page', async (req, res) => {
                         object: 'block',
                         type: 'bulleted_list_item',
                         bulleted_list_item: {
-                            rich_text: metrics.map(metric => ({
+                            rich_text: [{
                                 type: 'text',
-                                text: { content: metric }
-                            }))
+                                text: { content: metrics.join('\n') }
+                            }]
                         }
                     });
                 }
@@ -1295,6 +1323,8 @@ app.post('/api/create-notion-page', async (req, res) => {
                 const fullUrl = snapshot.visualization.startsWith('http') 
                     ? snapshot.visualization 
                     : `https://visualiser-xhjh.onrender.com${snapshot.visualization}`;
+
+                console.log(`Adding visualization image from URL: ${fullUrl}`);
 
                 pageContent.push({
                     object: 'block',
@@ -1315,43 +1345,62 @@ app.post('/api/create-notion-page', async (req, res) => {
         }
 
         // Create the page in Notion
-        console.log('Creating Notion page with content:', {
-            contentLength: pageContent.length,
-            firstBlock: pageContent[0],
-            lastBlock: pageContent[pageContent.length - 1]
-        });
-
-        const page = await notion.pages.create({
-            parent: { 
-                type: 'page_id', 
-                page_id: workspaceId 
-            },
-            properties: {
-                title: {
-                    type: 'title',
-                    title: [
-                        {
-                            type: 'text',
-                            text: {
-                                content: 'Workspace Analysis Report'
-                            }
-                        }
-                    ]
+        console.log('Creating Notion page...');
+        
+        try {
+            // First try to get the workspace root page
+            const search = await notion.search({
+                filter: {
+                    property: 'object',
+                    value: 'page'
                 }
+            });
+            
+            const rootPage = search.results[0]?.id;
+            if (!rootPage) {
+                throw new Error('Could not find a root page to create the report in');
             }
-        });
+            
+            console.log('Found root page:', rootPage);
 
-        // Add content blocks to the created page
-        await notion.blocks.children.append({
-            block_id: page.id,
-            children: pageContent
-        });
+            const page = await notion.pages.create({
+                parent: { 
+                    type: 'page_id', 
+                    page_id: rootPage 
+                },
+                properties: {
+                    title: {
+                        type: 'title',
+                        title: [
+                            {
+                                type: 'text',
+                                text: {
+                                    content: 'Workspace Analysis Report'
+                                }
+                            }
+                        ]
+                    }
+                }
+            });
 
-        console.log('Successfully created Notion page:', page.id);
-        res.json({ success: true, pageId: page.id });
+            console.log('Created page:', page.id);
+
+            // Add content blocks to the created page
+            await notion.blocks.children.append({
+                block_id: page.id,
+                children: pageContent
+            });
+
+            console.log('Successfully added content to page');
+            res.json({ success: true, pageId: page.id });
+
+        } catch (error) {
+            console.error('Error creating Notion page:', error);
+            throw new Error(`Failed to create Notion page: ${error.message}`);
+        }
 
     } catch (error) {
-        console.error('Error creating Notion page:', error);
+        console.error('Error in create-notion-page endpoint:', error);
         res.status(500).json({ 
             error: 'Failed to create Notion page',
             details: error.message

@@ -1042,5 +1042,289 @@ async function triggerHexRun(workspaceId) {
     return callHexAPI(workspaceId, "21c6c24a-60e8-487c-b03a-1f04dda4f918");
 }
 
+// Add Notion page creation endpoint
+app.post('/api/create-notion-page', async (req, res) => {
+    try {
+        const { workspaceId, metrics, snapshots } = req.body;
+        
+        if (!req.session?.notionToken) {
+            throw new Error('No Notion authentication token found');
+        }
+
+        const notion = new Client({
+            auth: req.session.notionToken
+        });
+
+        // Create page content
+        const pageContent = [];
+
+        // Add title and workspace ID
+        pageContent.push({
+            type: 'heading_1',
+            heading_1: {
+                rich_text: [{
+                    type: 'text',
+                    text: { content: 'Workspace Analysis Report' }
+                }]
+            }
+        });
+
+        pageContent.push({
+            type: 'paragraph',
+            paragraph: {
+                rich_text: [{
+                    type: 'text',
+                    text: { content: `Workspace ID: ${workspaceId}` }
+                }]
+            }
+        });
+
+        // Add metrics sections
+        if (metrics) {
+            // Structure & Evolution Metrics
+            pageContent.push({
+                type: 'heading_2',
+                heading_2: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'Structure & Evolution Metrics' }
+                    }]
+                }
+            });
+
+            const structureMetrics = [
+                `Total Pages: ${metrics.totalPages}`,
+                `Active Pages: ${metrics.activePages}`,
+                `Max Depth: ${metrics.maxDepth}`,
+                `Average Depth: ${metrics.avgDepth.toFixed(2)}`,
+                `Deep Pages: ${metrics.deepPagesCount}`,
+                `Total Connections: ${metrics.totalConnections}`,
+                `Collections: ${metrics.collectionsCount}`
+            ];
+
+            pageContent.push({
+                type: 'bulleted_list_item',
+                bulleted_list_item: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: structureMetrics.join('\n') }
+                    }]
+                }
+            });
+
+            // Usage & Team Metrics
+            pageContent.push({
+                type: 'heading_2',
+                heading_2: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'Usage & Team Metrics' }
+                    }]
+                }
+            });
+
+            const usageMetrics = [
+                `Total Members: ${metrics.totalMembers}`,
+                `Total Guests: ${metrics.totalGuests}`,
+                `Total Teamspaces: ${metrics.totalTeamspaces}`,
+                `Average Members per Teamspace: ${metrics.averageTeamspaceMembers.toFixed(2)}`
+            ];
+
+            pageContent.push({
+                type: 'bulleted_list_item',
+                bulleted_list_item: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: usageMetrics.join('\n') }
+                    }]
+                }
+            });
+
+            // Growth & Projections
+            pageContent.push({
+                type: 'heading_2',
+                heading_2: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'Growth & Projections' }
+                    }]
+                }
+            });
+
+            const growthMetrics = [
+                `Monthly Member Growth Rate: ${metrics.monthlyMemberGrowthRate.toFixed(2)}%`,
+                `Monthly Content Growth Rate: ${metrics.monthlyContentGrowthRate.toFixed(2)}%`,
+                `Growth Capacity: ${metrics.growthCapacity.toFixed(2)}%`,
+                `Expected Members Next Year: ${Math.round(metrics.expectedMembersNextYear)}`
+            ];
+
+            pageContent.push({
+                type: 'bulleted_list_item',
+                bulleted_list_item: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: growthMetrics.join('\n') }
+                    }]
+                }
+            });
+
+            // Organization Scores
+            pageContent.push({
+                type: 'heading_2',
+                heading_2: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'Organization Scores' }
+                    }]
+                }
+            });
+
+            const organizationMetrics = [
+                `Visibility Score: ${metrics.currentVisibilityScore.toFixed(2)}%`,
+                `Collaboration Score: ${metrics.currentCollaborationScore.toFixed(2)}%`,
+                `Productivity Score: ${metrics.currentProductivityScore.toFixed(2)}%`,
+                `Overall Organization Score: ${metrics.currentOrganizationScore.toFixed(2)}%`,
+                `Projected Organization Score: ${metrics.projectedOrganisationScore.toFixed(2)}%`
+            ];
+
+            pageContent.push({
+                type: 'bulleted_list_item',
+                bulleted_list_item: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: organizationMetrics.join('\n') }
+                    }]
+                }
+            });
+
+            // ROI Analysis
+            pageContent.push({
+                type: 'heading_2',
+                heading_2: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'ROI Analysis' }
+                    }]
+                }
+            });
+
+            const roiMetrics = [
+                `Current Plan Cost: $${metrics.currentPlan.toLocaleString()}`,
+                `Enterprise Plan ROI: ${metrics.enterprisePlanRoi.toFixed(2)}%`,
+                `Enterprise Plan with AI ROI: ${metrics.enterprisePlanWithAiRoi.toFixed(2)}%`,
+                `Value at 10% Productivity Increase: $${metrics.tenPercentIncrease.toLocaleString()}`,
+                `Value at 20% Productivity Increase: $${metrics.twentyPercentIncrease.toLocaleString()}`,
+                `Value at 50% Productivity Increase: $${metrics.fiftyPercentIncrease.toLocaleString()}`
+            ];
+
+            pageContent.push({
+                type: 'bulleted_list_item',
+                bulleted_list_item: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: roiMetrics.join('\n') }
+                    }]
+                }
+            });
+        }
+
+        // Add visualizations if available
+        if (snapshots) {
+            pageContent.push({
+                type: 'heading_2',
+                heading_2: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'Workspace Evolution Visualizations' }
+                    }]
+                }
+            });
+
+            // Helper function to add visualization section
+            const addVisualizationSection = (title, snapshot) => {
+                if (!snapshot?.visualization) return;
+
+                pageContent.push({
+                    type: 'heading_3',
+                    heading_3: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: title }
+                        }]
+                    }
+                });
+
+                // Add visualization metrics
+                if (snapshot.metrics) {
+                    const metrics = [
+                        `Total Nodes: ${snapshot.metrics.totalNodes}`,
+                        `Active Members: ${snapshot.metrics.totalMembers}`,
+                        `Total Connections: ${snapshot.metrics.totalConnections}`,
+                        `Connection Density: ${(snapshot.metrics.connectionDensity * 100).toFixed(1)}%`,
+                        `Collaboration Score: ${snapshot.metrics.collaborationScore.toFixed(1)}`
+                    ];
+
+                    pageContent.push({
+                        type: 'bulleted_list_item',
+                        bulleted_list_item: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: metrics.join('\n') }
+                            }]
+                        }
+                    });
+                }
+
+                // Add visualization image
+                const fullUrl = snapshot.visualization.startsWith('http') 
+                    ? snapshot.visualization 
+                    : `https://visualiser-xhjh.onrender.com${snapshot.visualization}`;
+
+                pageContent.push({
+                    type: 'image',
+                    image: {
+                        type: 'external',
+                        external: {
+                            url: fullUrl
+                        }
+                    }
+                });
+            };
+
+            // Add each visualization section
+            addVisualizationSection('Past State (60 days ago)', snapshots.past);
+            addVisualizationSection('Current State', snapshots.present);
+            addVisualizationSection('Projected Future (90 days)', snapshots.future);
+        }
+
+        // Create the page in Notion
+        const page = await notion.pages.create({
+            parent: { type: 'page_id', page_id: workspaceId },
+            properties: {
+                title: {
+                    title: [
+                        {
+                            text: {
+                                content: 'Workspace Analysis Report'
+                            }
+                        }
+                    ]
+                }
+            },
+            children: pageContent
+        });
+
+        console.log('Created Notion page:', page.id);
+        res.json({ success: true, pageId: page.id });
+
+    } catch (error) {
+        console.error('Error creating Notion page:', error);
+        res.status(500).json({ 
+            error: 'Failed to create Notion page',
+            details: error.message
+        });
+    }
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

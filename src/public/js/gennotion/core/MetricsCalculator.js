@@ -862,195 +862,69 @@ export class MetricsCalculator {
 
     async createNotionEntry(workspaceId, metrics) {
         try {
-            const pageContent = [];
+            console.log('Creating Notion entry for workspace:', workspaceId);
+            console.log('Metrics to include:', metrics);
 
-            // Add workspace ID and title
-            pageContent.push({
-                type: 'heading_1',
-                heading_1: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Workspace Analysis Report' }
-                    }]
-                }
-            });
-
-            pageContent.push({
-                type: 'paragraph',
-                paragraph: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: `Workspace ID: ${workspaceId}` }
-                    }]
-                }
-            });
-
-            // Add Structure & Evolution Metrics
-            pageContent.push({
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Structure & Evolution Metrics' }
-                    }]
-                }
-            });
-
-            pageContent.push(...this.createBulletedList([
-                `Total Pages: ${metrics['[[total_pages]]']} | Max Depth: ${metrics['[[max_depth]]']} | Avg Depth: ${metrics['[[avg_depth]]']}`,
-                `Root Pages: ${metrics['[[root_pages]]']} | Deep Pages: ${metrics['[[deep_pages_count]]']} | Orphaned: ${metrics['[[orphaned_blocks]]']}`,
-                `Collections: ${metrics['[[collections_count]]']} | Views: ${metrics['[[collection_views]]']} | Templates: ${metrics['[[template_count]]']}`,
-                `Content Maturity: ${metrics['[[content_maturity_score]]']} | Growth Index: ${metrics['[[growth_sustainability_index]]']}`,
-                `Workspace Complexity: ${metrics['[[workspace_complexity_score]]']} | Knowledge Structure: ${metrics['[[knowledge_structure_score]]']}`
-            ]));
-
-            // Add Collaboration & Content Quality
-            pageContent.push({
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Collaboration & Content Quality' }
-                    }]
-                }
-            });
-
-            pageContent.push(...this.createBulletedList([
-                `Team Adoption: ${metrics['[[team_adoption_score]]']} | Collaboration Density: ${metrics['[[collaboration_density]]']}`,
-                `Knowledge Sharing: ${metrics['[[knowledge_sharing_index]]']} | Cross-Team Score: ${metrics['[[cross_team_collaboration_score]]']}`,
-                `Content Freshness: ${metrics['[[content_freshness_score]]']} | Structure Quality: ${metrics['[[structure_quality_index]]']}`,
-                `Knowledge Base Health: ${metrics['[[knowledge_base_health]]']} | Documentation: ${metrics['[[documentation_coverage]]']}`
-            ]));
-
-            // Add Usage & Predictive Metrics
-            pageContent.push({
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Usage & Predictive Metrics' }
-                    }]
-                }
-            });
-
-            pageContent.push(...this.createBulletedList([
-                `Automation: ${metrics['[[automation_effectiveness]]']} | Integration Impact: ${metrics['[[integration_impact_score]]']}`,
-                `Feature Usage: ${metrics['[[feature_utilization_index]]']} | Advanced Features: ${metrics['[[advanced_features_adoption]]']}`,
-                `Growth Trajectory: ${metrics['[[growth_trajectory]]']} | Scaling Readiness: ${metrics['[[scaling_readiness_score]]']}`,
-                `Growth Potential: ${metrics['[[growth_potential_score]]']} | Optimization Opportunities: ${metrics['[[optimization_opportunities]]']}`
-            ]));
-
-            // Add workspace evolution visualizations
-            pageContent.push({
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: 'Workspace Evolution Visualizations' }
-                    }]
-                }
-            });
-
-            // Helper function to add visualization block with metrics
-            const addVisualizationBlock = (title, snapshot) => {
-                if (!snapshot) return;
-                
-                // Add section title
-                pageContent.push({
-                    type: 'heading_3',
-                    heading_3: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: title }
-                        }]
-                    }
-                });
-
-                // Add metrics for this snapshot
-                if (snapshot.metrics) {
-                    pageContent.push(...this.createBulletedList([
-                        `Total Nodes: ${snapshot.metrics.totalNodes}`,
-                        `Active Members: ${snapshot.metrics.totalMembers}`,
-                        `Total Connections: ${snapshot.metrics.totalConnections}`,
-                        `Connection Density: ${(snapshot.metrics.connectionDensity * 100).toFixed(1)}%`,
-                        `Collaboration Score: ${snapshot.metrics.collaborationScore.toFixed(1)}`,
-                        `Active Nodes: ${snapshot.metrics.activeNodes}`,
-                        `Identified Silos: ${snapshot.metrics.silos}`
-                    ]));
-                }
-
-                // Add visualization if available
-                if (snapshot.visualization) {
-                    const fullUrl = snapshot.visualization.startsWith('http') 
-                        ? snapshot.visualization 
-                        : `https://visualiser-xhjh.onrender.com${snapshot.visualization}`;
-                    
-                    pageContent.push({
-                        type: 'image',
-                        image: {
-                            type: 'external',
-                            external: {
-                                url: fullUrl
-                            }
-                        }
-                    });
-                }
-            };
-
-            // Add visualization blocks with their metrics
-            if (metrics.snapshots) {
-                addVisualizationBlock('Past State (60 days ago)', metrics.snapshots.past);
-                addVisualizationBlock('Current State', metrics.snapshots.present);
-                addVisualizationBlock('Projected Future (90 days)', metrics.snapshots.future);
-            }
-
-            // Add analysis date
-            pageContent.push({
-                type: 'paragraph',
-                paragraph: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: `Analysis Date: ${new Date().toISOString()}` }
-                    }]
-                }
-            });
-
-            // Create the Notion page
-            const response = await fetch('https://api.notion.com/v1/pages', {
+            // Make API call to create Notion page
+            const response = await fetch('/api/create-notion-page', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${this.NOTION_API_KEY}`,
-                    'Content-Type': 'application/json',
-                    'Notion-Version': '2022-06-28'
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    parent: { database_id: this.NOTION_DATABASE_ID },
-                    properties: {
-                        title: {
-                            title: [
-                                {
-                                    text: {
-                                        content: `Workspace Analysis - ${workspaceId}`
-                                    }
-                                }
-                            ]
-                        }
+                    workspaceId,
+                    metrics: {
+                        // Structure metrics
+                        totalPages: metrics.total_pages || 0,
+                        activePages: metrics.num_alive_pages || 0,
+                        maxDepth: metrics.max_depth || 0,
+                        totalConnections: metrics.total_connections || 0,
+                        avgDepth: metrics.avg_depth || 0,
+                        deepPagesCount: metrics.deep_pages_count || 0,
+                        collectionsCount: metrics.collections_count || 0,
+                        
+                        // Usage metrics
+                        totalMembers: metrics.total_num_members || 0,
+                        totalGuests: metrics.total_num_guests || 0,
+                        totalTeamspaces: metrics.total_num_teamspaces || 0,
+                        averageTeamspaceMembers: metrics.average_teamspace_members || 0,
+                        
+                        // Growth metrics
+                        monthlyMemberGrowthRate: metrics.monthly_member_growth_rate || 0,
+                        monthlyContentGrowthRate: metrics.monthly_content_growth_rate || 0,
+                        growthCapacity: metrics.growth_capacity || 0,
+                        expectedMembersNextYear: metrics.expected_members_in_next_year || 0,
+                        
+                        // Organization metrics
+                        currentVisibilityScore: metrics.current_visibility_score || 0,
+                        currentCollaborationScore: metrics.current_collaboration_score || 0,
+                        currentProductivityScore: metrics.current_productivity_score || 0,
+                        currentOrganizationScore: metrics.current_organization_score || 0,
+                        projectedOrganisationScore: metrics.projected_organisation_score || 0,
+                        
+                        // ROI metrics
+                        currentPlan: metrics.current_plan || 0,
+                        enterprisePlanRoi: metrics.enterprise_plan_roi || 0,
+                        enterprisePlanWithAiRoi: metrics.enterprise_plan_w_ai_roi || 0,
+                        tenPercentIncrease: metrics['10_percent_increase'] || 0,
+                        twentyPercentIncrease: metrics['20_percent_increase'] || 0,
+                        fiftyPercentIncrease: metrics['50_percent_increase'] || 0
                     },
-                    children: pageContent
+                    snapshots: metrics.snapshots || null
                 })
             });
 
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Error response:', errorText);
-                throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
+                const errorData = await response.json();
+                throw new Error(`Failed to create Notion page: ${errorData.error}`);
             }
 
             const result = await response.json();
-            console.log("Success! Notion entry created:", result);
+            console.log('Successfully created Notion page:', result);
             return result;
+
         } catch (error) {
-            console.error("Error creating Notion entry:", error);
+            console.error('Error in createNotionEntry:', error);
             throw error;
         }
     }
@@ -1595,8 +1469,8 @@ export class MetricsCalculator {
                 `Total Nodes: ${snapshot.metrics.totalNodes}`,
                 `Active Members: ${snapshot.metrics.totalMembers}`,
                 `Total Connections: ${snapshot.metrics.totalConnections}`,
-                `Connection Density: ${snapshot.metrics.connectionDensity}`,
-                `Collaboration Score: ${snapshot.metrics.collaborationScore}`,
+                `Connection Density: ${(snapshot.metrics.connectionDensity * 100).toFixed(1)}%`,
+                `Collaboration Score: ${snapshot.metrics.collaborationScore.toFixed(1)}`,
                 `Active Nodes: ${snapshot.metrics.activeNodes}`,
                 `Identified Silos: ${snapshot.metrics.silos}`
             ]),

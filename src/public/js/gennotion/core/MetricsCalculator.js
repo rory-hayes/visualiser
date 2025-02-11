@@ -112,11 +112,35 @@ export class MetricsCalculator {
                 snapshotKeys: snapshotResults.snapshots ? Object.keys(snapshotResults.snapshots) : []
             });
             
-            const notionPageId = await this.createNotionEntry(workspaceId, { 
-                ...placeholderMetrics, 
-                snapshots: snapshotResults.snapshots 
+            // Make API call to create Notion page
+            const response = await fetch('/api/create-notion-page', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    workspaceId,
+                    metrics: placeholderMetrics,
+                    snapshots: snapshotResults.snapshots
+                })
             });
-            console.log('DEBUG - Successfully created Notion page with ID:', notionPageId);
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Error creating Notion page:', errorText);
+                throw new Error(`Failed to create Notion page: ${errorText}`);
+            }
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error('Failed to create Notion page: ' + (result.error || 'Unknown error'));
+            }
+
+            console.log('DEBUG - Successfully created Notion page with ID:', result.pageId);
+            allMetrics.notionPageId = result.pageId;
+
         } catch (error) {
             console.error('Error creating Notion entry:', error);
             console.error('Error stack:', error.stack);
@@ -125,6 +149,8 @@ export class MetricsCalculator {
                 snapshotsPresent: !!snapshotResults.snapshots,
                 workspaceId
             });
+            // Don't throw here - we want to return the metrics even if Notion page creation fails
+            allMetrics.notionError = error.message;
         }
 
         return allMetrics;
@@ -943,17 +969,20 @@ export class MetricsCalculator {
             console.log('DEBUG - Notion API response status:', response.status);
             console.log('DEBUG - Notion API response headers:', Object.fromEntries(response.headers.entries()));
 
-            const responseText = await response.text();
-            console.log('DEBUG - Raw response text:', responseText);
-
-            let result;
-            try {
-                result = JSON.parse(responseText);
-            } catch (parseError) {
-                console.error('DEBUG - Failed to parse response:', parseError);
-                throw new Error(`Invalid JSON response: ${responseText}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('DEBUG - Error response:', errorText);
+                let errorMessage;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    errorMessage = errorJson.error || errorJson.details || 'Unknown error occurred';
+                } catch (e) {
+                    errorMessage = errorText || 'Failed to create Notion page';
+                }
+                throw new Error(errorMessage);
             }
 
+            const result = await response.json();
             console.log('DEBUG - Parsed response:', result);
             
             if (!result.success || !result.pageId) {

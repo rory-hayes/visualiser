@@ -1062,7 +1062,10 @@ app.post('/api/create-notion-page', async (req, res) => {
         
         if (!req.session?.notionToken) {
             console.error('DEBUG - No Notion token found in session');
-            return res.status(401).json({ error: 'No Notion authentication token found' });
+            return res.status(401).json({ 
+                success: false,
+                error: 'No Notion authentication token found' 
+            });
         }
 
         console.log('DEBUG - Using Notion token from session');
@@ -1077,7 +1080,10 @@ app.post('/api/create-notion-page', async (req, res) => {
             console.log('DEBUG - Notion token verified for user:', user.name);
         } catch (error) {
             console.error('DEBUG - Failed to verify Notion token:', error);
-            return res.status(401).json({ error: 'Invalid Notion token' });
+            return res.status(401).json({ 
+                success: false,
+                error: 'Invalid Notion token' 
+            });
         }
 
         // Create page content
@@ -1334,7 +1340,10 @@ app.post('/api/create-notion-page', async (req, res) => {
             const rootPage = search.results[0]?.id;
             if (!rootPage) {
                 console.error('DEBUG - Could not find a root page');
-                throw new Error('Could not find a root page to create the report in');
+                return res.status(500).json({
+                    success: false,
+                    error: 'Could not find a root page to create the report in'
+                });
             }
             
             console.log('DEBUG - Found root page:', rootPage);
@@ -1370,12 +1379,15 @@ app.post('/api/create-notion-page', async (req, res) => {
             });
 
             console.log('DEBUG - Successfully added content to page');
-            return res.json({ success: true, pageId: page.id });
+            res.json({ success: true, pageId: page.id });
 
         } catch (error) {
             console.error('DEBUG - Error creating Notion page:', error);
             console.error('DEBUG - Error stack:', error.stack);
-            throw new Error(`Failed to create Notion page: ${error.message}`);
+            res.status(500).json({ 
+                success: false,
+                error: `Failed to create Notion page: ${error.message}` 
+            });
         }
 
     } catch (error) {
@@ -1384,6 +1396,7 @@ app.post('/api/create-notion-page', async (req, res) => {
         // Ensure we haven't already sent a response
         if (!res.headersSent) {
             res.status(500).json({ 
+                success: false,
                 error: 'Failed to create Notion page',
                 details: error.message
             });

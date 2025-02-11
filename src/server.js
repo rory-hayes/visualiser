@@ -1055,12 +1055,11 @@ app.post('/api/create-notion-page', async (req, res) => {
         console.log('DEBUG - Request headers:', req.headers);
         console.log('DEBUG - Session data:', req.session);
 
-        const { workspaceId, metrics, snapshots } = req.body;
+        const requestData = req.body;
         console.log('DEBUG - Request body:', {
-            hasWorkspaceId: !!workspaceId,
-            hasMetrics: !!metrics,
-            hasSnapshots: !!snapshots,
-            metricsKeys: metrics ? Object.keys(metrics) : []
+            hasWorkspaceId: !!requestData.workspaceId,
+            hasMetrics: !!requestData.metrics,
+            metricsKeys: requestData.metrics ? Object.keys(requestData.metrics) : []
         });
         
         if (!req.session?.notionToken) {
@@ -1120,13 +1119,13 @@ app.post('/api/create-notion-page', async (req, res) => {
                 paragraph: {
                     rich_text: [{
                         type: 'text',
-                        text: { content: `Workspace ID: ${workspaceId}` }
+                        text: { content: `Workspace ID: ${requestData.workspaceId}` }
                     }]
                 }
             });
 
             // Add metrics sections
-            if (metrics) {
+            if (requestData.metrics) {
                 console.log('DEBUG - Adding metrics sections...');
                 try {
                     // Structure & Evolution Metrics
@@ -1142,13 +1141,13 @@ app.post('/api/create-notion-page', async (req, res) => {
                     });
 
                     const structureMetrics = [
-                        `Total Pages: ${metrics.totalPages}`,
-                        `Active Pages: ${metrics.activePages}`,
-                        `Max Depth: ${metrics.maxDepth}`,
-                        `Average Depth: ${metrics.avgDepth?.toFixed(2) || 0}`,
-                        `Deep Pages: ${metrics.deepPagesCount}`,
-                        `Total Connections: ${metrics.totalConnections}`,
-                        `Collections: ${metrics.collectionsCount}`
+                        `Total Pages: ${requestData.metrics.totalPages}`,
+                        `Active Pages: ${requestData.metrics.activePages}`,
+                        `Max Depth: ${requestData.metrics.maxDepth}`,
+                        `Average Depth: ${requestData.metrics.avgDepth?.toFixed(2) || 0}`,
+                        `Deep Pages: ${requestData.metrics.deepPagesCount}`,
+                        `Total Connections: ${requestData.metrics.totalConnections}`,
+                        `Collections: ${requestData.metrics.collectionsCount}`
                     ];
 
                     pageContent.push({
@@ -1175,10 +1174,10 @@ app.post('/api/create-notion-page', async (req, res) => {
                     });
 
                     const usageMetrics = [
-                        `Total Members: ${metrics.totalMembers}`,
-                        `Total Guests: ${metrics.totalGuests}`,
-                        `Total Teamspaces: ${metrics.totalTeamspaces}`,
-                        `Average Members per Teamspace: ${metrics.averageTeamspaceMembers?.toFixed(2) || 0}`
+                        `Total Members: ${requestData.metrics.totalMembers}`,
+                        `Total Guests: ${requestData.metrics.totalGuests}`,
+                        `Total Teamspaces: ${requestData.metrics.totalTeamspaces}`,
+                        `Average Members per Teamspace: ${requestData.metrics.averageTeamspaceMembers?.toFixed(2) || 0}`
                     ];
 
                     pageContent.push({
@@ -1205,10 +1204,10 @@ app.post('/api/create-notion-page', async (req, res) => {
                     });
 
                     const growthMetrics = [
-                        `Monthly Member Growth Rate: ${metrics.monthlyMemberGrowthRate?.toFixed(2) || 0}%`,
-                        `Monthly Content Growth Rate: ${metrics.monthlyContentGrowthRate?.toFixed(2) || 0}%`,
-                        `Growth Capacity: ${metrics.growthCapacity?.toFixed(2) || 0}%`,
-                        `Expected Members Next Year: ${Math.round(metrics.expectedMembersNextYear || 0)}`
+                        `Monthly Member Growth Rate: ${requestData.metrics.monthlyMemberGrowthRate?.toFixed(2) || 0}%`,
+                        `Monthly Content Growth Rate: ${requestData.metrics.monthlyContentGrowthRate?.toFixed(2) || 0}%`,
+                        `Growth Capacity: ${requestData.metrics.growthCapacity?.toFixed(2) || 0}%`,
+                        `Expected Members Next Year: ${Math.round(requestData.metrics.expectedMembersNextYear || 0)}`
                     ];
 
                     pageContent.push({
@@ -1235,10 +1234,10 @@ app.post('/api/create-notion-page', async (req, res) => {
                     });
 
                     const organizationMetrics = [
-                        `Visibility Score: ${metrics.currentVisibilityScore?.toFixed(2) || 0}%`,
-                        `Collaboration Score: ${metrics.currentCollaborationScore?.toFixed(2) || 0}%`,
-                        `Productivity Score: ${metrics.currentProductivityScore?.toFixed(2) || 0}%`,
-                        `Overall Organization Score: ${metrics.currentOrganizationScore?.toFixed(2) || 0}%`
+                        `Visibility Score: ${requestData.metrics.currentVisibilityScore?.toFixed(2) || 0}%`,
+                        `Collaboration Score: ${requestData.metrics.currentCollaborationScore?.toFixed(2) || 0}%`,
+                        `Productivity Score: ${requestData.metrics.currentProductivityScore?.toFixed(2) || 0}%`,
+                        `Overall Organization Score: ${requestData.metrics.currentOrganizationScore?.toFixed(2) || 0}%`
                     ];
 
                     pageContent.push({
@@ -1265,20 +1264,20 @@ app.post('/api/create-notion-page', async (req, res) => {
                     });
 
                     const advancedMetrics = [
-                        `Content Maturity Score: ${metrics.contentMaturityScore?.toFixed(2) || 0}`,
-                        `Workspace Complexity Score: ${metrics.workspaceComplexityScore?.toFixed(2) || 0}`,
-                        `Knowledge Structure Score: ${metrics.knowledgeStructureScore?.toFixed(2) || 0}`,
-                        `Team Adoption Score: ${metrics.teamAdoptionScore?.toFixed(2) || 0}`,
-                        `Knowledge Sharing Index: ${metrics.knowledgeSharingIndex?.toFixed(2) || 0}`,
-                        `Content Freshness Score: ${metrics.contentFreshnessScore?.toFixed(2) || 0}`,
-                        `Structure Quality Index: ${metrics.structureQualityIndex?.toFixed(2) || 0}`,
-                        `Documentation Coverage: ${metrics.documentationCoverage?.toFixed(2) || 0}%`,
-                        `Automation Effectiveness: ${metrics.automationEffectiveness?.toFixed(2) || 0}%`,
-                        `Integration Impact Score: ${metrics.integrationImpactScore?.toFixed(2) || 0}`,
-                        `Feature Utilization Index: ${metrics.featureUtilizationIndex?.toFixed(2) || 0}`,
-                        `Growth Trajectory: ${metrics.growthTrajectory?.toFixed(2) || 0}`,
-                        `Scaling Readiness Score: ${metrics.scalingReadinessScore?.toFixed(2) || 0}`,
-                        `Growth Potential Score: ${metrics.growthPotentialScore?.toFixed(2) || 0}`
+                        `Content Maturity Score: ${requestData.metrics.contentMaturityScore?.toFixed(2) || 0}`,
+                        `Workspace Complexity Score: ${requestData.metrics.workspaceComplexityScore?.toFixed(2) || 0}`,
+                        `Knowledge Structure Score: ${requestData.metrics.knowledgeStructureScore?.toFixed(2) || 0}`,
+                        `Team Adoption Score: ${requestData.metrics.teamAdoptionScore?.toFixed(2) || 0}`,
+                        `Knowledge Sharing Index: ${requestData.metrics.knowledgeSharingIndex?.toFixed(2) || 0}`,
+                        `Content Freshness Score: ${requestData.metrics.contentFreshnessScore?.toFixed(2) || 0}`,
+                        `Structure Quality Index: ${requestData.metrics.structureQualityIndex?.toFixed(2) || 0}`,
+                        `Documentation Coverage: ${requestData.metrics.documentationCoverage?.toFixed(2) || 0}%`,
+                        `Automation Effectiveness: ${requestData.metrics.automationEffectiveness?.toFixed(2) || 0}%`,
+                        `Integration Impact Score: ${requestData.metrics.integrationImpactScore?.toFixed(2) || 0}`,
+                        `Feature Utilization Index: ${requestData.metrics.featureUtilizationIndex?.toFixed(2) || 0}`,
+                        `Growth Trajectory: ${requestData.metrics.growthTrajectory?.toFixed(2) || 0}`,
+                        `Scaling Readiness Score: ${requestData.metrics.scalingReadinessScore?.toFixed(2) || 0}`,
+                        `Growth Potential Score: ${requestData.metrics.growthPotentialScore?.toFixed(2) || 0}`
                     ];
 
                     pageContent.push({
@@ -1294,46 +1293,6 @@ app.post('/api/create-notion-page', async (req, res) => {
                 } catch (error) {
                     console.error('DEBUG - Error formatting metrics:', error);
                     // Continue with partial metrics rather than failing completely
-                }
-            }
-
-            // Add visualizations if available
-            if (snapshots) {
-                console.log('DEBUG - Adding visualization sections...');
-                try {
-                    pageContent.push({
-                        object: 'block',
-                        type: 'heading_2',
-                        heading_2: {
-                            rich_text: [{
-                                type: 'text',
-                                text: { content: 'Workspace Evolution Visualizations' }
-                            }]
-                        }
-                    });
-
-                    // Helper function to add visualization section
-                    const addVisualizationSection = async (title, snapshot) => {
-                        if (!snapshot) return; // Skip if snapshot is missing
-                        
-                        try {
-                            // ... visualization section code ...
-                        } catch (error) {
-                            console.error(`DEBUG - Error adding visualization for ${title}:`, error);
-                            // Continue without this visualization
-                        }
-                    };
-
-                    // Add each visualization section with individual error handling
-                    await Promise.all([
-                        addVisualizationSection('Past State (60 days ago)', snapshots.past),
-                        addVisualizationSection('Current State', snapshots.present),
-                        addVisualizationSection('Projected Future (90 days)', snapshots.future),
-                        addVisualizationSection('Key Metrics', snapshots.keyMetrics)
-                    ]);
-                } catch (error) {
-                    console.error('DEBUG - Error adding visualizations:', error);
-                    // Continue without visualizations rather than failing completely
                 }
             }
         } catch (error) {

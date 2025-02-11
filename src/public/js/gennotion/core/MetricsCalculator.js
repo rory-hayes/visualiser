@@ -32,19 +32,6 @@ export class MetricsCalculator {
             df3Keys: dataframe_3 ? Object.keys(dataframe_3) : [],
             df5Sample: dataframe_5?.[0]
         });
-        
-        let snapshotResults = { snapshots: null };
-        
-        // Try to generate snapshots but don't let it block the whole process
-        try {
-            // Generate snapshots and visualizations
-            console.log('Generating snapshots and visualizations...');
-            snapshotResults = await this.snapshotVisualizer.generateSnapshots(dataframe_2, dataframe_3, dataframe_5);
-            console.log('Generated snapshots:', snapshotResults);
-        } catch (error) {
-            console.error('Error generating snapshots:', error);
-            // Continue with metrics calculation even if snapshots fail
-        }
 
         // Calculate workspace age first
         const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
@@ -91,8 +78,7 @@ export class MetricsCalculator {
             ...collaborationPatterns,
             ...contentQualityMetrics,
             ...usagePatterns,
-            ...predictiveMetrics,
-            snapshots: snapshotResults.snapshots
+            ...predictiveMetrics
         };
 
         // Log metrics with placeholders
@@ -107,15 +93,10 @@ export class MetricsCalculator {
             }
             console.log('DEBUG - About to create Notion entry with:', {
                 workspaceId,
-                metricsCount: Object.keys(placeholderMetrics).length,
-                hasSnapshots: !!snapshotResults.snapshots,
-                snapshotKeys: snapshotResults.snapshots ? Object.keys(snapshotResults.snapshots) : []
+                metricsCount: Object.keys(placeholderMetrics).length
             });
             
-            const pageId = await this.createNotionEntry(workspaceId, {
-                ...placeholderMetrics,
-                snapshots: snapshotResults.snapshots
-            });
+            const pageId = await this.createNotionEntry(workspaceId, placeholderMetrics);
             
             console.log('DEBUG - Successfully created Notion page with ID:', pageId);
             allMetrics.notionPageId = pageId;
@@ -125,7 +106,6 @@ export class MetricsCalculator {
             console.error('Error stack:', error.stack);
             console.error('DEBUG - Failed metrics:', {
                 metricsKeys: Object.keys(placeholderMetrics),
-                snapshotsPresent: !!snapshotResults.snapshots,
                 workspaceId
             });
             // Don't throw here - we want to return the metrics even if Notion page creation fails

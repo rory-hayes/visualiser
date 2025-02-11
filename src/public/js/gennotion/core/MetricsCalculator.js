@@ -1,4 +1,5 @@
 import { SnapshotVisualizer } from './SnapshotVisualizer.js';
+import { Client } from '@notionhq/client';
 
 export class MetricsCalculator {
     constructor() {
@@ -14,10 +15,17 @@ export class MetricsCalculator {
         this.MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
         this.MILLISECONDS_PER_MONTH = 30 * this.MILLISECONDS_PER_DAY;
 
-        // Notion API configuration
-        this.NOTION_DATABASE_ID = "18730aa1-c7a9-8059-b53e-de31cde8bfc4";
-        this.NOTION_API_KEY = "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";
+        // Get Notion credentials from environment
+        if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
+            throw new Error('Missing required Notion environment variables: NOTION_API_KEY and NOTION_DATABASE_ID');
+        }
 
+        // Initialize Notion client
+        this.notion = new Client({
+            auth: process.env.NOTION_API_KEY
+        });
+
+        this.NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID;
         this.snapshotVisualizer = new SnapshotVisualizer();
     }
 
@@ -887,106 +895,141 @@ export class MetricsCalculator {
         try {
             console.log('DEBUG - createNotionEntry called with:', {
                 workspaceId,
-                metricsKeys: Object.keys(metrics),
-                hasSnapshots: !!metrics.snapshots,
-                metricsValues: Object.entries(metrics).slice(0, 5).map(([k, v]) => `${k}: ${v}`),
-                snapshotKeys: metrics.snapshots ? Object.keys(metrics.snapshots) : []
+                metricsKeys: Object.keys(metrics)
             });
             
-            // Ensure we have the required data
             if (!workspaceId) {
                 throw new Error('Workspace ID is required');
             }
 
-            // Format metrics for Notion
-            const formattedMetrics = this.formatMetricsForNotion(metrics);
-            console.log('DEBUG - Formatted metrics for Notion:', {
-                formattedKeys: Object.keys(formattedMetrics),
-                sampleValues: Object.entries(formattedMetrics).slice(0, 5)
-            });
-
-            console.log('DEBUG - Preparing API request to /api/create-notion-page');
-
-            // Get the base URL from the window location or environment
-            const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://visualiser-xhjh.onrender.com';
-            
-            // Make API call to create Notion page
-            const requestBody = {
-                workspaceId,
-                metrics: formattedMetrics,
-                snapshots: metrics.snapshots || null
-            };
-            console.log('DEBUG - Request body:', JSON.stringify(requestBody, null, 2));
-
-            const response = await fetch(`${baseUrl}/api/create-notion-page`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+            // Format metrics for Notion blocks
+            const blocks = [
+                {
+                    object: 'block',
+                    type: 'heading_1',
+                    heading_1: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Workspace Analysis Report' }
+                        }]
+                    }
                 },
-                credentials: 'include',
-                body: JSON.stringify(requestBody)
+                {
+                    object: 'block',
+                    type: 'paragraph',
+                    paragraph: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Workspace ID: ${workspaceId}` }
+                        }]
+                    }
+                }
+            ];
+
+            // Add metrics sections
+            const sections = {
+                'Structure & Evolution Metrics': [
+                    `Total Pages: ${metrics['[[total_pages]]']}`,
+                    `Active Pages: ${metrics['[[alive_pages]]']}`,
+                    `Max Depth: ${metrics['[[max_depth]]']}`,
+                    `Deep Pages: ${metrics['[[deep_pages_count]]']}`,
+                    `Total Connections: ${metrics['[[total_connections]]']}`,
+                    `Collections: ${metrics['[[collections_count]]']}`
+                ],
+                'Usage & Team Metrics': [
+                    `Total Members: ${metrics['[[total_members]]']}`,
+                    `Total Guests: ${metrics['[[total_guests]]']}`,
+                    `Total Teamspaces: ${metrics['[[total_teamspaces]]']}`,
+                    `Average Members per Teamspace: ${metrics['[[avg_teamspace_members]]']}`
+                ],
+                'Organization Scores': [
+                    `Visibility Score: ${metrics['[[visibility_score]]']}%`,
+                    `Collaboration Score: ${metrics['[[collab_score]]']}%`,
+                    `Productivity Score: ${metrics['[[prod_score]]']}%`,
+                    `Overall Organization Score: ${metrics['[[org_score]]']}%`
+                ],
+                'Advanced Metrics': [
+                    `Content Maturity Score: ${metrics['[[content_maturity_score]]']}`,
+                    `Workspace Complexity Score: ${metrics['[[workspace_complexity_score]]']}`,
+                    `Knowledge Structure Score: ${metrics['[[knowledge_structure_score]]']}`,
+                    `Team Adoption Score: ${metrics['[[team_adoption_score]]']}`,
+                    `Knowledge Sharing Index: ${metrics['[[knowledge_sharing_index]]']}`,
+                    `Content Freshness Score: ${metrics['[[content_freshness_score]]']}`,
+                    `Structure Quality Index: ${metrics['[[structure_quality_index]]']}`,
+                    `Documentation Coverage: ${metrics['[[documentation_coverage]]']}%`
+                ]
+            };
+
+            // Add each section to blocks
+            for (const [title, items] of Object.entries(sections)) {
+                // Add section heading
+                blocks.push({
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: title }
+                        }]
+                    }
+                });
+
+                // Add metrics as bullet points
+                items.forEach(item => {
+                    blocks.push({
+                        object: 'block',
+                        type: 'bulleted_list_item',
+                        bulleted_list_item: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: item }
+                            }]
+                        }
+                    });
+                });
+            }
+
+            // Create the page in Notion
+            const response = await this.notion.pages.create({
+                parent: {
+                    type: 'database_id',
+                    database_id: this.NOTION_DATABASE_ID
+                },
+                properties: {
+                    'Title': {
+                        title: [
+                            {
+                                text: {
+                                    content: `Workspace Analysis - ${workspaceId}`
+                                }
+                            }
+                        ]
+                    },
+                    'Workspace ID': {
+                        rich_text: [
+                            {
+                                text: {
+                                    content: workspaceId
+                                }
+                            }
+                        ]
+                    },
+                    'Date': {
+                        date: {
+                            start: new Date().toISOString()
+                        }
+                    }
+                },
+                children: blocks
             });
 
-            console.log('DEBUG - Notion API response status:', response.status);
-            console.log('DEBUG - Notion API response headers:', Object.fromEntries(response.headers.entries()));
-
-            // Check content type first
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const text = await response.text();
-                console.error('DEBUG - Unexpected response type:', contentType);
-                console.error('DEBUG - Response body:', text);
-                throw new Error('Unexpected response type from server');
-            }
-
-            // Now we know it's JSON, parse it
-            const result = await response.json();
-            console.log('DEBUG - Parsed response:', result);
-
-            if (!response.ok) {
-                const errorMessage = result.error || result.details || 'Unknown error occurred';
-                throw new Error(errorMessage);
-            }
-
-            if (!result.success || !result.pageId) {
-                throw new Error('Invalid response from server when creating Notion page');
-            }
-
-            console.log('Successfully created Notion page:', result.pageId);
-            return result.pageId;
+            console.log('Successfully created Notion page:', response.id);
+            return response.id;
 
         } catch (error) {
             console.error('Error in createNotionEntry:', error);
-            console.error('Error stack:', error.stack);
             throw error;
         }
-    }
-
-    formatMetricsForNotion(metrics) {
-        // Helper function to safely format values
-        const formatValue = (value) => {
-            if (value === null || value === undefined) return 'N/A';
-            if (typeof value === 'number') {
-                return Number.isInteger(value) ? value.toString() : value.toFixed(2);
-            }
-            return String(value);
-        };
-
-        // Create formatted metrics object
-        const formatted = {};
-        for (const [key, value] of Object.entries(metrics)) {
-            if (key === 'snapshots') continue; // Skip snapshots object
-            formatted[key] = formatValue(value);
-        }
-
-        console.log('DEBUG - Formatted metrics:', {
-            originalKeys: Object.keys(metrics).length,
-            formattedKeys: Object.keys(formatted).length,
-            sample: Object.entries(formatted).slice(0, 5)
-        });
-
-        return formatted;
     }
 
     createBulletedList(items) {

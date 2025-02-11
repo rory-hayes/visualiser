@@ -902,6 +902,10 @@ export class MetricsCalculator {
                 throw new Error('Workspace ID is required');
             }
 
+            if (!this.NOTION_DATABASE_ID) {
+                throw new Error('Notion database ID is not configured');
+            }
+
             // Helper function to safely format numbers
             const safeFormat = (value, decimals = 2) => {
                 if (value === undefined || value === null || isNaN(value)) return 'N/A';
@@ -1036,15 +1040,15 @@ export class MetricsCalculator {
             // Create the page in Notion
             const response = await this.notion.pages.create({
                 parent: {
-                    type: 'database_id',
-                    database_id: this.NOTION_DATABASE_ID
+                    database_id: this.NOTION_DATABASE_ID,
+                    type: 'database_id'
                 },
                 properties: {
-                    Title: {
+                    Name: {
                         title: [
                             {
                                 text: {
-                                    content: "Workspace Analysis Report"
+                                    content: `Workspace Analysis Report - ${new Date().toLocaleDateString()}`
                                 }
                             }
                         ]
@@ -1057,6 +1061,16 @@ export class MetricsCalculator {
                                 }
                             }
                         ]
+                    },
+                    Status: {
+                        select: {
+                            name: "Generated"
+                        }
+                    },
+                    "Analysis Date": {
+                        date: {
+                            start: new Date().toISOString()
+                        }
                     }
                 },
                 children: blocks

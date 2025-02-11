@@ -996,16 +996,16 @@ export class MetricsCalculator {
                     database_id: this.NOTION_DATABASE_ID
                 },
                 properties: {
-                    'Title': {
+                    Title: {
                         title: [
                             {
                                 text: {
-                                    content: `Workspace Analysis - ${workspaceId}`
+                                    content: "Workspace Analysis Report"
                                 }
                             }
                         ]
                     },
-                    'Workspace ID': {
+                    "Workspace ID": {
                         rich_text: [
                             {
                                 text: {
@@ -1013,11 +1013,6 @@ export class MetricsCalculator {
                                 }
                             }
                         ]
-                    },
-                    'Date': {
-                        date: {
-                            start: new Date().toISOString()
-                        }
                     }
                 },
                 children: blocks

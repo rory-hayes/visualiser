@@ -932,7 +932,7 @@ export class MetricsCalculator {
                 }
             ];
 
-            // Add metrics sections
+            // Add metrics sections with actual values from metrics object
             const sections = {
                 'Structure & Evolution Metrics': [
                     `Total Pages: ${metrics.total_pages}`,
@@ -942,6 +942,7 @@ export class MetricsCalculator {
                     `Max Depth: ${metrics.max_depth}`,
                     `Average Depth: ${safeFormat(metrics.avg_depth)}`,
                     `Median Depth: ${metrics.median_depth}`,
+                    `Deep Pages Count: ${metrics.deep_pages_count}`,
                     `Root Pages: ${metrics.root_pages}`,
                     `Orphaned Pages: ${metrics.orphaned_pages}`,
                     `Navigation Score: ${safeFormat(metrics.navigation_score)}`,
@@ -962,6 +963,9 @@ export class MetricsCalculator {
                     `Total Members: ${metrics.total_members}`,
                     `Total Guests: ${metrics.total_guests}`,
                     `Total Teamspaces: ${metrics.teamspaces?.total || metrics.total_num_teamspaces}`,
+                    `Open Teamspaces: ${metrics.teamspaces?.open}`,
+                    `Closed Teamspaces: ${metrics.teamspaces?.closed}`,
+                    `Private Teamspaces: ${metrics.teamspaces?.private}`,
                     `Average Members per Teamspace: ${safeFormat(metrics.average_teamspace_members)}`,
                     `Total Bots: ${metrics.automation?.total_bots || metrics.total_num_bots}`,
                     `Total Integrations: ${metrics.automation?.integrations || metrics.total_num_integrations}`,
@@ -997,7 +1001,10 @@ export class MetricsCalculator {
                     `Content Freshness Score: ${safeFormat(metrics.content_freshness_score)}`,
                     `Structure Quality Index: ${safeFormat(metrics.structure_quality_index)}`,
                     `Documentation Coverage: ${safeFormat(metrics.documentation_coverage)}%`,
+                    `Automation Effectiveness: ${safeFormat(metrics.automation_effectiveness)}%`,
+                    `Integration Impact Score: ${safeFormat(metrics.integration_impact_score)}`,
                     `Feature Utilization Index: ${safeFormat(metrics.feature_utilization_index)}`,
+                    `Growth Trajectory: ${safeFormat(metrics.growth_trajectory)}`,
                     `Scaling Readiness Score: ${safeFormat(metrics.scaling_readiness_score)}`,
                     `Growth Potential Score: ${safeFormat(metrics.growth_potential_score)}`
                 ]
@@ -1030,16 +1037,18 @@ export class MetricsCalculator {
 
                 // Add metrics as bullet points
                 items.forEach(item => {
-                    blocks.push({
-                        object: 'block',
-                        type: 'bulleted_list_item',
-                        bulleted_list_item: {
-                            rich_text: [{
-                                type: 'text',
-                                text: { content: item }
-                            }]
-                        }
-                    });
+                    if (item) {  // Only add non-empty items
+                        blocks.push({
+                            object: 'block',
+                            type: 'bulleted_list_item',
+                            bulleted_list_item: {
+                                rich_text: [{
+                                    type: 'text',
+                                    text: { content: item }
+                                }]
+                            }
+                        });
+                    }
                 });
             }
 

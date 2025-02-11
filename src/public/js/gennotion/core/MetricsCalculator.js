@@ -902,6 +902,12 @@ export class MetricsCalculator {
                 throw new Error('Workspace ID is required');
             }
 
+            // Helper function to safely format numbers
+            const safeFormat = (value, decimals = 2) => {
+                if (value === undefined || value === null || isNaN(value)) return 'N/A';
+                return typeof value === 'number' ? value.toFixed(decimals) : value.toString();
+            };
+
             // Format metrics for Notion blocks
             const blocks = [
                 {
@@ -929,79 +935,82 @@ export class MetricsCalculator {
             // Add metrics sections
             const sections = {
                 'Structure & Evolution Metrics': [
-                    `Total Pages: ${metrics.total_pages}`,
-                    `Active Pages: ${metrics.alive_pages}`,
-                    `Public Pages: ${metrics.public_pages}`,
-                    `Private Pages: ${metrics.private_pages}`,
-                    `Max Depth: ${metrics.max_depth}`,
-                    `Average Depth: ${metrics.avg_depth.toFixed(2)}`,
-                    `Median Depth: ${metrics.median_depth}`,
-                    `Root Pages: ${metrics.root_pages}`,
-                    `Orphaned Pages: ${metrics.orphaned_pages}`,
-                    `Navigation Score: ${metrics.navigation_score.toFixed(2)}`,
-                    `Health Score: ${metrics.health_score.toFixed(2)}`
+                    `Total Pages: ${metrics.total_pages || 'N/A'}`,
+                    `Active Pages: ${metrics.alive_pages || 'N/A'}`,
+                    `Public Pages: ${metrics.public_pages || 'N/A'}`,
+                    `Private Pages: ${metrics.private_pages || 'N/A'}`,
+                    `Max Depth: ${metrics.max_depth || 'N/A'}`,
+                    `Average Depth: ${safeFormat(metrics.avg_depth)}`,
+                    `Median Depth: ${metrics.median_depth || 'N/A'}`,
+                    `Root Pages: ${metrics.root_pages || 'N/A'}`,
+                    `Orphaned Pages: ${metrics.orphaned_pages || 'N/A'}`,
+                    `Navigation Score: ${safeFormat(metrics.navigation_score)}`,
+                    `Health Score: ${safeFormat(metrics.health_score)}`
                 ],
                 'Collections & Content': [
-                    `Total Collections: ${metrics.total_collections}`,
-                    `Active Collections: ${metrics.alive_collections}`,
-                    `Collection Views: ${metrics.collection_views}`,
-                    `Collection View Pages: ${metrics.collection_view_pages}`,
-                    `Collection Health: ${metrics.collection_health.toFixed(2)}%`,
-                    `Collection Usage Ratio: ${metrics.collection_usage_ratio.toFixed(2)}`,
-                    `Collection Health Score: ${metrics.collection_health_score.toFixed(2)}`,
-                    `Content Health Score: ${metrics.content_health_score.toFixed(2)}`,
-                    `Content Diversity Score: ${metrics.content_diversity_score.toFixed(2)}`
+                    `Total Collections: ${metrics.total_collections || 'N/A'}`,
+                    `Active Collections: ${metrics.alive_collections || 'N/A'}`,
+                    `Collection Views: ${metrics.collection_views || 'N/A'}`,
+                    `Collection View Pages: ${metrics.collection_view_pages || 'N/A'}`,
+                    `Collection Health: ${safeFormat(metrics.collection_health)}%`,
+                    `Collection Usage Ratio: ${safeFormat(metrics.collection_usage_ratio)}`,
+                    `Collection Health Score: ${safeFormat(metrics.collection_health_score)}`,
+                    `Content Health Score: ${safeFormat(metrics.content_health_score)}`,
+                    `Content Diversity Score: ${safeFormat(metrics.content_diversity_score)}`
                 ],
                 'Team & Usage Metrics': [
-                    `Total Members: ${metrics.total_members}`,
-                    `Total Guests: ${metrics.total_guests}`,
-                    `Total Teamspaces: ${metrics.total_num_teamspaces}`,
-                    `Average Members per Teamspace: ${metrics.average_teamspace_members.toFixed(2)}`,
-                    `Total Bots: ${metrics.total_num_bots}`,
-                    `Total Integrations: ${metrics.total_num_integrations}`,
-                    `Automation Usage Rate: ${metrics.automation_usage_rate.toFixed(2)}%`,
-                    `Integration Coverage: ${metrics.current_integration_coverage.toFixed(2)}%`,
-                    `Team Efficiency Score: ${metrics.team_efficiency_score}`
+                    `Total Members: ${metrics.total_members || 'N/A'}`,
+                    `Total Guests: ${metrics.total_guests || 'N/A'}`,
+                    `Total Teamspaces: ${metrics.total_num_teamspaces || 'N/A'}`,
+                    `Average Members per Teamspace: ${safeFormat(metrics.average_teamspace_members)}`,
+                    `Total Bots: ${metrics.total_num_bots || 'N/A'}`,
+                    `Total Integrations: ${metrics.total_num_integrations || 'N/A'}`,
+                    `Automation Usage Rate: ${safeFormat(metrics.automation_usage_rate)}%`,
+                    `Integration Coverage: ${safeFormat(metrics.current_integration_coverage)}%`,
+                    `Team Efficiency Score: ${metrics.team_efficiency_score || 'N/A'}`
                 ],
                 'Growth & Activity': [
-                    `Monthly Member Growth Rate: ${metrics.monthly_member_growth_rate.toFixed(2)}%`,
-                    `Monthly Content Growth Rate: ${metrics.monthly_content_growth_rate.toFixed(2)}%`,
-                    `Growth Capacity: ${metrics.growth_capacity.toFixed(2)}`,
-                    `Expected Members Next Year: ${Math.round(metrics.expected_members_in_next_year)}`,
-                    `Nodes Created (30 days): ${metrics.nodes_created_last_30_days}`,
-                    `Nodes Created (60 days): ${metrics.nodes_created_last_60_days}`,
-                    `Nodes Created (90 days): ${metrics.nodes_created_last_90_days}`,
-                    `Average Daily Creation (30d): ${metrics.avg_daily_creation_30d}`,
-                    `Creation Velocity: ${metrics.creation_velocity}`,
-                    `Workspace Maturity: ${metrics.workspace_maturity}`
+                    `Monthly Member Growth Rate: ${safeFormat(metrics.monthly_member_growth_rate)}%`,
+                    `Monthly Content Growth Rate: ${safeFormat(metrics.monthly_content_growth_rate)}%`,
+                    `Growth Capacity: ${safeFormat(metrics.growth_capacity)}`,
+                    `Expected Members Next Year: ${Math.round(metrics.expected_members_in_next_year || 0)}`,
+                    `Nodes Created (30 days): ${metrics.nodes_created_last_30_days || 'N/A'}`,
+                    `Nodes Created (60 days): ${metrics.nodes_created_last_60_days || 'N/A'}`,
+                    `Nodes Created (90 days): ${metrics.nodes_created_last_90_days || 'N/A'}`,
+                    `Average Daily Creation (30d): ${safeFormat(metrics.avg_daily_creation_30d)}`,
+                    `Creation Velocity: ${metrics.creation_velocity || 'N/A'}`,
+                    `Workspace Maturity: ${metrics.workspace_maturity || 'N/A'}`
                 ],
                 'Organization Scores': [
-                    `Visibility Score: ${metrics.current_visibility_score.toFixed(2)}%`,
-                    `Collaboration Score: ${metrics.current_collaboration_score.toFixed(2)}%`,
-                    `Productivity Score: ${metrics.current_productivity_score.toFixed(2)}%`,
-                    `Overall Organization Score: ${metrics.current_organization_score.toFixed(2)}%`,
-                    `Cross Team Collaboration Score: ${metrics.cross_team_collaboration_score.toFixed(2)}%`
+                    `Visibility Score: ${safeFormat(metrics.current_visibility_score)}%`,
+                    `Collaboration Score: ${safeFormat(metrics.current_collaboration_score)}%`,
+                    `Productivity Score: ${safeFormat(metrics.current_productivity_score)}%`,
+                    `Overall Organization Score: ${safeFormat(metrics.current_organization_score)}%`,
+                    `Cross Team Collaboration Score: ${safeFormat(metrics.cross_team_collaboration_score)}%`
                 ],
                 'Advanced Metrics': [
-                    `Content Maturity Score: ${metrics.content_maturity_score.toFixed(2)}`,
-                    `Workspace Complexity Score: ${metrics.workspace_complexity_score.overall_complexity.toFixed(2)}`,
-                    `Knowledge Structure Score: ${metrics.knowledge_structure_score.toFixed(2)}`,
-                    `Team Adoption Score: ${metrics.team_adoption_score.toFixed(2)}`,
-                    `Knowledge Sharing Index: ${metrics.knowledge_sharing_index.toFixed(2)}`,
-                    `Content Freshness Score: ${metrics.content_freshness_score.toFixed(2)}`,
-                    `Structure Quality Index: ${metrics.structure_quality_index.toFixed(2)}`,
-                    `Documentation Coverage: ${metrics.documentation_coverage.toFixed(2)}%`,
-                    `Feature Utilization Index: ${metrics.feature_utilization_index.toFixed(2)}`,
-                    `Scaling Readiness Score: ${metrics.scaling_readiness_score.toFixed(2)}`,
-                    `Growth Potential Score: ${metrics.growth_potential_score.toFixed(2)}`
-                ],
-                'Predictions & Recommendations': [
-                    `Bottleneck Predictions:`,
-                    ...metrics.bottleneck_prediction.map(pred => `  • ${pred}`),
-                    `\nOptimization Opportunities:`,
-                    ...metrics.optimization_opportunities.map(opp => `  • ${opp}`)
+                    `Content Maturity Score: ${safeFormat(metrics.content_maturity_score)}`,
+                    `Workspace Complexity Score: ${safeFormat(metrics.workspace_complexity_score?.overall_complexity)}`,
+                    `Knowledge Structure Score: ${safeFormat(metrics.knowledge_structure_score)}`,
+                    `Team Adoption Score: ${safeFormat(metrics.team_adoption_score)}`,
+                    `Knowledge Sharing Index: ${safeFormat(metrics.knowledge_sharing_index)}`,
+                    `Content Freshness Score: ${safeFormat(metrics.content_freshness_score)}`,
+                    `Structure Quality Index: ${safeFormat(metrics.structure_quality_index)}`,
+                    `Documentation Coverage: ${safeFormat(metrics.documentation_coverage)}%`,
+                    `Feature Utilization Index: ${safeFormat(metrics.feature_utilization_index)}`,
+                    `Scaling Readiness Score: ${safeFormat(metrics.scaling_readiness_score)}`,
+                    `Growth Potential Score: ${safeFormat(metrics.growth_potential_score)}`
                 ]
             };
+
+            if (metrics.bottleneck_prediction?.length || metrics.optimization_opportunities?.length) {
+                sections['Predictions & Recommendations'] = [
+                    'Bottleneck Predictions:',
+                    ...(metrics.bottleneck_prediction || []).map(pred => `  • ${pred}`),
+                    '\nOptimization Opportunities:',
+                    ...(metrics.optimization_opportunities || []).map(opp => `  • ${opp}`)
+                ];
+            }
 
             // Add each section to blocks
             for (const [title, items] of Object.entries(sections)) {

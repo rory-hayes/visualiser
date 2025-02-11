@@ -1,4 +1,5 @@
 import { MetricsCalculator } from './gennotion/core/MetricsCalculator.js';
+import { TreeVisualizer } from './gennotion/core/TreeVisualizer.js';
 
 // Constants
 const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';
@@ -288,75 +289,67 @@ function displayResults(response) {
             response.data.dataframe_3
         );
 
-        // Log detailed metrics for debugging
-        console.log('Detailed Workspace Metrics:', {
-            structure: {
-                total_pages: metrics.total_pages,
-                max_depth: metrics.max_depth,
-                avg_depth: metrics.avg_depth,
-                deep_pages_count: metrics.deep_pages_count,
-                root_pages: metrics.root_pages,
-                orphaned_blocks: metrics.orphaned_blocks,
-                collections_count: metrics.collections_count,
-                linked_database_count: metrics.linked_database_count,
-                template_count: metrics.template_count,
-                duplicate_count: metrics.duplicate_count,
-                bottleneck_count: metrics.bottleneck_count,
-                percentage_unlinked: metrics.percentage_unlinked,
-                scatter_index: metrics.scatter_index,
-                unfindable_pages: metrics.unfindable_pages,
-                nav_depth_score: metrics.nav_depth_score,
-                nav_complexity: metrics.nav_complexity
-            },
-            usage: {
-                total_num_members: metrics.total_num_members,
-                total_num_guests: metrics.total_num_guests,
-                total_num_teamspaces: metrics.total_num_teamspaces,
-                total_num_integrations: metrics.total_num_integrations,
-                total_num_bots: metrics.total_num_bots,
-                average_teamspace_members: metrics.average_teamspace_members,
-                automation_usage_rate: metrics.automation_usage_rate,
-                current_integration_coverage: metrics.current_integration_coverage,
-                automation_efficiency_gain: metrics.automation_efficiency_gain
-            },
-            growth: {
-                monthly_member_growth_rate: metrics.monthly_member_growth_rate,
-                monthly_content_growth_rate: metrics.monthly_content_growth_rate,
-                growth_capacity: metrics.growth_capacity,
-                expected_members_in_next_year: metrics.expected_members_in_next_year
-            },
-            organization: {
-                current_visibility_score: metrics.current_visibility_score,
-                current_collaboration_score: metrics.current_collaboration_score,
-                current_productivity_score: metrics.current_productivity_score,
-                current_organization_score: metrics.current_organization_score,
-                projected_organisation_score: metrics.projected_organisation_score,
-                success_improvement: metrics.success_improvement
-            },
-            roi: {
-                current_plan: metrics.current_plan,
-                enterprise_plan: metrics.enterprise_plan,
-                enterprise_plan_w_ai: metrics.enterprise_plan_w_ai,
-                '10_percent_increase': metrics['10_percent_increase'],
-                '20_percent_increase': metrics['20_percent_increase'],
-                '50_percent_increase': metrics['50_percent_increase'],
-                enterprise_plan_roi: metrics.enterprise_plan_roi,
-                enterprise_plan_w_ai_roi: metrics.enterprise_plan_w_ai_roi
-            }
-        });
-
         // Show results section
         resultsSection.classList.remove('hidden');
         resultsContent.innerHTML = ''; // Clear previous results
+
+        // Create metrics container
+        const metricsContainer = document.createElement('div');
+        metricsContainer.className = 'bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6';
+        metricsContainer.innerHTML = formatResults(response.data.dataframe_2, response.data.dataframe_3);
+        resultsContent.appendChild(metricsContainer);
+
+        // Create tree visualization container
+        const treeContainer = document.createElement('div');
+        treeContainer.id = 'tree-visualization';
+        treeContainer.className = 'bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6';
         
-        // Create single graph container
-        const graphContainer = document.createElement('div');
-        graphContainer.id = 'graph-container';
-        resultsContent.appendChild(graphContainer);
+        // Add title and export button
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'flex justify-between items-center mb-4';
+        headerDiv.innerHTML = `
+            <h3 class="text-lg font-semibold text-gray-900">Workspace Structure</h3>
+            <button id="export-tree" class="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+                Export as PNG
+            </button>
+        `;
+        treeContainer.appendChild(headerDiv);
+
+        // Add visualization div
+        const visDiv = document.createElement('div');
+        visDiv.id = 'tree-vis';
+        visDiv.style.minHeight = '600px';
+        treeContainer.appendChild(visDiv);
         
-        // Create graph visualization with the new data structure
-        createGraphVisualization(response.data);
-        
+        resultsContent.appendChild(treeContainer);
+
+        // Initialize tree visualization
+        const treeVisualizer = new TreeVisualizer();
+        treeVisualizer.generateVisualization(response.data.dataframe_2, 'tree-vis')
+            .then(() => {
+                // Add export handler
+                document.getElementById('export-tree').addEventListener('click', async () => {
+                    try {
+                        const blob = await treeVisualizer.exportAsPNG('tree-vis');
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'workspace-structure.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    } catch (error) {
+                        console.error('Error exporting visualization:', error);
+                        alert('Failed to export visualization. Please try again.');
+                    }
+                });
+            })
+            .catch(error => {
+                console.error('Error generating tree visualization:', error);
+                visDiv.innerHTML = '<p class="text-red-500 p-4">Error generating visualization</p>';
+            });
+
         showStatus('Analysis complete');
     } catch (error) {
         console.error('Error in displayResults:', error);

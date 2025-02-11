@@ -3,6 +3,7 @@
     "@notionhq/client": "^2.2.15",
     "canvas": "^3.1.0",
     "d3": "^7.9.0",
+    "d3-graphviz": "^5.2.0",
     "formdata-node": "^6.0.3",
     "jsdom": "^26.0.0",
     "marked": "^15.0.6",

@@ -962,6 +962,11 @@ app.post('/api/analyze-workspace', async (req, res) => {
             throw new Error('workspaceId is required');
         }
 
+        // Verify Notion credentials are available
+        if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
+            throw new Error('Missing required Notion environment variables');
+        }
+
         // Step 1: Trigger Hex run
         console.log('Step 1: Triggering Hex run...');
         const hexResponse = await triggerHexRun(workspaceId);
@@ -972,7 +977,10 @@ app.post('/api/analyze-workspace', async (req, res) => {
 
         // Step 3: Calculate metrics using our MetricsCalculator
         console.log('Step 3: Calculating metrics...');
-        const metricsCalculator = new MetricsCalculator();
+        const metricsCalculator = new MetricsCalculator(
+            process.env.NOTION_API_KEY,
+            process.env.NOTION_DATABASE_ID
+        );
         const metrics = await metricsCalculator.calculateAllMetrics(
             results.data.dataframe_2,
             results.data.dataframe_3,

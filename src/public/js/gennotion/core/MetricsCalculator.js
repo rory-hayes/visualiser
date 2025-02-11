@@ -2,7 +2,7 @@ import { SnapshotVisualizer } from './SnapshotVisualizer.js';
 import { Client } from '@notionhq/client';
 
 export class MetricsCalculator {
-    constructor() {
+    constructor(notionApiKey, notionDatabaseId) {
         // Constants for calculations
         this.INDUSTRY_AVERAGE_TEAM_SIZE = 8;
         this.RECOMMENDED_INTEGRATIONS = 5;
@@ -15,17 +15,17 @@ export class MetricsCalculator {
         this.MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
         this.MILLISECONDS_PER_MONTH = 30 * this.MILLISECONDS_PER_DAY;
 
-        // Get Notion credentials from environment
-        if (!process.env.NOTION_API_KEY || !process.env.NOTION_DATABASE_ID) {
-            throw new Error('Missing required Notion environment variables: NOTION_API_KEY and NOTION_DATABASE_ID');
+        // Validate Notion credentials
+        if (!notionApiKey || !notionDatabaseId) {
+            throw new Error('Missing required Notion credentials: notionApiKey and notionDatabaseId must be provided');
         }
 
         // Initialize Notion client
         this.notion = new Client({
-            auth: process.env.NOTION_API_KEY
+            auth: notionApiKey
         });
 
-        this.NOTION_DATABASE_ID = process.env.NOTION_DATABASE_ID;
+        this.NOTION_DATABASE_ID = notionDatabaseId;
         this.snapshotVisualizer = new SnapshotVisualizer();
     }
 

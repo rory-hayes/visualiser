@@ -1425,5 +1425,17 @@ app.post('/api/create-notion-page', async (req, res) => {
     }
 });
 
+// Add this endpoint to provide Notion credentials
+app.get('/api/notion-config', (req, res) => {
+    if (!req.session?.notionToken) {
+        return res.status(401).json({ error: 'No authentication token found' });
+    }
+
+    res.json({
+        apiKey: req.session.notionToken,
+        databaseId: process.env.NOTION_DATABASE_ID
+    });
+});
+
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

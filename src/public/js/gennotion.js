@@ -276,14 +276,24 @@ async function checkServerStatus() {
     }
 }
 
-function displayResults(response) {
+async function displayResults(response) {
     try {
         if (!response.success || !response.data) {
             throw new Error('Invalid response format');
         }
 
+        // Fetch Notion credentials
+        const notionConfigResponse = await fetch('/api/notion-config');
+        if (!notionConfigResponse.ok) {
+            throw new Error('Failed to fetch Notion configuration');
+        }
+        const notionConfig = await notionConfigResponse.json();
+
         // Calculate detailed metrics
-        const metricsCalculator = new MetricsCalculator();
+        const metricsCalculator = new MetricsCalculator(
+            notionConfig.apiKey,
+            notionConfig.databaseId
+        );
         const metrics = metricsCalculator.calculateAllMetrics(
             response.data.dataframe_2,
             response.data.dataframe_3

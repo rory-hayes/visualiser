@@ -24,6 +24,14 @@ export class MetricsCalculator {
     async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5, workspaceId) {
         // Debug workspaceId
         console.log('DEBUG - calculateAllMetrics workspaceId:', workspaceId);
+        console.log('DEBUG - Input data validation:', {
+            df2Length: dataframe_2?.length,
+            df3Present: !!dataframe_3,
+            df5Length: dataframe_5?.length,
+            df2Sample: dataframe_2?.[0],
+            df3Keys: dataframe_3 ? Object.keys(dataframe_3) : [],
+            df5Sample: dataframe_5?.[0]
+        });
         
         let snapshotResults = { snapshots: null };
         
@@ -42,6 +50,8 @@ export class MetricsCalculator {
         const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
         console.log('Calculated workspace age:', workspaceAge);
 
+        console.log('DEBUG - Starting metrics calculations');
+
         // Calculate all metrics
         const structureMetrics = this.calculateStructureMetrics(dataframe_2, dataframe_3);
         const usageMetrics = this.calculateUsageMetrics(dataframe_3, dataframe_5);
@@ -54,12 +64,16 @@ export class MetricsCalculator {
         const collectionMetrics = this.calculateDetailedCollectionMetrics(dataframe_2, dataframe_3);
         const contentMetrics = this.calculateContentMetrics(dataframe_2, dataframe_3);
 
+        console.log('DEBUG - Completed base metrics calculations');
+
         // Calculate new advanced metrics
         const evolutionMetrics = this.calculateEvolutionMetrics(dataframe_2, dataframe_3);
         const collaborationPatterns = this.calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5);
         const contentQualityMetrics = this.calculateContentQualityMetrics(dataframe_2, dataframe_3);
         const usagePatterns = this.calculateAdvancedUsagePatterns(dataframe_2, dataframe_3, dataframe_5);
         const predictiveMetrics = this.calculatePredictiveMetrics(dataframe_2, dataframe_3);
+
+        console.log('DEBUG - Completed advanced metrics calculations');
 
         const allMetrics = {
             workspace_age: workspaceAge,
@@ -91,9 +105,9 @@ export class MetricsCalculator {
                 console.error('DEBUG - Missing workspaceId in calculateAllMetrics');
                 throw new Error('workspaceId is required');
             }
-            console.log('DEBUG - About to create Notion entry with workspaceId:', workspaceId);
-            console.log('DEBUG - Metrics being sent to createNotionEntry:', {
-                metricsKeys: Object.keys(placeholderMetrics),
+            console.log('DEBUG - About to create Notion entry with:', {
+                workspaceId,
+                metricsCount: Object.keys(placeholderMetrics).length,
                 hasSnapshots: !!snapshotResults.snapshots,
                 snapshotKeys: snapshotResults.snapshots ? Object.keys(snapshotResults.snapshots) : []
             });
@@ -106,8 +120,11 @@ export class MetricsCalculator {
         } catch (error) {
             console.error('Error creating Notion entry:', error);
             console.error('Error stack:', error.stack);
-            // Don't throw the error here, just log it and continue
-            // This ensures the metrics are still returned even if Notion page creation fails
+            console.error('DEBUG - Failed metrics:', {
+                metricsKeys: Object.keys(placeholderMetrics),
+                snapshotsPresent: !!snapshotResults.snapshots,
+                workspaceId
+            });
         }
 
         return allMetrics;
@@ -886,7 +903,9 @@ export class MetricsCalculator {
             console.log('DEBUG - createNotionEntry called with:', {
                 workspaceId,
                 metricsKeys: Object.keys(metrics),
-                hasSnapshots: !!metrics.snapshots
+                hasSnapshots: !!metrics.snapshots,
+                metricsValues: Object.entries(metrics).slice(0, 5).map(([k, v]) => `${k}: ${v}`),
+                snapshotKeys: metrics.snapshots ? Object.keys(metrics.snapshots) : []
             });
             
             // Ensure we have the required data
@@ -894,56 +913,13 @@ export class MetricsCalculator {
                 throw new Error('Workspace ID is required');
             }
 
-            // Format metrics for Notion - handle placeholder format
-            const formattedMetrics = {
-                // Structure metrics
-                totalPages: parseInt(metrics['[[total_pages]]']) || 0,
-                activePages: parseInt(metrics['[[active_pages]]']) || 0,
-                maxDepth: parseInt(metrics['[[max_depth]]']) || 0,
-                avgDepth: parseFloat(metrics['[[avg_depth]]']) || 0,
-                deepPagesCount: parseInt(metrics['[[deep_pages_count]]']) || 0,
-                totalConnections: parseInt(metrics['[[total_connections]]']) || 0,
-                collectionsCount: parseInt(metrics['[[collections_count]]']) || 0,
-                
-                // Usage metrics
-                totalMembers: parseInt(metrics['[[key_metrics_insight_4]]']) || 0,
-                totalGuests: parseInt(metrics['[[total_guests]]']) || 0,
-                totalTeamspaces: parseInt(metrics['[[total_teamspaces]]']) || 0,
-                averageTeamspaceMembers: parseFloat(metrics['[[key_metrics_insight_5]]']) || 0,
-                
-                // Growth metrics
-                monthlyMemberGrowthRate: parseFloat(metrics['[[key_metrics_insight_2]]']) || 0,
-                monthlyContentGrowthRate: parseFloat(metrics['[[key_metrics_insight_1]]']) || 0,
-                growthCapacity: parseFloat(metrics['[[growth_capacity]]']) || 0,
-                expectedMembersNextYear: parseInt(metrics['[[projected_members]]']) || 0,
-                
-                // Organization metrics
-                currentVisibilityScore: parseFloat(metrics['[[visibility_score]]']) || 0,
-                currentCollaborationScore: parseFloat(metrics['[[collab_score]]']) || 0,
-                currentProductivityScore: parseFloat(metrics['[[prod_score]]']) || 0,
-                currentOrganizationScore: parseFloat(metrics['[[org_score]]']) || 0,
-                
-                // Advanced metrics
-                contentMaturityScore: parseFloat(metrics['[[content_maturity_score]]']) || 0,
-                workspaceComplexityScore: parseFloat(metrics['[[workspace_complexity_score]]']) || 0,
-                knowledgeStructureScore: parseFloat(metrics['[[knowledge_structure_score]]']) || 0,
-                teamAdoptionScore: parseFloat(metrics['[[team_adoption_score]]']) || 0,
-                collaborationDensity: parseFloat(metrics['[[collaboration_density]]']) || 0,
-                knowledgeSharingIndex: parseFloat(metrics['[[knowledge_sharing_index]]']) || 0,
-                contentFreshnessScore: parseFloat(metrics['[[content_freshness_score]]']) || 0,
-                structureQualityIndex: parseFloat(metrics['[[structure_quality_index]]']) || 0,
-                knowledgeBaseHealth: parseFloat(metrics['[[knowledge_base_health]]']) || 0,
-                documentationCoverage: parseFloat(metrics['[[documentation_coverage]]']) || 0,
-                automationEffectiveness: parseFloat(metrics['[[automation_effectiveness]]']) || 0,
-                integrationImpactScore: parseFloat(metrics['[[integration_impact_score]]']) || 0,
-                featureUtilizationIndex: parseFloat(metrics['[[feature_utilization_index]]']) || 0,
-                advancedFeaturesAdoption: parseFloat(metrics['[[advanced_features_adoption]]']) || 0,
-                growthTrajectory: parseFloat(metrics['[[growth_trajectory]]']) || 0,
-                scalingReadinessScore: parseFloat(metrics['[[scaling_readiness_score]]']) || 0,
-                growthPotentialScore: parseFloat(metrics['[[growth_potential_score]]']) || 0
-            };
+            // Format metrics for Notion
+            const formattedMetrics = this.formatMetricsForNotion(metrics);
+            console.log('DEBUG - Formatted metrics for Notion:', {
+                formattedKeys: Object.keys(formattedMetrics),
+                sampleValues: Object.entries(formattedMetrics).slice(0, 5)
+            });
 
-            console.log('DEBUG - Formatted metrics:', formattedMetrics);
             console.log('DEBUG - Preparing API request to /api/create-notion-page');
 
             // Make API call to create Notion page
@@ -967,14 +943,18 @@ export class MetricsCalculator {
             console.log('DEBUG - Notion API response status:', response.status);
             console.log('DEBUG - Notion API response headers:', Object.fromEntries(response.headers.entries()));
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Failed to create Notion page:', errorData);
-                throw new Error(`Failed to create Notion page: ${errorData.error || 'Unknown error'}`);
+            const responseText = await response.text();
+            console.log('DEBUG - Raw response text:', responseText);
+
+            let result;
+            try {
+                result = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('DEBUG - Failed to parse response:', parseError);
+                throw new Error(`Invalid JSON response: ${responseText}`);
             }
 
-            const result = await response.json();
-            console.log('DEBUG - Notion API response body:', result);
+            console.log('DEBUG - Parsed response:', result);
             
             if (!result.success || !result.pageId) {
                 throw new Error('Invalid response from server when creating Notion page');
@@ -988,6 +968,32 @@ export class MetricsCalculator {
             console.error('Error stack:', error.stack);
             throw error;
         }
+    }
+
+    formatMetricsForNotion(metrics) {
+        // Helper function to safely format values
+        const formatValue = (value) => {
+            if (value === null || value === undefined) return 'N/A';
+            if (typeof value === 'number') {
+                return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+            }
+            return String(value);
+        };
+
+        // Create formatted metrics object
+        const formatted = {};
+        for (const [key, value] of Object.entries(metrics)) {
+            if (key === 'snapshots') continue; // Skip snapshots object
+            formatted[key] = formatValue(value);
+        }
+
+        console.log('DEBUG - Formatted metrics:', {
+            originalKeys: Object.keys(metrics).length,
+            formattedKeys: Object.keys(formatted).length,
+            sample: Object.entries(formatted).slice(0, 5)
+        });
+
+        return formatted;
     }
 
     createBulletedList(items) {

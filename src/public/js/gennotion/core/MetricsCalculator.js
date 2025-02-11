@@ -929,34 +929,77 @@ export class MetricsCalculator {
             // Add metrics sections
             const sections = {
                 'Structure & Evolution Metrics': [
-                    `Total Pages: ${metrics['[[total_pages]]']}`,
-                    `Active Pages: ${metrics['[[alive_pages]]']}`,
-                    `Max Depth: ${metrics['[[max_depth]]']}`,
-                    `Deep Pages: ${metrics['[[deep_pages_count]]']}`,
-                    `Total Connections: ${metrics['[[total_connections]]']}`,
-                    `Collections: ${metrics['[[collections_count]]']}`
+                    `Total Pages: ${metrics.total_pages}`,
+                    `Active Pages: ${metrics.alive_pages}`,
+                    `Public Pages: ${metrics.public_pages}`,
+                    `Private Pages: ${metrics.private_pages}`,
+                    `Max Depth: ${metrics.max_depth}`,
+                    `Average Depth: ${metrics.avg_depth.toFixed(2)}`,
+                    `Median Depth: ${metrics.median_depth}`,
+                    `Root Pages: ${metrics.root_pages}`,
+                    `Orphaned Pages: ${metrics.orphaned_pages}`,
+                    `Navigation Score: ${metrics.navigation_score.toFixed(2)}`,
+                    `Health Score: ${metrics.health_score.toFixed(2)}`
                 ],
-                'Usage & Team Metrics': [
-                    `Total Members: ${metrics['[[total_members]]']}`,
-                    `Total Guests: ${metrics['[[total_guests]]']}`,
-                    `Total Teamspaces: ${metrics['[[total_teamspaces]]']}`,
-                    `Average Members per Teamspace: ${metrics['[[avg_teamspace_members]]']}`
+                'Collections & Content': [
+                    `Total Collections: ${metrics.total_collections}`,
+                    `Active Collections: ${metrics.alive_collections}`,
+                    `Collection Views: ${metrics.collection_views}`,
+                    `Collection View Pages: ${metrics.collection_view_pages}`,
+                    `Collection Health: ${metrics.collection_health.toFixed(2)}%`,
+                    `Collection Usage Ratio: ${metrics.collection_usage_ratio.toFixed(2)}`,
+                    `Collection Health Score: ${metrics.collection_health_score.toFixed(2)}`,
+                    `Content Health Score: ${metrics.content_health_score.toFixed(2)}`,
+                    `Content Diversity Score: ${metrics.content_diversity_score.toFixed(2)}`
+                ],
+                'Team & Usage Metrics': [
+                    `Total Members: ${metrics.total_members}`,
+                    `Total Guests: ${metrics.total_guests}`,
+                    `Total Teamspaces: ${metrics.total_num_teamspaces}`,
+                    `Average Members per Teamspace: ${metrics.average_teamspace_members.toFixed(2)}`,
+                    `Total Bots: ${metrics.total_num_bots}`,
+                    `Total Integrations: ${metrics.total_num_integrations}`,
+                    `Automation Usage Rate: ${metrics.automation_usage_rate.toFixed(2)}%`,
+                    `Integration Coverage: ${metrics.current_integration_coverage.toFixed(2)}%`,
+                    `Team Efficiency Score: ${metrics.team_efficiency_score}`
+                ],
+                'Growth & Activity': [
+                    `Monthly Member Growth Rate: ${metrics.monthly_member_growth_rate.toFixed(2)}%`,
+                    `Monthly Content Growth Rate: ${metrics.monthly_content_growth_rate.toFixed(2)}%`,
+                    `Growth Capacity: ${metrics.growth_capacity.toFixed(2)}`,
+                    `Expected Members Next Year: ${Math.round(metrics.expected_members_in_next_year)}`,
+                    `Nodes Created (30 days): ${metrics.nodes_created_last_30_days}`,
+                    `Nodes Created (60 days): ${metrics.nodes_created_last_60_days}`,
+                    `Nodes Created (90 days): ${metrics.nodes_created_last_90_days}`,
+                    `Average Daily Creation (30d): ${metrics.avg_daily_creation_30d}`,
+                    `Creation Velocity: ${metrics.creation_velocity}`,
+                    `Workspace Maturity: ${metrics.workspace_maturity}`
                 ],
                 'Organization Scores': [
-                    `Visibility Score: ${metrics['[[visibility_score]]']}%`,
-                    `Collaboration Score: ${metrics['[[collab_score]]']}%`,
-                    `Productivity Score: ${metrics['[[prod_score]]']}%`,
-                    `Overall Organization Score: ${metrics['[[org_score]]']}%`
+                    `Visibility Score: ${metrics.current_visibility_score.toFixed(2)}%`,
+                    `Collaboration Score: ${metrics.current_collaboration_score.toFixed(2)}%`,
+                    `Productivity Score: ${metrics.current_productivity_score.toFixed(2)}%`,
+                    `Overall Organization Score: ${metrics.current_organization_score.toFixed(2)}%`,
+                    `Cross Team Collaboration Score: ${metrics.cross_team_collaboration_score.toFixed(2)}%`
                 ],
                 'Advanced Metrics': [
-                    `Content Maturity Score: ${metrics['[[content_maturity_score]]']}`,
-                    `Workspace Complexity Score: ${metrics['[[workspace_complexity_score]]']}`,
-                    `Knowledge Structure Score: ${metrics['[[knowledge_structure_score]]']}`,
-                    `Team Adoption Score: ${metrics['[[team_adoption_score]]']}`,
-                    `Knowledge Sharing Index: ${metrics['[[knowledge_sharing_index]]']}`,
-                    `Content Freshness Score: ${metrics['[[content_freshness_score]]']}`,
-                    `Structure Quality Index: ${metrics['[[structure_quality_index]]']}`,
-                    `Documentation Coverage: ${metrics['[[documentation_coverage]]']}%`
+                    `Content Maturity Score: ${metrics.content_maturity_score.toFixed(2)}`,
+                    `Workspace Complexity Score: ${metrics.workspace_complexity_score.overall_complexity.toFixed(2)}`,
+                    `Knowledge Structure Score: ${metrics.knowledge_structure_score.toFixed(2)}`,
+                    `Team Adoption Score: ${metrics.team_adoption_score.toFixed(2)}`,
+                    `Knowledge Sharing Index: ${metrics.knowledge_sharing_index.toFixed(2)}`,
+                    `Content Freshness Score: ${metrics.content_freshness_score.toFixed(2)}`,
+                    `Structure Quality Index: ${metrics.structure_quality_index.toFixed(2)}`,
+                    `Documentation Coverage: ${metrics.documentation_coverage.toFixed(2)}%`,
+                    `Feature Utilization Index: ${metrics.feature_utilization_index.toFixed(2)}`,
+                    `Scaling Readiness Score: ${metrics.scaling_readiness_score.toFixed(2)}`,
+                    `Growth Potential Score: ${metrics.growth_potential_score.toFixed(2)}`
+                ],
+                'Predictions & Recommendations': [
+                    `Bottleneck Predictions:`,
+                    ...metrics.bottleneck_prediction.map(pred => `  • ${pred}`),
+                    `\nOptimization Opportunities:`,
+                    ...metrics.optimization_opportunities.map(opp => `  • ${opp}`)
                 ]
             };
 

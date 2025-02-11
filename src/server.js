@@ -958,158 +958,80 @@ app.get('/api/health', (req, res) => {
 app.post('/api/analyze-workspace', async (req, res) => {
     try {
         const { workspaceId } = req.body;
-        
         if (!workspaceId) {
-            return res.status(400).json({ error: 'workspaceId is required' });
+            throw new Error('workspaceId is required');
         }
-
-        console.log('Starting workspace analysis for:', workspaceId);
 
         // Step 1: Trigger Hex run
         console.log('Step 1: Triggering Hex run...');
-        const hexResponse = await axios.post(
-            'https://app.hex.tech/api/v1/project/21c6c24a-60e8-487c-b03a-1f04dda4f918/run',
-            {
-                inputParams: {
-                    _input_text: workspaceId
-                },
-                updatePublishedResults: false,
-                useCachedSqlResults: true
-            },
-            {
-                headers: {
-                    'Authorization': `Bearer ${HEX_API_TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
-            }
-        );
+        const hexResponse = await triggerHexRun(workspaceId);
 
-        console.log('Hex API response:', {
-            status: hexResponse.status,
-            runId: hexResponse.data.runId,
-            data: hexResponse.data
-        });
-
-        if (!hexResponse.data.runId) {
-            throw new Error('No runId received from Hex API');
-        }
-
-        // Step 2: Wait for results
+        // Step 2: Wait for Hex run to complete
         console.log('Step 2: Waiting for Hex run to complete...');
-        const results = await waitForHexResults(hexResponse.data.runId);
+        const results = await waitForHexResults(hexResponse.runId);
 
-        if (!results?.data) {
-            throw new Error('No valid results received from Hex');
-        }
-
-        // Step 3: Calculate metrics
-        console.log('Step 3: Calculating metrics...', {
-            hasDataframe2: !!results.data.dataframe_2?.length,
-            hasDataframe3: !!results.data.dataframe_3,
-            hasDataframe5: !!results.data.dataframe_5?.length
-        });
-
-        const calculator = new MetricsCalculator();
-        const metrics = await calculator.calculateAllMetrics(
+        // Step 3: Calculate metrics using our MetricsCalculator
+        console.log('Step 3: Calculating metrics...');
+        const metricsCalculator = new MetricsCalculator();
+        const metrics = await metricsCalculator.calculateAllMetrics(
             results.data.dataframe_2,
             results.data.dataframe_3,
             results.data.dataframe_5,
             workspaceId
         );
 
-        console.log('Analysis completed successfully');
-        return res.json({ success: true, metrics });
+        // Return complete response
+        res.json({
+            success: true,
+            runId: hexResponse.runId,
+            metrics: metrics
+        });
 
     } catch (error) {
         console.error('Error in analyze-workspace:', error);
-        console.error('Error stack:', error.stack);
-        
-        let status = 500;
-        let message = 'Internal server error';
-        
-        if (error.message.includes('Timeout')) {
-            status = 504;
-            message = 'Analysis timed out - please try again';
-        } else if (error.message.includes('Hex run failed')) {
-            status = 502;
-            message = 'Analysis failed - please try again';
-        } else if (error.response?.status === 404) {
-            status = 404;
-            message = 'Workspace not found';
-        }
-
-        return res.status(status).json({
-            error: message,
-            details: error.message
+        res.status(500).json({ 
+            error: error.message || 'Failed to analyze workspace',
+            details: error.response?.data
         });
     }
 });
 
-async function waitForHexResults(runId, maxAttempts = 60) {
+async function waitForHexResults(runId, maxAttempts = 30) {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
     let attempts = 0;
-    let results = null;
 
     while (attempts < maxAttempts) {
         try {
-            // First check the Hex run status
-            const hexStatusResponse = await axios.get(
-                `https://app.hex.tech/api/v1/project/21c6c24a-60e8-487c-b03a-1f04dda4f918/runs/${runId}/status`,
-                {
-                    headers: {
-                        'Authorization': `Bearer ${HEX_API_TOKEN}`,
-                        'Content-Type': 'application/json'
-                    }
-                }
-            );
-
-            const runStatus = hexStatusResponse.data.status;
-            console.log(`Hex run status (Attempt ${attempts + 1}):`, runStatus);
-
-            if (runStatus === 'failed') {
-                throw new Error('Hex run failed');
-            }
-
-            if (runStatus === 'completed') {
-                // Check for results in our storage
-                results = loadResults();
-                
-                // Check if we have valid data for all required dataframes
-                if (results?.data?.dataframe_2?.length > 0 && 
-                    results?.data?.dataframe_3 &&
-                    results?.data?.dataframe_5?.length > 0) {
-                    console.log('Valid results found:', {
-                        dataframe2Length: results.data.dataframe_2.length,
-                        hasDataframe3: !!results.data.dataframe_3,
-                        dataframe5Length: results.data.dataframe_5.length
-                    });
-                    return results;
-                }
+            const results = await loadResults();
+            
+            // Check if we have valid data for all required dataframes
+            if (results?.data?.dataframe_2?.length > 0 && 
+                results?.data?.dataframe_3 &&
+                results?.data?.dataframe_5?.length > 0) {
+                console.log('Valid results found:', {
+                    dataframe2Length: results.data.dataframe_2.length,
+                    hasDataframe3: !!results.data.dataframe_3,
+                    dataframe5Length: results.data.dataframe_5.length
+                });
+                return results;
             }
             
             console.log(`Attempt ${attempts + 1}: Waiting for valid results...`, {
-                hexStatus: runStatus,
                 hasDataframe2: !!results?.data?.dataframe_2?.length,
                 hasDataframe3: !!results?.data?.dataframe_3,
                 hasDataframe5: !!results?.data?.dataframe_5?.length
             });
-
-            // Increase delay between attempts based on status
-            const waitTime = runStatus === 'running' ? 5000 : 2000; // 5 seconds if running, 2 seconds otherwise
-            await delay(waitTime);
+            await delay(2000); // Wait 2 seconds between attempts
             attempts++;
             
         } catch (error) {
             console.error(`Attempt ${attempts + 1} failed:`, error);
-            if (attempts >= maxAttempts - 1) {
-                throw new Error(`Failed to get results after ${maxAttempts} attempts: ${error.message}`);
-            }
+            if (attempts >= maxAttempts - 1) throw error;
             await delay(2000);
-            attempts++;
         }
     }
     
-    throw new Error(`Timeout waiting for results after ${maxAttempts} attempts`);
+    throw new Error('Timeout waiting for results with valid data');
 }
 
 async function triggerHexRun(workspaceId) {
@@ -1137,7 +1059,6 @@ app.post('/api/create-notion-page', async (req, res) => {
         console.log('DEBUG - Request body:', {
             hasWorkspaceId: !!requestData.workspaceId,
             hasMetrics: !!requestData.metrics,
-            hasDatabaseId: !!requestData.databaseId,
             metricsKeys: requestData.metrics ? Object.keys(requestData.metrics) : []
         });
         
@@ -1163,6 +1084,12 @@ app.post('/api/create-notion-page', async (req, res) => {
             console.log('DEBUG - Notion token verified for user:', user.name);
         } catch (error) {
             console.error('DEBUG - Step 1 Failed: Token verification error:', error);
+            console.error('DEBUG - Error details:', {
+                name: error.name,
+                code: error.code,
+                status: error.status,
+                message: error.message
+            });
             return res.status(401).json({ 
                 success: false,
                 error: 'Invalid Notion token',
@@ -1170,17 +1097,257 @@ app.post('/api/create-notion-page', async (req, res) => {
             });
         }
 
-        // Step 2: Create the page in the specified database
+        // Create page content
+        let pageContent = [];
+        try {
+            console.log('DEBUG - Preparing page content...');
+            // Add title and workspace ID
+            pageContent.push({
+                object: 'block',
+                type: 'heading_1',
+                heading_1: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: 'Workspace Analysis Report' }
+                    }]
+                }
+            });
+
+            pageContent.push({
+                object: 'block',
+                type: 'paragraph',
+                paragraph: {
+                    rich_text: [{
+                        type: 'text',
+                        text: { content: `Workspace ID: ${requestData.workspaceId}` }
+                    }]
+                }
+            });
+
+            // Add metrics sections
+            if (requestData.metrics) {
+                console.log('DEBUG - Adding metrics sections...');
+                try {
+                    // Structure & Evolution Metrics
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_2',
+                        heading_2: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Structure & Evolution Metrics' }
+                            }]
+                        }
+                    });
+
+                    const structureMetrics = [
+                        `Total Pages: ${requestData.metrics.totalPages}`,
+                        `Active Pages: ${requestData.metrics.activePages}`,
+                        `Max Depth: ${requestData.metrics.maxDepth}`,
+                        `Average Depth: ${requestData.metrics.avgDepth?.toFixed(2) || 0}`,
+                        `Deep Pages: ${requestData.metrics.deepPagesCount}`,
+                        `Total Connections: ${requestData.metrics.totalConnections}`,
+                        `Collections: ${requestData.metrics.collectionsCount}`
+                    ];
+
+                    pageContent.push({
+                        object: 'block',
+                        type: 'bulleted_list_item',
+                        bulleted_list_item: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: structureMetrics.join('\n') }
+                            }]
+                        }
+                    });
+
+                    // Usage & Team Metrics
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_2',
+                        heading_2: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Usage & Team Metrics' }
+                            }]
+                        }
+                    });
+
+                    const usageMetrics = [
+                        `Total Members: ${requestData.metrics.totalMembers}`,
+                        `Total Guests: ${requestData.metrics.totalGuests}`,
+                        `Total Teamspaces: ${requestData.metrics.totalTeamspaces}`,
+                        `Average Members per Teamspace: ${requestData.metrics.averageTeamspaceMembers?.toFixed(2) || 0}`
+                    ];
+
+                    pageContent.push({
+                        object: 'block',
+                        type: 'bulleted_list_item',
+                        bulleted_list_item: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: usageMetrics.join('\n') }
+                            }]
+                        }
+                    });
+
+                    // Growth & Projections
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_2',
+                        heading_2: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Growth & Projections' }
+                            }]
+                        }
+                    });
+
+                    const growthMetrics = [
+                        `Monthly Member Growth Rate: ${requestData.metrics.monthlyMemberGrowthRate?.toFixed(2) || 0}%`,
+                        `Monthly Content Growth Rate: ${requestData.metrics.monthlyContentGrowthRate?.toFixed(2) || 0}%`,
+                        `Growth Capacity: ${requestData.metrics.growthCapacity?.toFixed(2) || 0}%`,
+                        `Expected Members Next Year: ${Math.round(requestData.metrics.expectedMembersNextYear || 0)}`
+                    ];
+
+                    pageContent.push({
+                        object: 'block',
+                        type: 'bulleted_list_item',
+                        bulleted_list_item: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: growthMetrics.join('\n') }
+                            }]
+                        }
+                    });
+
+                    // Organization Scores
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_2',
+                        heading_2: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Organization Scores' }
+                            }]
+                        }
+                    });
+
+                    const organizationMetrics = [
+                        `Visibility Score: ${requestData.metrics.currentVisibilityScore?.toFixed(2) || 0}%`,
+                        `Collaboration Score: ${requestData.metrics.currentCollaborationScore?.toFixed(2) || 0}%`,
+                        `Productivity Score: ${requestData.metrics.currentProductivityScore?.toFixed(2) || 0}%`,
+                        `Overall Organization Score: ${requestData.metrics.currentOrganizationScore?.toFixed(2) || 0}%`
+                    ];
+
+                    pageContent.push({
+                        object: 'block',
+                        type: 'bulleted_list_item',
+                        bulleted_list_item: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: organizationMetrics.join('\n') }
+                            }]
+                        }
+                    });
+
+                    // Advanced Metrics
+                    pageContent.push({
+                        object: 'block',
+                        type: 'heading_2',
+                        heading_2: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: 'Advanced Metrics' }
+                            }]
+                        }
+                    });
+
+                    const advancedMetrics = [
+                        `Content Maturity Score: ${requestData.metrics.contentMaturityScore?.toFixed(2) || 0}`,
+                        `Workspace Complexity Score: ${requestData.metrics.workspaceComplexityScore?.toFixed(2) || 0}`,
+                        `Knowledge Structure Score: ${requestData.metrics.knowledgeStructureScore?.toFixed(2) || 0}`,
+                        `Team Adoption Score: ${requestData.metrics.teamAdoptionScore?.toFixed(2) || 0}`,
+                        `Knowledge Sharing Index: ${requestData.metrics.knowledgeSharingIndex?.toFixed(2) || 0}`,
+                        `Content Freshness Score: ${requestData.metrics.contentFreshnessScore?.toFixed(2) || 0}`,
+                        `Structure Quality Index: ${requestData.metrics.structureQualityIndex?.toFixed(2) || 0}`,
+                        `Documentation Coverage: ${requestData.metrics.documentationCoverage?.toFixed(2) || 0}%`,
+                        `Automation Effectiveness: ${requestData.metrics.automationEffectiveness?.toFixed(2) || 0}%`,
+                        `Integration Impact Score: ${requestData.metrics.integrationImpactScore?.toFixed(2) || 0}`,
+                        `Feature Utilization Index: ${requestData.metrics.featureUtilizationIndex?.toFixed(2) || 0}`,
+                        `Growth Trajectory: ${requestData.metrics.growthTrajectory?.toFixed(2) || 0}`,
+                        `Scaling Readiness Score: ${requestData.metrics.scalingReadinessScore?.toFixed(2) || 0}`,
+                        `Growth Potential Score: ${requestData.metrics.growthPotentialScore?.toFixed(2) || 0}`
+                    ];
+
+                    pageContent.push({
+                        object: 'block',
+                        type: 'bulleted_list_item',
+                        bulleted_list_item: {
+                            rich_text: [{
+                                type: 'text',
+                                text: { content: advancedMetrics.join('\n') }
+                            }]
+                        }
+                    });
+                } catch (error) {
+                    console.error('DEBUG - Error formatting metrics:', error);
+                    // Continue with partial metrics rather than failing completely
+                }
+            }
+        } catch (error) {
+            console.error('DEBUG - Error preparing page content:', error);
+            // Continue with empty content rather than failing
+            pageContent = [];
+        }
+
+        // Step 2: Find root page
+        let rootPage;
+        try {
+            console.log('DEBUG - Step 2: Searching for root page...');
+            const search = await notion.search({
+                filter: {
+                    property: 'object',
+                    value: 'page'
+                }
+            });
+            
+            rootPage = search.results[0]?.id;
+            if (!rootPage) {
+                console.error('DEBUG - Step 2 Failed: No root page found');
+                return res.status(500).json({
+                    success: false,
+                    error: 'Could not find a root page to create the report in'
+                });
+            }
+            
+            console.log('DEBUG - Found root page:', rootPage);
+        } catch (error) {
+            console.error('DEBUG - Step 2 Failed: Error searching for root page:', error);
+            console.error('DEBUG - Search error details:', {
+                name: error.name,
+                code: error.code,
+                status: error.status,
+                message: error.message
+            });
+            return res.status(500).json({
+                success: false,
+                error: 'Failed to search for root page',
+                details: error.message
+            });
+        }
+
+        // Step 3: Create the page
         let page;
         try {
-            console.log('DEBUG - Step 2: Creating new page in database:', requestData.databaseId);
+            console.log('DEBUG - Step 3: Creating new page...');
             page = await notion.pages.create({
                 parent: { 
-                    type: 'database_id', 
-                    database_id: requestData.databaseId 
+                    type: 'page_id', 
+                    page_id: rootPage 
                 },
                 properties: {
-                    Name: {
+                    title: {
                         type: 'title',
                         title: [
                             {
@@ -1190,208 +1357,41 @@ app.post('/api/create-notion-page', async (req, res) => {
                                 }
                             }
                         ]
-                    },
-                    WorkspaceId: {
-                        type: 'rich_text',
-                        rich_text: [
-                            {
-                                type: 'text',
-                                text: {
-                                    content: requestData.workspaceId
-                                }
-                            }
-                        ]
                     }
                 }
             });
             console.log('DEBUG - Created page:', page.id);
         } catch (error) {
-            console.error('DEBUG - Step 2 Failed: Error creating page:', error);
+            console.error('DEBUG - Step 3 Failed: Error creating page:', error);
+            console.error('DEBUG - Page creation error details:', {
+                name: error.name,
+                code: error.code,
+                status: error.status,
+                message: error.message
+            });
             return res.status(500).json({
                 success: false,
-                error: 'Failed to create page in database',
+                error: 'Failed to create page',
                 details: error.message
             });
         }
 
-        // Step 3: Add content blocks
+        // Step 4: Add content blocks
         try {
-            console.log('DEBUG - Step 3: Adding content blocks...');
-            const pageContent = [];
-
-            // Add metrics sections
-            if (requestData.metrics) {
-                // Structure & Evolution Metrics
-                pageContent.push({
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Structure & Evolution Metrics' }
-                        }]
-                    }
-                });
-
-                const structureMetrics = [
-                    `Total Pages: ${requestData.metrics.totalPages}`,
-                    `Active Pages: ${requestData.metrics.activePages}`,
-                    `Max Depth: ${requestData.metrics.maxDepth}`,
-                    `Average Depth: ${requestData.metrics.avgDepth?.toFixed(2) || 0}`,
-                    `Deep Pages: ${requestData.metrics.deepPagesCount}`,
-                    `Total Connections: ${requestData.metrics.totalConnections}`,
-                    `Collections: ${requestData.metrics.collectionsCount}`
-                ];
-
-                pageContent.push({
-                    object: 'block',
-                    type: 'bulleted_list_item',
-                    bulleted_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: structureMetrics.join('\n') }
-                        }]
-                    }
-                });
-
-                // Usage & Team Metrics
-                pageContent.push({
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Usage & Team Metrics' }
-                        }]
-                    }
-                });
-
-                const usageMetrics = [
-                    `Total Members: ${requestData.metrics.totalMembers}`,
-                    `Total Guests: ${requestData.metrics.totalGuests}`,
-                    `Total Teamspaces: ${requestData.metrics.totalTeamspaces}`,
-                    `Average Members per Teamspace: ${requestData.metrics.averageTeamspaceMembers?.toFixed(2) || 0}`
-                ];
-
-                pageContent.push({
-                    object: 'block',
-                    type: 'bulleted_list_item',
-                    bulleted_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: usageMetrics.join('\n') }
-                        }]
-                    }
-                });
-
-                // Growth & Projections
-                pageContent.push({
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Growth & Projections' }
-                        }]
-                    }
-                });
-
-                const growthMetrics = [
-                    `Monthly Member Growth Rate: ${requestData.metrics.monthlyMemberGrowthRate?.toFixed(2) || 0}%`,
-                    `Monthly Content Growth Rate: ${requestData.metrics.monthlyContentGrowthRate?.toFixed(2) || 0}%`,
-                    `Growth Capacity: ${requestData.metrics.growthCapacity?.toFixed(2) || 0}%`,
-                    `Expected Members Next Year: ${Math.round(requestData.metrics.expectedMembersNextYear || 0)}`
-                ];
-
-                pageContent.push({
-                    object: 'block',
-                    type: 'bulleted_list_item',
-                    bulleted_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: growthMetrics.join('\n') }
-                        }]
-                    }
-                });
-
-                // Organization Scores
-                pageContent.push({
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Organization Scores' }
-                        }]
-                    }
-                });
-
-                const organizationMetrics = [
-                    `Visibility Score: ${requestData.metrics.currentVisibilityScore?.toFixed(2) || 0}%`,
-                    `Collaboration Score: ${requestData.metrics.currentCollaborationScore?.toFixed(2) || 0}%`,
-                    `Productivity Score: ${requestData.metrics.currentProductivityScore?.toFixed(2) || 0}%`,
-                    `Overall Organization Score: ${requestData.metrics.currentOrganizationScore?.toFixed(2) || 0}%`
-                ];
-
-                pageContent.push({
-                    object: 'block',
-                    type: 'bulleted_list_item',
-                    bulleted_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: organizationMetrics.join('\n') }
-                        }]
-                    }
-                });
-
-                // Advanced Metrics
-                pageContent.push({
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Advanced Metrics' }
-                        }]
-                    }
-                });
-
-                const advancedMetrics = [
-                    `Content Maturity Score: ${requestData.metrics.contentMaturityScore?.toFixed(2) || 0}`,
-                    `Workspace Complexity Score: ${requestData.metrics.workspaceComplexityScore?.toFixed(2) || 0}`,
-                    `Knowledge Structure Score: ${requestData.metrics.knowledgeStructureScore?.toFixed(2) || 0}`,
-                    `Team Adoption Score: ${requestData.metrics.teamAdoptionScore?.toFixed(2) || 0}`,
-                    `Knowledge Sharing Index: ${requestData.metrics.knowledgeSharingIndex?.toFixed(2) || 0}`,
-                    `Content Freshness Score: ${requestData.metrics.contentFreshnessScore?.toFixed(2) || 0}`,
-                    `Structure Quality Index: ${requestData.metrics.structureQualityIndex?.toFixed(2) || 0}`,
-                    `Documentation Coverage: ${requestData.metrics.documentationCoverage?.toFixed(2) || 0}%`,
-                    `Automation Effectiveness: ${requestData.metrics.automationEffectiveness?.toFixed(2) || 0}%`,
-                    `Integration Impact Score: ${requestData.metrics.integrationImpactScore?.toFixed(2) || 0}`,
-                    `Feature Utilization Index: ${requestData.metrics.featureUtilizationIndex?.toFixed(2) || 0}`,
-                    `Growth Trajectory: ${requestData.metrics.growthTrajectory?.toFixed(2) || 0}`,
-                    `Scaling Readiness Score: ${requestData.metrics.scalingReadinessScore?.toFixed(2) || 0}`,
-                    `Growth Potential Score: ${requestData.metrics.growthPotentialScore?.toFixed(2) || 0}`
-                ];
-
-                pageContent.push({
-                    object: 'block',
-                    type: 'bulleted_list_item',
-                    bulleted_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: advancedMetrics.join('\n') }
-                        }]
-                    }
-                });
-            }
-
+            console.log('DEBUG - Step 4: Adding content blocks...');
             await notion.blocks.children.append({
                 block_id: page.id,
                 children: pageContent
             });
             console.log('DEBUG - Successfully added content to page');
         } catch (error) {
-            console.error('DEBUG - Step 3 Failed: Error adding content blocks:', error);
+            console.error('DEBUG - Step 4 Failed: Error adding content blocks:', error);
+            console.error('DEBUG - Content addition error details:', {
+                name: error.name,
+                code: error.code,
+                status: error.status,
+                message: error.message
+            });
             // Don't return here - we've created the page, so return success with a warning
             return res.json({ 
                 success: true, 
@@ -1405,6 +1405,7 @@ app.post('/api/create-notion-page', async (req, res) => {
 
     } catch (error) {
         console.error('DEBUG - Unexpected error in create-notion-page endpoint:', error);
+        console.error('DEBUG - Error stack:', error.stack);
         // Ensure we haven't already sent a response
         if (!res.headersSent) {
             return res.status(500).json({ 

@@ -1,4 +1,5 @@
 import { SnapshotVisualizer } from './SnapshotVisualizer.js';
+import { Client } from '@notionhq/client';
 
 export class MetricsCalculator {
     constructor() {
@@ -887,10 +888,7 @@ export class MetricsCalculator {
         try {
             console.log('DEBUG - createNotionEntry called with:', {
                 workspaceId,
-                metricsKeys: Object.keys(metrics),
-                hasSnapshots: !!metrics.snapshots,
-                metricsValues: Object.entries(metrics).slice(0, 5).map(([k, v]) => `${k}: ${v}`),
-                snapshotKeys: metrics.snapshots ? Object.keys(metrics.snapshots) : []
+                metricsKeys: Object.keys(metrics)
             });
             
             // Ensure we have the required data
@@ -898,60 +896,313 @@ export class MetricsCalculator {
                 throw new Error('Workspace ID is required');
             }
 
-            // Format metrics for Notion
-            const formattedMetrics = this.formatMetricsForNotion(metrics);
-            console.log('DEBUG - Formatted metrics for Notion:', {
-                formattedKeys: Object.keys(formattedMetrics),
-                sampleValues: Object.entries(formattedMetrics).slice(0, 5)
-            });
+            // Initialize Notion client with our API key
+            const notion = new Client({ auth: this.NOTION_API_KEY });
 
-            console.log('DEBUG - Preparing API request to /api/create-notion-page');
-
-            // Make API call to create Notion page
-            const requestBody = {
-                workspaceId,
-                metrics: formattedMetrics,
-                snapshots: metrics.snapshots || null
-            };
-            console.log('DEBUG - Request body:', JSON.stringify(requestBody, null, 2));
-
-            const response = await fetch('/api/create-notion-page', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
+            // Create the page with just the title
+            const response = await notion.pages.create({
+                parent: { database_id: this.NOTION_DATABASE_ID },
+                properties: {
+                    Name: {
+                        title: [
+                            {
+                                text: {
+                                    content: workspaceId,
+                                },
+                            },
+                        ],
+                    }
                 },
-                credentials: 'include',
-                body: JSON.stringify(requestBody)
             });
 
-            console.log('DEBUG - Notion API response status:', response.status);
-            console.log('DEBUG - Notion API response headers:', Object.fromEntries(response.headers.entries()));
+            // Create content blocks
+            const blocks = [
+                // Title
+                {
+                    object: 'block',
+                    type: 'heading_1',
+                    heading_1: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Workspace Analysis Report' }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'paragraph',
+                    paragraph: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Workspace ID: ${workspaceId}` }
+                        }]
+                    }
+                },
+                // Structure & Evolution Metrics
+                {
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Structure & Evolution Metrics' }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Total Pages: ${metrics['[[total_pages]]']} | Max Depth: ${metrics['[[max_depth]]']} | Avg Depth: ${metrics['[[avg_depth]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Root Pages: ${metrics['[[root_pages]]']} | Deep Pages: ${metrics['[[deep_pages_count]]']} | Orphaned: ${metrics['[[orphaned_blocks]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Collections: ${metrics['[[collections_count]]']} | Views: ${metrics['[[collection_views]]']} | Templates: ${metrics['[[template_count]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Content Maturity: ${metrics['[[content_maturity_score]]']} | Growth Index: ${metrics['[[growth_sustainability_index]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Workspace Complexity: ${metrics['[[workspace_complexity_score]]']} | Knowledge Structure: ${metrics['[[knowledge_structure_score]]']}` }
+                        }]
+                    }
+                },
+                // Collaboration & Content Quality
+                {
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Collaboration & Content Quality' }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Team Adoption: ${metrics['[[team_adoption_score]]']} | Collaboration Density: ${metrics['[[collaboration_density]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Knowledge Sharing: ${metrics['[[knowledge_sharing_index]]']} | Cross-Team Score: ${metrics['[[cross_team_collaboration_score]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Content Freshness: ${metrics['[[content_freshness_score]]']} | Structure Quality: ${metrics['[[structure_quality_index]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Knowledge Base Health: ${metrics['[[knowledge_base_health]]']} | Documentation: ${metrics['[[documentation_coverage]]']}` }
+                        }]
+                    }
+                },
+                // Usage & Predictive Metrics
+                {
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Usage & Predictive Metrics' }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Automation: ${metrics['[[automation_effectiveness]]']} | Integration Impact: ${metrics['[[integration_impact_score]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Feature Usage: ${metrics['[[feature_utilization_index]]']} | Advanced Features: ${metrics['[[advanced_features_adoption]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Growth Trajectory: ${metrics['[[growth_trajectory]]']} | Scaling Readiness: ${metrics['[[scaling_readiness_score]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Growth Potential: ${metrics['[[growth_potential_score]]']} | Optimization Opportunities: ${metrics['[[optimization_opportunities]]']}` }
+                        }]
+                    }
+                },
+                // Trends & Collections
+                {
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Trends & Collections' }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Monthly Growth: ${metrics['[[monthly_growth_rates]]']} | Creation Velocity: ${metrics['[[creation_velocity]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Recent Blocks: ${metrics['[[blocks_created_last_month]]']} | Yearly Blocks: ${metrics['[[blocks_created_last_year]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Total Collections: ${metrics['[[total_collections]]']} | Linked DBs: ${metrics['[[linked_database_count]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Collection Health: ${metrics['[[collection_health_score]]']} | Usage Ratio: ${metrics['[[collection_usage_ratio]]']}` }
+                        }]
+                    }
+                },
+                // Key Insights
+                {
+                    object: 'block',
+                    type: 'heading_2',
+                    heading_2: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: 'Key Insights' }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Monthly Content Growth: ${metrics['[[key_metrics_insight_1]]']}% | Member Growth: ${metrics['[[key_metrics_insight_2]]']}%` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Members & Guests: ${metrics['[[key_metrics_insight_4]]']} | Members per Space: ${metrics['[[key_metrics_insight_5]]']}` }
+                        }]
+                    }
+                },
+                {
+                    object: 'block',
+                    type: 'bulleted_list_item',
+                    bulleted_list_item: {
+                        rich_text: [{
+                            type: 'text',
+                            text: { content: `Integration Coverage: ${metrics['[[key_metrics_insight_12]]']} | Alive Pages Ratio: ${metrics['[[key_metrics_insight_13]]']}` }
+                        }]
+                    }
+                }
+            ];
 
-            // Check content type first
-            const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
-                const text = await response.text();
-                console.error('DEBUG - Unexpected response type:', contentType);
-                console.error('DEBUG - Response body:', text);
-                throw new Error('Unexpected response type from server');
-            }
+            // Add the blocks to the page
+            await notion.blocks.children.append({
+                block_id: response.id,
+                children: blocks
+            });
 
-            // Now we know it's JSON, parse it
-            const result = await response.json();
-            console.log('DEBUG - Parsed response:', result);
-
-            if (!response.ok) {
-                const errorMessage = result.error || result.details || 'Unknown error occurred';
-                throw new Error(errorMessage);
-            }
-
-            if (!result.success || !result.pageId) {
-                throw new Error('Invalid response from server when creating Notion page');
-            }
-
-            console.log('Successfully created Notion page:', result.pageId);
-            return result.pageId;
+            console.log('Successfully created Notion page:', response.id);
+            return response.id;
 
         } catch (error) {
             console.error('Error in createNotionEntry:', error);

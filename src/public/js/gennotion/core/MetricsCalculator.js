@@ -1061,16 +1061,6 @@ export class MetricsCalculator {
                                 }
                             }
                         ]
-                    },
-                    Status: {
-                        select: {
-                            name: "Generated"
-                        }
-                    },
-                    "Analysis Date": {
-                        date: {
-                            start: new Date().toISOString()
-                        }
                     }
                 },
                 children: blocks

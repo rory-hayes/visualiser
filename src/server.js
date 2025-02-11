@@ -11,7 +11,7 @@ import session from 'express-session';
 import axios from 'axios';
 import { AIInsightsService } from './services/aiService.js';
 import fs from 'fs';
-import { MetricsCalculator } from './public/js/gennotion/core/metrics/BaseMetricsCalculator.js';
+import { MetricsCalculator } from './public/js/gennotion/core/MetricsCalculator.js';
 
 // Load environment variables from .env file
 dotenv.config();

@@ -907,6 +907,9 @@ export class MetricsCalculator {
 
             console.log('DEBUG - Preparing API request to /api/create-notion-page');
 
+            // Get the base URL from the window location or environment
+            const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://visualiser-xhjh.onrender.com';
+            
             // Make API call to create Notion page
             const requestBody = {
                 workspaceId,
@@ -915,7 +918,7 @@ export class MetricsCalculator {
             };
             console.log('DEBUG - Request body:', JSON.stringify(requestBody, null, 2));
 
-            const response = await fetch('/api/create-notion-page', {
+            const response = await fetch(`${baseUrl}/api/create-notion-page`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

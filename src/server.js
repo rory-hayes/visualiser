@@ -958,80 +958,158 @@ app.get('/api/health', (req, res) => {
 app.post('/api/analyze-workspace', async (req, res) => {
     try {
         const { workspaceId } = req.body;
+        
         if (!workspaceId) {
-            throw new Error('workspaceId is required');
+            return res.status(400).json({ error: 'workspaceId is required' });
         }
+
+        console.log('Starting workspace analysis for:', workspaceId);
 
         // Step 1: Trigger Hex run
         console.log('Step 1: Triggering Hex run...');
-        const hexResponse = await triggerHexRun(workspaceId);
+        const hexResponse = await axios.post(
+            'https://app.hex.tech/api/v1/project/21c6c24a-60e8-487c-b03a-1f04dda4f918/run',
+            {
+                inputParams: {
+                    _input_text: workspaceId
+                },
+                updatePublishedResults: false,
+                useCachedSqlResults: true
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${HEX_API_TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
 
-        // Step 2: Wait for Hex run to complete
+        console.log('Hex API response:', {
+            status: hexResponse.status,
+            runId: hexResponse.data.runId,
+            data: hexResponse.data
+        });
+
+        if (!hexResponse.data.runId) {
+            throw new Error('No runId received from Hex API');
+        }
+
+        // Step 2: Wait for results
         console.log('Step 2: Waiting for Hex run to complete...');
-        const results = await waitForHexResults(hexResponse.runId);
+        const results = await waitForHexResults(hexResponse.data.runId);
 
-        // Step 3: Calculate metrics using our MetricsCalculator
-        console.log('Step 3: Calculating metrics...');
-        const metricsCalculator = new MetricsCalculator();
-        const metrics = await metricsCalculator.calculateAllMetrics(
+        if (!results?.data) {
+            throw new Error('No valid results received from Hex');
+        }
+
+        // Step 3: Calculate metrics
+        console.log('Step 3: Calculating metrics...', {
+            hasDataframe2: !!results.data.dataframe_2?.length,
+            hasDataframe3: !!results.data.dataframe_3,
+            hasDataframe5: !!results.data.dataframe_5?.length
+        });
+
+        const calculator = new MetricsCalculator();
+        const metrics = await calculator.calculateAllMetrics(
             results.data.dataframe_2,
             results.data.dataframe_3,
             results.data.dataframe_5,
             workspaceId
         );
 
-        // Return complete response
-        res.json({
-            success: true,
-            runId: hexResponse.runId,
-            metrics: metrics
-        });
+        console.log('Analysis completed successfully');
+        return res.json({ success: true, metrics });
 
     } catch (error) {
         console.error('Error in analyze-workspace:', error);
-        res.status(500).json({ 
-            error: error.message || 'Failed to analyze workspace',
-            details: error.response?.data
+        console.error('Error stack:', error.stack);
+        
+        let status = 500;
+        let message = 'Internal server error';
+        
+        if (error.message.includes('Timeout')) {
+            status = 504;
+            message = 'Analysis timed out - please try again';
+        } else if (error.message.includes('Hex run failed')) {
+            status = 502;
+            message = 'Analysis failed - please try again';
+        } else if (error.response?.status === 404) {
+            status = 404;
+            message = 'Workspace not found';
+        }
+
+        return res.status(status).json({
+            error: message,
+            details: error.message
         });
     }
 });
 
-async function waitForHexResults(runId, maxAttempts = 30) {
+async function waitForHexResults(runId, maxAttempts = 60) {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
     let attempts = 0;
+    let results = null;
 
     while (attempts < maxAttempts) {
         try {
-            const results = await loadResults();
-            
-            // Check if we have valid data for all required dataframes
-            if (results?.data?.dataframe_2?.length > 0 && 
-                results?.data?.dataframe_3 &&
-                results?.data?.dataframe_5?.length > 0) {
-                console.log('Valid results found:', {
-                    dataframe2Length: results.data.dataframe_2.length,
-                    hasDataframe3: !!results.data.dataframe_3,
-                    dataframe5Length: results.data.dataframe_5.length
-                });
-                return results;
+            // First check the Hex run status
+            const hexStatusResponse = await axios.get(
+                `https://app.hex.tech/api/v1/project/21c6c24a-60e8-487c-b03a-1f04dda4f918/runs/${runId}/status`,
+                {
+                    headers: {
+                        'Authorization': `Bearer ${HEX_API_TOKEN}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const runStatus = hexStatusResponse.data.status;
+            console.log(`Hex run status (Attempt ${attempts + 1}):`, runStatus);
+
+            if (runStatus === 'failed') {
+                throw new Error('Hex run failed');
+            }
+
+            if (runStatus === 'completed') {
+                // Check for results in our storage
+                results = loadResults();
+                
+                // Check if we have valid data for all required dataframes
+                if (results?.data?.dataframe_2?.length > 0 && 
+                    results?.data?.dataframe_3 &&
+                    results?.data?.dataframe_5?.length > 0) {
+                    console.log('Valid results found:', {
+                        dataframe2Length: results.data.dataframe_2.length,
+                        hasDataframe3: !!results.data.dataframe_3,
+                        dataframe5Length: results.data.dataframe_5.length
+                    });
+                    return results;
+                }
             }
             
             console.log(`Attempt ${attempts + 1}: Waiting for valid results...`, {
+                hexStatus: runStatus,
                 hasDataframe2: !!results?.data?.dataframe_2?.length,
                 hasDataframe3: !!results?.data?.dataframe_3,
                 hasDataframe5: !!results?.data?.dataframe_5?.length
             });
-            await delay(2000); // Wait 2 seconds between attempts
+
+            // Increase delay between attempts based on status
+            const waitTime = runStatus === 'running' ? 5000 : 2000; // 5 seconds if running, 2 seconds otherwise
+            await delay(waitTime);
             attempts++;
             
         } catch (error) {
             console.error(`Attempt ${attempts + 1} failed:`, error);
-            if (attempts >= maxAttempts - 1) throw error;
+            if (attempts >= maxAttempts - 1) {
+                throw new Error(`Failed to get results after ${maxAttempts} attempts: ${error.message}`);
+            }
             await delay(2000);
+            attempts++;
         }
     }
     
-    throw new Error('Timeout waiting for results with valid data');
+    throw new Error(`Timeout waiting for results after ${maxAttempts} attempts`);
 }
 
 async function triggerHexRun(workspaceId) {

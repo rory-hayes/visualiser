@@ -1,4 +1,4 @@
-import { MetricsCalculator } from './gennotion/core/MetricsCalculator.js';
+import { MetricsCalculator } from './gennotion/core/metrics/BaseMetricsCalculator.js';
 
 // Constants
 const HEX_PROJECT_ID = '21c6c24a-60e8-487c-b03a-1f04dda4f918';

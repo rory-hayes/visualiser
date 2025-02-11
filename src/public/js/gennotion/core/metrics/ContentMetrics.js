@@ -81,7 +81,7 @@ export class ContentMetrics {
     calculateContentHealthScore(dataframe_2, dataframe_3) {
         const aliveRatio = dataframe_3.NUM_ALIVE_BLOCKS / dataframe_3.NUM_BLOCKS;
         const depthScore = 1 - (this.calculator.structureMetrics.calculateAverageDepth(dataframe_2) / 10); // Penalize deep nesting
-        const orphanedRatio = 1 - (this.calculator.structureMetrics.countOrphanedBlocks(dataframe_2) / dataframe_2.length);
+        const orphanedRatio = 1 - (this.calculator.structureMetrics.countOrphanedPages(dataframe_2) / dataframe_2.length);
         
         return (aliveRatio * 0.4 + depthScore * 0.3 + orphanedRatio * 0.3) * 100;
     }

@@ -112,34 +112,13 @@ export class MetricsCalculator {
                 snapshotKeys: snapshotResults.snapshots ? Object.keys(snapshotResults.snapshots) : []
             });
             
-            // Make API call to create Notion page
-            const response = await fetch('/api/create-notion-page', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    workspaceId,
-                    metrics: placeholderMetrics,
-                    snapshots: snapshotResults.snapshots
-                })
+            const pageId = await this.createNotionEntry(workspaceId, {
+                ...placeholderMetrics,
+                snapshots: snapshotResults.snapshots
             });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('Error creating Notion page:', errorText);
-                throw new Error(`Failed to create Notion page: ${errorText}`);
-            }
-
-            const result = await response.json();
-            if (!result.success) {
-                throw new Error('Failed to create Notion page: ' + (result.error || 'Unknown error'));
-            }
-
-            console.log('DEBUG - Successfully created Notion page with ID:', result.pageId);
-            allMetrics.notionPageId = result.pageId;
+            
+            console.log('DEBUG - Successfully created Notion page with ID:', pageId);
+            allMetrics.notionPageId = pageId;
 
         } catch (error) {
             console.error('Error creating Notion entry:', error);
@@ -962,29 +941,31 @@ export class MetricsCalculator {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                credentials: 'include', // Important: Include credentials for session cookie
+                credentials: 'include',
                 body: JSON.stringify(requestBody)
             });
 
             console.log('DEBUG - Notion API response status:', response.status);
             console.log('DEBUG - Notion API response headers:', Object.fromEntries(response.headers.entries()));
 
+            // Check content type first
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                const text = await response.text();
+                console.error('DEBUG - Unexpected response type:', contentType);
+                console.error('DEBUG - Response body:', text);
+                throw new Error('Unexpected response type from server');
+            }
+
+            // Now we know it's JSON, parse it
+            const result = await response.json();
+            console.log('DEBUG - Parsed response:', result);
+
             if (!response.ok) {
-                const errorText = await response.text();
-                console.error('DEBUG - Error response:', errorText);
-                let errorMessage;
-                try {
-                    const errorJson = JSON.parse(errorText);
-                    errorMessage = errorJson.error || errorJson.details || 'Unknown error occurred';
-                } catch (e) {
-                    errorMessage = errorText || 'Failed to create Notion page';
-                }
+                const errorMessage = result.error || result.details || 'Unknown error occurred';
                 throw new Error(errorMessage);
             }
 
-            const result = await response.json();
-            console.log('DEBUG - Parsed response:', result);
-            
             if (!result.success || !result.pageId) {
                 throw new Error('Invalid response from server when creating Notion page');
             }

@@ -1044,6 +1044,9 @@ async function triggerHexRun(workspaceId) {
 
 // Add Notion page creation endpoint
 app.post('/api/create-notion-page', async (req, res) => {
+    // Set response type to JSON
+    res.setHeader('Content-Type', 'application/json');
+    
     // Set a timeout for the request
     req.setTimeout(30000); // 30 second timeout
     
@@ -1325,7 +1328,8 @@ app.post('/api/create-notion-page', async (req, res) => {
                     await Promise.all([
                         addVisualizationSection('Past State (60 days ago)', snapshots.past),
                         addVisualizationSection('Current State', snapshots.present),
-                        addVisualizationSection('Projected Future (90 days)', snapshots.future)
+                        addVisualizationSection('Projected Future (90 days)', snapshots.future),
+                        addVisualizationSection('Key Metrics', snapshots.keyMetrics)
                     ]);
                 } catch (error) {
                     console.error('DEBUG - Error adding visualizations:', error);
@@ -1437,14 +1441,15 @@ app.post('/api/create-notion-page', async (req, res) => {
             });
         }
 
-        res.json({ success: true, pageId: page.id });
+        // Return success response
+        return res.json({ success: true, pageId: page.id });
 
     } catch (error) {
         console.error('DEBUG - Unexpected error in create-notion-page endpoint:', error);
         console.error('DEBUG - Error stack:', error.stack);
         // Ensure we haven't already sent a response
         if (!res.headersSent) {
-            res.status(500).json({ 
+            return res.status(500).json({ 
                 success: false,
                 error: 'Failed to create Notion page',
                 details: error.message

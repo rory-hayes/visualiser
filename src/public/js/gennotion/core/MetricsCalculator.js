@@ -935,23 +935,23 @@ export class MetricsCalculator {
             // Add metrics sections
             const sections = {
                 'Structure & Evolution Metrics': [
-                    `Total Pages: ${metrics.total_pages || 'N/A'}`,
-                    `Active Pages: ${metrics.alive_pages || 'N/A'}`,
-                    `Public Pages: ${metrics.public_pages || 'N/A'}`,
-                    `Private Pages: ${metrics.private_pages || 'N/A'}`,
-                    `Max Depth: ${metrics.max_depth || 'N/A'}`,
+                    `Total Pages: ${metrics.total_pages}`,
+                    `Active Pages: ${metrics.alive_pages}`,
+                    `Public Pages: ${metrics.public_pages}`,
+                    `Private Pages: ${metrics.private_pages}`,
+                    `Max Depth: ${metrics.max_depth}`,
                     `Average Depth: ${safeFormat(metrics.avg_depth)}`,
-                    `Median Depth: ${metrics.median_depth || 'N/A'}`,
-                    `Root Pages: ${metrics.root_pages || 'N/A'}`,
-                    `Orphaned Pages: ${metrics.orphaned_pages || 'N/A'}`,
+                    `Median Depth: ${metrics.median_depth}`,
+                    `Root Pages: ${metrics.root_pages}`,
+                    `Orphaned Pages: ${metrics.orphaned_pages}`,
                     `Navigation Score: ${safeFormat(metrics.navigation_score)}`,
                     `Health Score: ${safeFormat(metrics.health_score)}`
                 ],
                 'Collections & Content': [
-                    `Total Collections: ${metrics.total_collections || 'N/A'}`,
-                    `Active Collections: ${metrics.alive_collections || 'N/A'}`,
-                    `Collection Views: ${metrics.collection_views || 'N/A'}`,
-                    `Collection View Pages: ${metrics.collection_view_pages || 'N/A'}`,
+                    `Total Collections: ${metrics.total_collections}`,
+                    `Active Collections: ${metrics.alive_collections}`,
+                    `Collection Views: ${metrics.collection_views}`,
+                    `Collection View Pages: ${metrics.collection_view_pages}`,
                     `Collection Health: ${safeFormat(metrics.collection_health)}%`,
                     `Collection Usage Ratio: ${safeFormat(metrics.collection_usage_ratio)}`,
                     `Collection Health Score: ${safeFormat(metrics.collection_health_score)}`,
@@ -959,27 +959,27 @@ export class MetricsCalculator {
                     `Content Diversity Score: ${safeFormat(metrics.content_diversity_score)}`
                 ],
                 'Team & Usage Metrics': [
-                    `Total Members: ${metrics.total_members || 'N/A'}`,
-                    `Total Guests: ${metrics.total_guests || 'N/A'}`,
-                    `Total Teamspaces: ${metrics.total_num_teamspaces || 'N/A'}`,
+                    `Total Members: ${metrics.total_members}`,
+                    `Total Guests: ${metrics.total_guests}`,
+                    `Total Teamspaces: ${metrics.teamspaces?.total || metrics.total_num_teamspaces}`,
                     `Average Members per Teamspace: ${safeFormat(metrics.average_teamspace_members)}`,
-                    `Total Bots: ${metrics.total_num_bots || 'N/A'}`,
-                    `Total Integrations: ${metrics.total_num_integrations || 'N/A'}`,
+                    `Total Bots: ${metrics.automation?.total_bots || metrics.total_num_bots}`,
+                    `Total Integrations: ${metrics.automation?.integrations || metrics.total_num_integrations}`,
                     `Automation Usage Rate: ${safeFormat(metrics.automation_usage_rate)}%`,
                     `Integration Coverage: ${safeFormat(metrics.current_integration_coverage)}%`,
-                    `Team Efficiency Score: ${metrics.team_efficiency_score || 'N/A'}`
+                    `Team Efficiency Score: ${safeFormat(metrics.team_efficiency_score)}`
                 ],
                 'Growth & Activity': [
                     `Monthly Member Growth Rate: ${safeFormat(metrics.monthly_member_growth_rate)}%`,
                     `Monthly Content Growth Rate: ${safeFormat(metrics.monthly_content_growth_rate)}%`,
                     `Growth Capacity: ${safeFormat(metrics.growth_capacity)}`,
                     `Expected Members Next Year: ${Math.round(metrics.expected_members_in_next_year || 0)}`,
-                    `Nodes Created (30 days): ${metrics.nodes_created_last_30_days || 'N/A'}`,
-                    `Nodes Created (60 days): ${metrics.nodes_created_last_60_days || 'N/A'}`,
-                    `Nodes Created (90 days): ${metrics.nodes_created_last_90_days || 'N/A'}`,
+                    `Nodes Created (30 days): ${metrics.nodes_created_last_30_days}`,
+                    `Nodes Created (60 days): ${metrics.nodes_created_last_60_days}`,
+                    `Nodes Created (90 days): ${metrics.nodes_created_last_90_days}`,
                     `Average Daily Creation (30d): ${safeFormat(metrics.avg_daily_creation_30d)}`,
-                    `Creation Velocity: ${metrics.creation_velocity || 'N/A'}`,
-                    `Workspace Maturity: ${metrics.workspace_maturity || 'N/A'}`
+                    `Creation Velocity: ${safeFormat(metrics.creation_velocity)}`,
+                    `Workspace Maturity: ${metrics.workspace_maturity}`
                 ],
                 'Organization Scores': [
                     `Visibility Score: ${safeFormat(metrics.current_visibility_score)}%`,
@@ -1003,11 +1003,13 @@ export class MetricsCalculator {
                 ]
             };
 
+            // Add Predictions & Recommendations section if available
             if (metrics.bottleneck_prediction?.length || metrics.optimization_opportunities?.length) {
                 sections['Predictions & Recommendations'] = [
                     'Bottleneck Predictions:',
                     ...(metrics.bottleneck_prediction || []).map(pred => `  • ${pred}`),
-                    '\nOptimization Opportunities:',
+                    '',
+                    'Optimization Opportunities:',
                     ...(metrics.optimization_opportunities || []).map(opp => `  • ${opp}`)
                 ];
             }

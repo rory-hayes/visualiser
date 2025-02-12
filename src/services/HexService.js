@@ -57,11 +57,11 @@ export class HexService {
             throw new Error(data.message || `Hex API error: ${response.statusText}`);
         }
 
-        if (!data.run_id) {
-            throw new Error('Invalid response from Hex API: Missing run_id');
+        if (!data.runId) {
+            throw new Error('Invalid response from Hex API: Missing runId');
         }
 
-        return data.run_id;
+        return data.runId;
     }
 
     async waitForHexResults(runId, maxAttempts = 30) {
@@ -75,7 +75,7 @@ export class HexService {
         while (attempts < maxAttempts) {
             console.log(`Checking run status (attempt ${attempts + 1}/${maxAttempts}):`, runId);
 
-            const response = await fetch(`${this.HEX_API_URL}/runs/${runId}`, {
+            const response = await fetch(`${this.HEX_API_URL}/projects/${this.HEX_PROJECT_ID}/runs/${runId}`, {
                 headers: {
                     'Authorization': `Bearer ${this.HEX_API_KEY}`,
                     'Accept': 'application/json'

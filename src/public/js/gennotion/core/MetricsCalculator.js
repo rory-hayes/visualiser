@@ -39,7 +39,7 @@ export class MetricsCalculator {
         const teamMetrics = this.calculateTeamMetrics(dataframe_2, dataframe_3);
         const trendMetrics = this.calculateTrendMetrics(dataframe_2, dataframe_3);
         const collectionMetrics = this.calculateDetailedCollectionMetrics(dataframe_2, dataframe_3);
-        const contentMetrics = this.calculateContentMetrics(dataframe_2);
+        const contentMetrics = this.calculateContentMetrics(dataframe_2, dataframe_3);
         const evolutionMetrics = this.calculateEvolutionMetrics(dataframe_2, dataframe_3);
         const collaborationPatterns = this.calculateCollaborationPatterns(dataframe_2, dataframe_3);
         const contentQualityMetrics = this.calculateContentQualityMetrics(dataframe_2);
@@ -177,29 +177,43 @@ export class MetricsCalculator {
     }
 
     calculateContentMetrics(dataframe_2, dataframe_3) {
-        const typeDistribution = {};
-        dataframe_2.forEach(row => {
-            const type = row.TYPE || 'unknown';
-            typeDistribution[type] = (typeDistribution[type] || 0) + 1;
-        });
+        try {
+            const typeDistribution = {};
+            dataframe_2.forEach(row => {
+                const type = row.TYPE || 'unknown';
+                typeDistribution[type] = (typeDistribution[type] || 0) + 1;
+            });
 
-        const titleCounts = {};
-        dataframe_2.forEach(row => {
-            const title = row.TEXT || '';
-            if (title.trim()) {
-                titleCounts[title] = (titleCounts[title] || 0) + 1;
-            }
-        });
+            const titleCounts = {};
+            dataframe_2.forEach(row => {
+                const title = row.TEXT || '';
+                if (title.trim()) {
+                    titleCounts[title] = (titleCounts[title] || 0) + 1;
+                }
+            });
 
-        const duplicateCount = Object.values(titleCounts).filter(count => count > 1).length;
+            const duplicateCount = Object.values(titleCounts).filter(count => count > 1).length;
 
-        return {
-            content_type_distribution: typeDistribution,
-            duplicate_content_rate: (duplicateCount / dataframe_2.length) * 100,
-            content_health_score: this.calculateContentHealthScore(dataframe_2, dataframe_3),
-            avg_content_per_type: Object.values(typeDistribution).reduce((a, b) => a + b, 0) / Object.keys(typeDistribution).length,
-            content_diversity_score: this.calculateContentDiversityScore(typeDistribution)
-        };
+            // Calculate content health score with validation
+            const contentHealthScore = this.calculateContentHealthScore(dataframe_2, dataframe_3);
+
+            return {
+                content_type_distribution: typeDistribution,
+                duplicate_content_rate: dataframe_2.length > 0 ? (duplicateCount / dataframe_2.length) * 100 : 0,
+                content_health_score: contentHealthScore,
+                avg_content_per_type: Object.keys(typeDistribution).length > 0 
+                    ? Object.values(typeDistribution).reduce((a, b) => a + b, 0) / Object.keys(typeDistribution).length 
+                    : 0
+            };
+        } catch (error) {
+            console.error('Error in calculateContentMetrics:', error);
+            return {
+                content_type_distribution: {},
+                duplicate_content_rate: 0,
+                content_health_score: 0,
+                avg_content_per_type: 0
+            };
+        }
     }
 
     calculateGrowthAcceleration(monthlyGrowthRates) {

@@ -6,7 +6,7 @@
     },
     {
       "name": "Install npm dependencies",
-      "command": "npm install"
+      "command": "cd src && npm install"
     }
   ]
 } 

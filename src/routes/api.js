@@ -41,21 +41,33 @@ router.post('/analyze-workspace', async (req, res) => {
             });
         }
 
-        const hexService = getHexService();
+        // Initialize service
+        try {
+            hexService = getHexService();
+        } catch (error) {
+            return res.status(500).json({
+                success: false,
+                error: 'Hex service configuration error',
+                details: error.message
+            });
+        }
+
         console.log('Analyzing workspace:', workspaceId);
         const hexResponse = await hexService.triggerHexRun(workspaceId);
         
         if (!hexResponse.success) {
-            console.error('Hex run failed:', hexResponse.error);
             return res.status(500).json({ 
                 success: false, 
-                error: 'Failed to trigger Hex run',
-                details: hexResponse.error
+                error: hexResponse.error
             });
         }
 
         if (hexResponse.results) {
-            resultsManager.saveResults(hexResponse.results);
+            try {
+                resultsManager.saveResults(hexResponse.results);
+            } catch (saveError) {
+                console.error('Failed to save results:', saveError);
+            }
         }
 
         res.json({
@@ -68,8 +80,7 @@ router.post('/analyze-workspace', async (req, res) => {
         console.error('Error analyzing workspace:', error);
         res.status(500).json({
             success: false,
-            error: 'Failed to analyze workspace',
-            details: error.message
+            error: error.message
         });
     }
 });

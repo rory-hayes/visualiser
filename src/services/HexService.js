@@ -64,48 +64,31 @@ export class HexService {
         return data.runId;
     }
 
-    async waitForHexResults(runId, maxAttempts = 30) {
+    async checkRunStatus(runId) {
         if (!runId) {
             throw new Error('runId is required');
         }
 
-        let attempts = 0;
-        const delay = 5000; // 5 seconds
+        console.log(`Checking run status for: ${runId}`);
 
-        while (attempts < maxAttempts) {
-            console.log(`Checking run status (attempt ${attempts + 1}/${maxAttempts}):`, runId);
-
-            const response = await fetch(`${this.HEX_API_URL}/projects/${this.HEX_PROJECT_ID}/runs/${runId}`, {
-                headers: {
-                    'Authorization': `Bearer ${this.HEX_API_KEY}`,
-                    'Accept': 'application/json'
-                }
-            });
-
-            const data = await response.json();
-            console.log('Run status response:', {
-                status: response.status,
-                data
-            });
-
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to check run status');
+        const response = await fetch(`${this.HEX_API_URL}/projects/${this.HEX_PROJECT_ID}/runs/${runId}`, {
+            headers: {
+                'Authorization': `Bearer ${this.HEX_API_KEY}`,
+                'Accept': 'application/json'
             }
+        });
 
-            if (data.status === 'COMPLETED') {
-                if (!data.results) {
-                    throw new Error('Completed run has no results');
-                }
-                return data.results;
-            } else if (data.status === 'FAILED') {
-                throw new Error('Hex run failed');
-            }
+        const data = await response.json();
+        console.log('Run status response:', {
+            status: response.status,
+            data
+        });
 
-            await new Promise(resolve => setTimeout(resolve, delay));
-            attempts++;
+        if (!response.ok) {
+            throw new Error(data.message || 'Failed to check run status');
         }
 
-        throw new Error('Timeout waiting for Hex results');
+        return data.status;
     }
 
     async triggerHexRun(workspaceId) {
@@ -113,13 +96,21 @@ export class HexService {
             console.log('Triggering Hex run for workspace:', workspaceId);
             const runId = await this.callHexAPI(workspaceId);
             console.log('Successfully got run ID:', runId);
-            const results = await this.waitForHexResults(runId);
-            console.log('Successfully got results');
+            
+            // Wait for the run to start
+            let status = await this.checkRunStatus(runId);
+            while (status === 'PENDING') {
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                status = await this.checkRunStatus(runId);
+            }
+            
+            if (status === 'FAILED') {
+                throw new Error('Hex run failed to start');
+            }
             
             return {
                 success: true,
-                runId,
-                results
+                runId
             };
         } catch (error) {
             console.error('Error in triggerHexRun:', error);

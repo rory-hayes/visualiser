@@ -29,6 +29,60 @@ router.get('/health', (req, res) => {
     res.json({ status: 'healthy' });
 });
 
+// Endpoint to receive results from Hex
+router.post('/hex-results', express.json({ limit: '50mb' }), async (req, res) => {
+    try {
+        console.log('Received results from Hex:', {
+            chunk: req.body.metadata?.chunk,
+            totalChunks: req.body.metadata?.total_chunks,
+            success: req.body.success,
+            hasDataframe2: !!req.body.data?.dataframe_2,
+            hasDataframe3: !!req.body.data?.dataframe_3,
+            hasDataframe5: !!req.body.data?.dataframe_5
+        });
+
+        if (!req.body.success || !req.body.data || !req.body.metadata) {
+            console.error('Invalid results data structure:', req.body);
+            return res.status(400).json({ error: 'Invalid results data structure' });
+        }
+
+        // Validate required dataframes
+        const { data, metadata } = req.body;
+        if (!data.dataframe_2 || !data.dataframe_3 || !data.dataframe_5) {
+            console.error('Missing required dataframes:', {
+                hasDataframe2: !!data.dataframe_2,
+                hasDataframe3: !!data.dataframe_3,
+                hasDataframe5: !!data.dataframe_5
+            });
+            return res.status(400).json({ error: 'Missing required dataframes' });
+        }
+
+        // Save the results
+        const saved = resultsManager.saveResults(req.body);
+        if (!saved) {
+            return res.status(500).json({ error: 'Failed to save results' });
+        }
+
+        const isComplete = resultsManager.isResultsComplete();
+        console.log('Results status:', {
+            saved: true,
+            isComplete,
+            chunk: metadata.chunk,
+            totalChunks: metadata.total_chunks
+        });
+
+        res.json({ 
+            success: true,
+            isComplete,
+            chunk: metadata.chunk,
+            totalChunks: metadata.total_chunks
+        });
+    } catch (error) {
+        console.error('Error handling Hex results:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Analyze workspace endpoint
 router.post('/analyze-workspace', async (req, res) => {
     try {
@@ -74,12 +128,15 @@ router.post('/analyze-workspace', async (req, res) => {
         }
 
         console.log('Analyzing workspace:', workspaceId);
+        
+        // Clear any existing results before starting new analysis
+        resultsManager.clearResults();
+        
         const hexResponse = await hexService.triggerHexRun(workspaceId);
         
         console.log('Hex response:', {
             success: hexResponse.success,
             hasRunId: !!hexResponse.runId,
-            hasResults: !!hexResponse.results,
             error: hexResponse.error
         });
         
@@ -90,20 +147,39 @@ router.post('/analyze-workspace', async (req, res) => {
             });
         }
 
-        if (hexResponse.results) {
-            try {
-                console.log('Saving results to ResultsManager');
-                resultsManager.saveResults(hexResponse.results);
-            } catch (saveError) {
-                console.error('Failed to save results:', saveError);
+        // Wait for results to be available (with timeout)
+        let attempts = 0;
+        const maxAttempts = 30;
+        const delay = 5000;
+
+        while (attempts < maxAttempts) {
+            const results = resultsManager.loadResults();
+            if (results?.data?.dataframe_2?.length > 0 && 
+                results?.data?.dataframe_3 && 
+                results?.data?.dataframe_5?.length > 0 && 
+                results?.metadata?.isComplete) {
+                return res.json({
+                    success: true,
+                    runId: hexResponse.runId,
+                    results: results
+                });
             }
+
+            console.log('Waiting for results:', {
+                attempt: attempts + 1,
+                hasDataframe2: results?.data?.dataframe_2?.length > 0,
+                hasDataframe3: !!results?.data?.dataframe_3,
+                hasDataframe5: results?.data?.dataframe_5?.length > 0,
+                isComplete: results?.metadata?.isComplete
+            });
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+            attempts++;
         }
 
-        console.log('Sending successful response');
-        res.json({
-            success: true,
-            runId: hexResponse.runId,
-            results: hexResponse.results
+        return res.status(408).json({
+            success: false,
+            error: 'Timeout waiting for results'
         });
 
     } catch (error) {

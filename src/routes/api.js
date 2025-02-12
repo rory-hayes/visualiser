@@ -31,7 +31,7 @@ router.get('/health', (req, res) => {
 
 // Configure express.json middleware with larger limit for the hex-results endpoint
 const jsonParser = express.json({
-    limit: '50mb',
+    limit: '100mb',
     verify: (req, res, buf) => {
         try {
             JSON.parse(buf);
@@ -45,6 +45,7 @@ const jsonParser = express.json({
 // Endpoint to receive results from Hex
 router.post('/hex-results', jsonParser, async (req, res) => {
     try {
+        // Log basic info about the incoming chunk without logging the full payload
         console.log('Received results chunk from Hex:', {
             chunk: req.body.metadata?.chunk,
             totalChunks: req.body.metadata?.total_chunks,
@@ -53,11 +54,12 @@ router.post('/hex-results', jsonParser, async (req, res) => {
             dataframe2Length: req.body.data?.dataframe_2?.length || 0,
             hasDataframe3: !!req.body.data?.dataframe_3,
             hasDataframe5: Array.isArray(req.body.data?.dataframe_5),
-            dataframe5Length: req.body.data?.dataframe_5?.length || 0
+            dataframe5Length: req.body.data?.dataframe_5?.length || 0,
+            payloadSize: JSON.stringify(req.body).length
         });
 
         if (!req.body.success || !req.body.data || !req.body.metadata) {
-            console.error('Invalid results data structure:', req.body);
+            console.error('Invalid results data structure');
             return res.status(400).json({ error: 'Invalid results data structure' });
         }
 
@@ -65,16 +67,29 @@ router.post('/hex-results', jsonParser, async (req, res) => {
         const { chunk, total_chunks } = metadata;
 
         // Validate chunk information
-        if (typeof chunk !== 'number' || typeof total_chunks !== 'number') {
-            console.error('Invalid chunk metadata:', metadata);
+        if (typeof chunk !== 'number' || typeof total_chunks !== 'number' || chunk < 1 || chunk > total_chunks) {
+            console.error('Invalid chunk metadata:', { chunk, total_chunks });
             return res.status(400).json({ error: 'Invalid chunk metadata' });
         }
 
-        // Save the chunk
-        const saved = resultsManager.saveResults(req.body);
-        if (!saved) {
-            return res.status(500).json({ error: 'Failed to save results chunk' });
-        }
+        // Process the chunk in smaller pieces if it's large
+        const processChunk = async () => {
+            // Save the chunk
+            const saved = await new Promise(resolve => {
+                process.nextTick(() => {
+                    const result = resultsManager.saveResults(req.body);
+                    resolve(result);
+                });
+            });
+
+            if (!saved) {
+                throw new Error('Failed to save results chunk');
+            }
+
+            return saved;
+        };
+
+        await processChunk();
 
         const isComplete = resultsManager.isResultsComplete();
         console.log('Results chunk status:', {

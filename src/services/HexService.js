@@ -21,7 +21,7 @@ export class HexService {
         // Format request body according to Hex API requirements
         const requestBody = {
             inputParams: {
-                workspace_id: workspaceId
+                _input_text: workspaceId
             }
         };
 

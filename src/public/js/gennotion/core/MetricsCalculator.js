@@ -1,6 +1,5 @@
 import { SnapshotVisualizer } from './SnapshotVisualizer.js';
 import { Client } from '@notionhq/client';
-import { TreeVisualizer } from './TreeVisualizer.js';
 
 export class MetricsCalculator {
     constructor(notionApiKey, notionDatabaseId) {
@@ -30,25 +29,54 @@ export class MetricsCalculator {
         this.snapshotVisualizer = new SnapshotVisualizer();
     }
 
-    async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5) {
-        const workspaceId = dataframe_2?.[0]?.space_id;
-        
+    async calculateAllMetrics(dataframe_2, dataframe_3, dataframe_5, workspaceId) {
+        // Debug workspaceId
+        console.log('DEBUG - calculateAllMetrics workspaceId:', workspaceId);
+        console.log('DEBUG - Input data validation:', {
+            df2Length: dataframe_2?.length,
+            df3Present: !!dataframe_3,
+            df5Length: dataframe_5?.length,
+            df2Sample: dataframe_2?.[0],
+            df3Keys: dataframe_3 ? Object.keys(dataframe_3) : [],
+            df5Sample: dataframe_5?.[0]
+        });
+
+        // Calculate workspace age first
+        const workspaceAge = this.calculateWorkspaceAge(dataframe_2);
+        console.log('Calculated workspace age:', workspaceAge);
+
+        console.log('DEBUG - Starting metrics calculations');
+
         // Calculate all metrics
-        const structureMetrics = this.calculateStructureMetrics(dataframe_2);
-        const engagementMetrics = this.calculateEngagementMetrics(dataframe_2, dataframe_3);
-        const teamMetrics = this.calculateTeamMetrics(dataframe_2, dataframe_3);
-        const trendMetrics = this.calculateTrendMetrics(dataframe_2, dataframe_3);
+        const structureMetrics = this.calculateStructureMetrics(dataframe_2, dataframe_3);
+        const usageMetrics = this.calculateUsageMetrics(dataframe_3, dataframe_5);
+        const growthMetrics = this.calculateGrowthMetrics(dataframe_3, dataframe_2, dataframe_5);
+        const organizationMetrics = this.calculateOrganizationMetrics(dataframe_3, dataframe_5);
+        const roiMetrics = this.calculateROIMetrics(dataframe_3, dataframe_5);
+        const engagementMetrics = this.calculateEngagementMetrics(dataframe_5);
+        const teamMetrics = this.calculateTeamMetrics(dataframe_3, dataframe_5);
+        const trendMetrics = this.calculateTrendMetrics(dataframe_2);
         const collectionMetrics = this.calculateDetailedCollectionMetrics(dataframe_2, dataframe_3);
         const contentMetrics = this.calculateContentMetrics(dataframe_2, dataframe_3);
-        const evolutionMetrics = this.calculateEvolutionMetrics(dataframe_2, dataframe_3);
-        const collaborationPatterns = this.calculateCollaborationPatterns(dataframe_2, dataframe_3);
-        const contentQualityMetrics = this.calculateContentQualityMetrics(dataframe_2);
-        const usagePatterns = this.calculateUsagePatterns(dataframe_2, dataframe_3);
-        const predictiveMetrics = this.calculatePredictiveMetrics(dataframe_2, dataframe_3, dataframe_5);
 
-        // Combine all metrics
+        console.log('DEBUG - Completed base metrics calculations');
+
+        // Calculate new advanced metrics
+        const evolutionMetrics = this.calculateEvolutionMetrics(dataframe_2, dataframe_3);
+        const collaborationPatterns = this.calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5);
+        const contentQualityMetrics = this.calculateContentQualityMetrics(dataframe_2, dataframe_3);
+        const usagePatterns = this.calculateAdvancedUsagePatterns(dataframe_2, dataframe_3, dataframe_5);
+        const predictiveMetrics = this.calculatePredictiveMetrics(dataframe_2, dataframe_3);
+
+        console.log('DEBUG - Completed advanced metrics calculations');
+
         const allMetrics = {
+            workspace_age: workspaceAge,
             ...structureMetrics,
+            ...usageMetrics,
+            ...growthMetrics,
+            ...organizationMetrics,
+            ...roiMetrics,
             ...engagementMetrics,
             ...teamMetrics,
             ...trendMetrics,
@@ -65,29 +93,30 @@ export class MetricsCalculator {
         console.log('DEBUG - Preparing metrics for Notion page creation...');
         const placeholderMetrics = this.logMetricsWithPlaceholders(allMetrics, dataframe_2, dataframe_3, dataframe_5);
 
-        // Generate treemap visualization
-        let visualizationUrl = null;
-        try {
-            const treeVisualizer = new TreeVisualizer();
-            visualizationUrl = await treeVisualizer.generateVisualization(dataframe_2, 'tree-vis');
-            console.log('DEBUG - Generated visualization URL:', visualizationUrl);
-        } catch (error) {
-            console.error('Error generating treemap visualization:', error);
-        }
-
-        // Create Notion entry with metrics and visualization
+        // Create Notion entry with all metrics
         try {
             if (!workspaceId) {
                 console.error('DEBUG - Missing workspaceId in calculateAllMetrics');
                 throw new Error('workspaceId is required');
             }
+            console.log('DEBUG - About to create Notion entry with:', {
+                workspaceId,
+                metricsCount: Object.keys(placeholderMetrics).length
+            });
             
-            const pageId = await this.createNotionEntry(workspaceId, placeholderMetrics, visualizationUrl);
+            const pageId = await this.createNotionEntry(workspaceId, placeholderMetrics);
+            
             console.log('DEBUG - Successfully created Notion page with ID:', pageId);
             allMetrics.notionPageId = pageId;
 
         } catch (error) {
             console.error('Error creating Notion entry:', error);
+            console.error('Error stack:', error.stack);
+            console.error('DEBUG - Failed metrics:', {
+                metricsKeys: Object.keys(placeholderMetrics),
+                workspaceId
+            });
+            // Don't throw here - we want to return the metrics even if Notion page creation fails
             allMetrics.notionError = error.message;
         }
 
@@ -177,43 +206,29 @@ export class MetricsCalculator {
     }
 
     calculateContentMetrics(dataframe_2, dataframe_3) {
-        try {
-            const typeDistribution = {};
-            dataframe_2.forEach(row => {
-                const type = row.TYPE || 'unknown';
-                typeDistribution[type] = (typeDistribution[type] || 0) + 1;
-            });
+        const typeDistribution = {};
+        dataframe_2.forEach(row => {
+            const type = row.TYPE || 'unknown';
+            typeDistribution[type] = (typeDistribution[type] || 0) + 1;
+        });
 
-            const titleCounts = {};
-            dataframe_2.forEach(row => {
-                const title = row.TEXT || '';
-                if (title.trim()) {
-                    titleCounts[title] = (titleCounts[title] || 0) + 1;
-                }
-            });
+        const titleCounts = {};
+        dataframe_2.forEach(row => {
+            const title = row.TEXT || '';
+            if (title.trim()) {
+                titleCounts[title] = (titleCounts[title] || 0) + 1;
+            }
+        });
 
-            const duplicateCount = Object.values(titleCounts).filter(count => count > 1).length;
+        const duplicateCount = Object.values(titleCounts).filter(count => count > 1).length;
 
-            // Calculate content health score with validation
-            const contentHealthScore = this.calculateContentHealthScore(dataframe_2, dataframe_3);
-
-            return {
-                content_type_distribution: typeDistribution,
-                duplicate_content_rate: dataframe_2.length > 0 ? (duplicateCount / dataframe_2.length) * 100 : 0,
-                content_health_score: contentHealthScore,
-                avg_content_per_type: Object.keys(typeDistribution).length > 0 
-                    ? Object.values(typeDistribution).reduce((a, b) => a + b, 0) / Object.keys(typeDistribution).length 
-                    : 0
-            };
-        } catch (error) {
-            console.error('Error in calculateContentMetrics:', error);
-            return {
-                content_type_distribution: {},
-                duplicate_content_rate: 0,
-                content_health_score: 0,
-                avg_content_per_type: 0
-            };
-        }
+        return {
+            content_type_distribution: typeDistribution,
+            duplicate_content_rate: (duplicateCount / dataframe_2.length) * 100,
+            content_health_score: this.calculateContentHealthScore(dataframe_2, dataframe_3),
+            avg_content_per_type: Object.values(typeDistribution).reduce((a, b) => a + b, 0) / Object.keys(typeDistribution).length,
+            content_diversity_score: this.calculateContentDiversityScore(typeDistribution)
+        };
     }
 
     calculateGrowthAcceleration(monthlyGrowthRates) {
@@ -876,8 +891,13 @@ export class MetricsCalculator {
         return placeholderMetrics;
     }
 
-    async createNotionEntry(workspaceId, metrics, visualizationUrl) {
+    async createNotionEntry(workspaceId, metrics) {
         try {
+            console.log('DEBUG - createNotionEntry called with:', {
+                workspaceId,
+                metricsKeys: Object.keys(metrics)
+            });
+            
             if (!workspaceId) {
                 throw new Error('Workspace ID is required');
             }
@@ -921,31 +941,6 @@ export class MetricsCalculator {
                     }
                 }
             ];
-
-            // Add treemap visualization if available
-            if (visualizationUrl) {
-                blocks.push({
-                    object: 'block',
-                    type: 'heading_2',
-                    heading_2: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: 'Workspace Structure Visualization' }
-                        }]
-                    }
-                });
-
-                blocks.push({
-                    object: 'block',
-                    type: 'image',
-                    image: {
-                        type: 'external',
-                        external: {
-                            url: visualizationUrl
-                        }
-                    }
-                });
-            }
 
             // Add metrics sections with actual values from metrics object
             const sections = {

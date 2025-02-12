@@ -18,6 +18,45 @@ router.get('/health', (req, res) => {
     res.json({ status: 'healthy' });
 });
 
+// Analyze workspace endpoint
+router.post('/analyze-workspace', async (req, res) => {
+    try {
+        const { workspaceId } = req.body;
+        
+        if (!workspaceId) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Workspace ID is required' 
+            });
+        }
+
+        const hexResponse = await hexService.triggerHexRun(workspaceId);
+        
+        if (!hexResponse.success) {
+            return res.status(500).json({ 
+                success: false, 
+                error: 'Failed to trigger Hex run' 
+            });
+        }
+
+        resultsManager.saveResults(hexResponse.results);
+
+        res.json({
+            success: true,
+            runId: hexResponse.runId,
+            results: hexResponse.results
+        });
+
+    } catch (error) {
+        console.error('Error analyzing workspace:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to analyze workspace',
+            details: error.message
+        });
+    }
+});
+
 // Generate report endpoint
 router.post('/generate-report', async (req, res) => {
     try {

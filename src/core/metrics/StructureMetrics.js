@@ -8,6 +8,70 @@ export class StructureMetrics extends BaseMetrics {
     calculateStructureMetrics(dataframe_2, dataframe_3) {
         this.validateData(dataframe_2, dataframe_3);
 
+        // Calculate basic counts from the simplified dataframe_2
+        const totalPages = dataframe_2.PAGE_COUNT || 0;
+        const collectionsCount = dataframe_2.COLLECTION_COUNT || 0;
+        const collectionViews = dataframe_2.COLLECTION_VIEW_COUNT || 0;
+        const collectionViewPages = dataframe_2.COLLECTION_VIEW_PAGE_COUNT || 0;
+        
+        // Calculate derived metrics
+        const structuredPagesRatio = (collectionViewPages + collectionsCount) / totalPages;
+        const navigationComplexity = this.calculateNavigationComplexity(dataframe_2);
+        const contentDiversity = this.calculateContentDiversity(dataframe_2);
+
+        return {
+            total_pages: totalPages,
+            collections_count: collectionsCount,
+            collection_views: collectionViews,
+            collection_view_pages: collectionViewPages,
+            nav_complexity: navigationComplexity,
+            content_diversity_score: contentDiversity,
+            structured_pages_ratio: structuredPagesRatio
+        };
+    }
+
+    calculateNavigationComplexity(data) {
+        // Calculate complexity based on the ratio of collection views to total pages
+        const complexityRatio = (data.COLLECTION_VIEW_COUNT + data.COLLECTION_COUNT) / 
+                              (data.PAGE_COUNT || 1);
+        return Math.min(complexityRatio, 1);
+    }
+
+    calculateContentDiversity(data) {
+        const totalItems = data.PAGE_COUNT || 1;
+        const types = {
+            pages: data.PAGE_COUNT - data.COLLECTION_VIEW_PAGE_COUNT,
+            collections: data.COLLECTION_COUNT,
+            collectionViews: data.COLLECTION_VIEW_COUNT,
+            collectionViewPages: data.COLLECTION_VIEW_PAGE_COUNT
+        };
+
+        // Calculate Shannon diversity index
+        let diversity = 0;
+        Object.values(types).forEach(count => {
+            if (count > 0) {
+                const p = count / totalItems;
+                diversity -= p * Math.log2(p);
+            }
+        });
+
+        // Normalize to 0-1 range
+        const maxDiversity = Math.log2(Object.keys(types).length);
+        return diversity / maxDiversity;
+    }
+
+    validateData(dataframe_2, dataframe_3) {
+        if (!dataframe_2 || typeof dataframe_2 !== 'object') {
+            throw new Error('dataframe_2 must be a valid object');
+        }
+        if (!dataframe_3 || typeof dataframe_3 !== 'object') {
+            throw new Error('dataframe_3 must be a valid object');
+        }
+    }
+
+    calculateStructureMetrics(dataframe_2, dataframe_3) {
+        this.validateData(dataframe_2, dataframe_3);
+
         // Calculate basic counts
         const totalPages = dataframe_3.NUM_PAGES || 0;
         const maxDepth = Math.max(...dataframe_2.map(page => parseInt(page.DEPTH) || 0));
@@ -25,7 +89,6 @@ export class StructureMetrics extends BaseMetrics {
         const bottleneckCount = this.identifyBottlenecks(dataframe_2).length;
         const duplicateCount = this.findDuplicates(dataframe_2).length;
         const unfindablePages = this.countUnfindablePages(dataframe_2);
-        const navComplexity = this.calculateNavigationComplexity(dataframe_2);
         const percentageUnlinked = this.calculateUnlinkedPercentage(dataframe_2);
 
         return {
@@ -44,7 +107,7 @@ export class StructureMetrics extends BaseMetrics {
             bottleneck_count: bottleneckCount,
             duplicate_count: duplicateCount,
             unfindable_pages: unfindablePages,
-            nav_complexity: navComplexity
+            nav_complexity: this.calculateNavigationComplexity(dataframe_2)
         };
     }
 
@@ -78,16 +141,6 @@ export class StructureMetrics extends BaseMetrics {
             !page.ANCESTORS?.length && 
             page.TYPE !== 'root'
         ).length;
-    }
-
-    calculateNavigationComplexity(pages) {
-        const maxDepth = Math.max(...pages.map(p => parseInt(p.DEPTH) || 0));
-        const branchingFactor = this.average(
-            pages.map(page => 
-                pages.filter(p => p.PARENT_ID === page.ID).length
-            )
-        );
-        return (maxDepth * branchingFactor) / 100;
     }
 
     calculateUnlinkedPercentage(pages) {

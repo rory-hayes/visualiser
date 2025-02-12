@@ -73,9 +73,9 @@ export class NotionFormatter {
                     `Team Readiness: ${this.formatPercentage(metrics.team_readiness || metrics.teamReadiness)}`,
                     
                     // Growth Scenarios
-                    `10% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.tenPercent || metrics.growthScenarios?.tenPercent || 0)}/year`,
-                    `20% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.twentyPercent || metrics.growthScenarios?.twentyPercent || 0)}/year`,
-                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fiftyPercent || metrics.growthScenarios?.fiftyPercent || 0)}/year`
+                    `10% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.tenPercent || 0)}/year`,
+                    `20% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.twentyPercent || 0)}/year`,
+                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fiftyPercent || 0)}/year`
                 ]
             },
             {
@@ -165,6 +165,12 @@ export class NotionFormatter {
     }
 
     formatCurrency(value) {
-        return value ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
+        const numValue = Number(value) || 0;
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(numValue);
     }
 } 

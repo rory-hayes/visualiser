@@ -75,9 +75,9 @@ export class MetricsCalculator extends BaseMetrics {
     calculateGrowthScenarios(dataframe_3, dataframe_5) {
         const baseRevenue = this.calculateBaseRevenue(dataframe_3, dataframe_5);
         return {
-            tenPercent: baseRevenue * 1.1,
-            twentyPercent: baseRevenue * 1.2,
-            fiftyPercent: baseRevenue * 1.5
+            tenPercent: Number((baseRevenue * 1.1).toFixed(2)),
+            twentyPercent: Number((baseRevenue * 1.2).toFixed(2)),
+            fiftyPercent: Number((baseRevenue * 1.5).toFixed(2))
         };
     }
 
@@ -85,7 +85,8 @@ export class MetricsCalculator extends BaseMetrics {
         // Calculate base revenue from current members and plan costs
         const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
         const planCost = dataframe_5.PLAN_COST || 0;
-        return totalMembers * planCost * 12; // Annual revenue
+        // Convert to number and round to 2 decimal places
+        return Number((totalMembers * planCost * 12).toFixed(2)); // Annual revenue
     }
 
     validateData(dataframe_2, dataframe_3, dataframe_5) {

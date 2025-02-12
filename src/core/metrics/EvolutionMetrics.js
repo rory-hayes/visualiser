@@ -17,21 +17,18 @@ export class EvolutionMetrics extends BaseMetrics {
         };
     }
 
-    calculateContentMaturityScore(pages) {
-        const totalPages = pages.length;
-        const structuredPages = pages.filter(p => 
-            p.TYPE === 'collection_view' || 
-            p.TYPE === 'collection_view_page'
-        ).length;
-        
-        const avgDepth = this.average(pages.map(p => parseInt(p.DEPTH) || 0));
-        const hasAncestors = pages.filter(p => p.ANCESTORS && p.ANCESTORS.length > 0).length;
+    calculateContentMaturityScore(data) {
+        const totalPages = data.PAGE_COUNT || 0;
+        if (totalPages === 0) return 0;
+
+        const structuredPages = (data.COLLECTION_VIEW_PAGE_COUNT || 0) + 
+                              (data.COLLECTION_COUNT || 0);
         
         const structureScore = structuredPages / totalPages;
-        const hierarchyScore = hasAncestors / totalPages;
-        const depthScore = Math.min(avgDepth / 5, 1); // Normalize to max depth of 5
+        const collectionScore = data.COLLECTION_COUNT / totalPages;
+        const viewScore = data.COLLECTION_VIEW_COUNT / totalPages;
         
-        return ((structureScore + hierarchyScore + depthScore) / 3) * 100;
+        return ((structureScore + collectionScore + viewScore) / 3) * 100;
     }
 
     calculateGrowthSustainabilityIndex(workspace) {
@@ -42,28 +39,24 @@ export class EvolutionMetrics extends BaseMetrics {
         return ((contentRatio + collectionRatio + pageRatio) / 3) * 100;
     }
 
-    calculateWorkspaceComplexityScore(pages, workspace) {
-        const pageComplexity = pages.length / 1000; // Normalize to 1000 pages
-        const blockComplexity = workspace.NUM_BLOCKS / 10000; // Normalize to 10000 blocks
-        const collectionComplexity = workspace.NUM_COLLECTIONS / 100; // Normalize to 100 collections
+    calculateWorkspaceComplexityScore(data, workspace) {
+        const pageComplexity = data.PAGE_COUNT / 1000; // Normalize to 1000 pages
+        const collectionComplexity = data.COLLECTION_COUNT / 100; // Normalize to 100 collections
+        const viewComplexity = data.COLLECTION_VIEW_COUNT / 200; // Normalize to 200 views
         
         return Math.min(
-            ((pageComplexity + blockComplexity + collectionComplexity) / 3) * 100,
+            ((pageComplexity + collectionComplexity + viewComplexity) / 3) * 100,
             100
         );
     }
 
-    calculateKnowledgeStructureScore(pages) {
-        const totalPages = pages.length;
-        const maxDepth = Math.max(...pages.map(p => parseInt(p.DEPTH) || 0));
-        const avgAncestors = this.average(
-            pages.map(p => p.ANCESTORS ? JSON.parse(p.ANCESTORS).length : 0)
-        );
+    calculateKnowledgeStructureScore(data) {
+        const totalPages = data.PAGE_COUNT || 0;
+        if (totalPages === 0) return 0;
+
+        const structuredContentRatio = (data.COLLECTION_VIEW_PAGE_COUNT + data.COLLECTION_COUNT) / totalPages;
+        const collectionViewRatio = data.COLLECTION_VIEW_COUNT / totalPages;
         
-        const depthScore = Math.min(maxDepth / 10, 1); // Normalize to max depth of 10
-        const ancestorScore = Math.min(avgAncestors / 5, 1); // Normalize to avg of 5 ancestors
-        const structureScore = pages.filter(p => p.TYPE !== 'page').length / totalPages;
-        
-        return ((depthScore + ancestorScore + structureScore) / 3) * 100;
+        return ((structuredContentRatio + collectionViewRatio) / 2) * 100;
     }
 } 

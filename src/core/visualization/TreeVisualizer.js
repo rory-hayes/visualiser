@@ -8,36 +8,54 @@ export class TreeVisualizer extends BaseVisualizer {
     }
 
     processHierarchy(data) {
-        this.validateData(data);
+        // Create a single root node for the workspace
+        const rootNode = {
+            id: data.SPACE_ID,
+            title: 'Workspace Root',
+            type: 'workspace',
+            depth: 0,
+            children: []
+        };
 
-        // Create nodes map
-        const nodesMap = new Map();
-        const rootNodes = [];
-
-        // First pass: create all nodes
-        data.forEach(item => {
-            const node = {
-                id: item.ID,
-                title: item.TEXT || 'Untitled',
-                type: item.TYPE || 'page',
-                depth: parseInt(item.DEPTH) || 0,
-                parent: item.PARENT_ID,
-                children: []
-            };
-            nodesMap.set(node.id, node);
-        });
-
-        // Second pass: build hierarchy
-        nodesMap.forEach(node => {
-            if (node.parent && nodesMap.has(node.parent)) {
-                const parentNode = nodesMap.get(node.parent);
-                parentNode.children.push(node);
-            } else {
-                rootNodes.push(node);
+        // Add collections as first level children
+        if (data.COLLECTION_COUNT > 0) {
+            for (let i = 0; i < data.COLLECTION_COUNT; i++) {
+                rootNode.children.push({
+                    id: `collection_${i}`,
+                    title: `Collection ${i + 1}`,
+                    type: 'collection',
+                    depth: 1,
+                    children: []
+                });
             }
-        });
+        }
 
-        return rootNodes;
+        // Add collection views and pages as second level
+        const remainingPages = data.PAGE_COUNT - data.COLLECTION_VIEW_PAGE_COUNT;
+        
+        // Add collection view pages
+        if (data.COLLECTION_VIEW_PAGE_COUNT > 0) {
+            rootNode.children.push({
+                id: 'collection_view_pages',
+                title: `Collection View Pages (${data.COLLECTION_VIEW_PAGE_COUNT})`,
+                type: 'collection_view_page',
+                depth: 1,
+                children: []
+            });
+        }
+
+        // Add regular pages
+        if (remainingPages > 0) {
+            rootNode.children.push({
+                id: 'pages',
+                title: `Pages (${remainingPages})`,
+                type: 'page',
+                depth: 1,
+                children: []
+            });
+        }
+
+        return [rootNode];
     }
 
     aggregateDeepBranches(node, currentDepth = 0) {
@@ -78,8 +96,8 @@ export class TreeVisualizer extends BaseVisualizer {
         const processNode = (node, parentId = null) => {
             // Node definition
             const color = this.getNodeColor(node.type);
-            const label = node.title.length > 20 ? 
-                node.title.substring(0, 17) + '...' : 
+            const label = node.title.length > 30 ? 
+                node.title.substring(0, 27) + '...' : 
                 node.title;
             
             dot += `  "${node.id}" [label="${label}", fillcolor="${color}", style="filled,rounded"];\n`;

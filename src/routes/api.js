@@ -7,11 +7,22 @@ import { Client } from '@notionhq/client';
 const router = express.Router();
 const resultsManager = new ResultsManager();
 
-// Initialize services with environment variables
-const hexService = new HexService(
-    process.env.HEX_API_KEY,
-    process.env.HEX_PROJECT_ID
-);
+// Initialize services lazily
+let hexService = null;
+
+const getHexService = () => {
+    if (!hexService) {
+        const hexApiKey = process.env.HEX_API_KEY;
+        const hexProjectId = process.env.HEX_PROJECT_ID;
+        
+        if (!hexApiKey || !hexProjectId) {
+            throw new Error('Missing required environment variables: HEX_API_KEY and HEX_PROJECT_ID must be set');
+        }
+        
+        hexService = new HexService(hexApiKey, hexProjectId);
+    }
+    return hexService;
+};
 
 // Health check endpoint
 router.get('/health', (req, res) => {
@@ -30,6 +41,7 @@ router.post('/analyze-workspace', async (req, res) => {
             });
         }
 
+        const hexService = getHexService();
         console.log('Analyzing workspace:', workspaceId);
         const hexResponse = await hexService.triggerHexRun(workspaceId);
         
@@ -74,6 +86,7 @@ router.post('/generate-report', async (req, res) => {
             });
         }
 
+        const hexService = getHexService();
         const hexResponse = await hexService.triggerHexRun(workspaceId);
         
         if (!hexResponse.success) {

@@ -6,10 +6,26 @@ export class HexService {
         this.HEX_API_URL = 'https://app.hex.tech/api/v1';
         this.HEX_API_KEY = hexApiKey;
         this.HEX_PROJECT_ID = hexProjectId;
+
+        // Validate configuration
+        this.validateConfiguration();
+    }
+
+    validateConfiguration() {
+        if (typeof this.HEX_API_KEY !== 'string' || this.HEX_API_KEY.trim() === '') {
+            throw new Error('Invalid HEX_API_KEY: Must be a non-empty string');
+        }
+        if (typeof this.HEX_PROJECT_ID !== 'string' || this.HEX_PROJECT_ID.trim() === '') {
+            throw new Error('Invalid HEX_PROJECT_ID: Must be a non-empty string');
+        }
     }
 
     async callHexAPI(workspaceId) {
         try {
+            if (!workspaceId) {
+                throw new Error('workspaceId is required');
+            }
+
             console.log('Calling Hex API with:', {
                 projectId: this.HEX_PROJECT_ID,
                 workspaceId,
@@ -45,6 +61,9 @@ export class HexService {
             }
 
             const data = await response.json();
+            if (!data.run_id) {
+                throw new Error('Invalid response from Hex API: Missing run_id');
+            }
             return data.run_id;
         } catch (error) {
             console.error('Error calling Hex API:', error);
@@ -53,6 +72,10 @@ export class HexService {
     }
 
     async waitForHexResults(runId, maxAttempts = 30) {
+        if (!runId) {
+            throw new Error('runId is required');
+        }
+
         let attempts = 0;
         const delay = 5000; // 5 seconds
 
@@ -77,6 +100,9 @@ export class HexService {
                 console.log('Run status:', data.status);
                 
                 if (data.status === 'COMPLETED') {
+                    if (!data.results) {
+                        throw new Error('Completed run has no results');
+                    }
                     return data.results;
                 } else if (data.status === 'FAILED') {
                     throw new Error('Hex run failed');

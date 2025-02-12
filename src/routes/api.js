@@ -3,6 +3,7 @@ import { HexService } from '../services/HexService.js';
 import { ResultsManager } from '../services/ResultsManager.js';
 import { NotionService } from '../services/NotionService.js';
 import { Client } from '@notionhq/client';
+import { MetricsCalculator } from '../core/metrics/MetricsCalculator.js';
 
 const router = express.Router();
 const resultsManager = new ResultsManager();
@@ -122,13 +123,6 @@ router.post('/analyze-workspace', async (req, res) => {
             headers: req.headers['content-type']
         });
 
-        // Debug environment variables
-        console.log('Environment variables check:', {
-            HEX_API_KEY_length: process.env.HEX_API_KEY?.length,
-            HEX_PROJECT_ID: process.env.HEX_PROJECT_ID,
-            NODE_ENV: process.env.NODE_ENV
-        });
-
         const { workspaceId } = req.body;
         
         if (!workspaceId) {
@@ -139,37 +133,14 @@ router.post('/analyze-workspace', async (req, res) => {
             });
         }
 
-        // Initialize service
-        try {
-            console.log('Initializing Hex service with environment variables:', {
-                hasApiKey: !!process.env.HEX_API_KEY,
-                hasProjectId: !!process.env.HEX_PROJECT_ID,
-                apiKeyLength: process.env.HEX_API_KEY?.length,
-                projectId: process.env.HEX_PROJECT_ID
-            });
-
-            hexService = getHexService();
-        } catch (error) {
-            console.error('Failed to initialize Hex service:', error);
-            return res.status(500).json({
-                success: false,
-                error: 'Hex service configuration error',
-                details: error.message
-            });
-        }
-
-        console.log('Analyzing workspace:', workspaceId);
-        
         // Clear any existing results before starting new analysis
         resultsManager.clearResults();
         
-        const hexResponse = await hexService.triggerHexRun(workspaceId);
+        // Initialize Hex service
+        const hexService = getHexService();
         
-        console.log('Hex response:', {
-            success: hexResponse.success,
-            hasRunId: !!hexResponse.runId,
-            error: hexResponse.error
-        });
+        // Trigger Hex analysis
+        const hexResponse = await hexService.triggerHexRun(workspaceId);
         
         if (!hexResponse.success) {
             return res.status(500).json({ 
@@ -189,6 +160,44 @@ router.post('/analyze-workspace', async (req, res) => {
                 results?.data?.dataframe_3 && 
                 results?.data?.dataframe_5?.length > 0 && 
                 results?.metadata?.isComplete) {
+                
+                // Initialize NotionService if we have credentials
+                if (process.env.NOTION_API_KEY && process.env.NOTION_DATABASE_ID) {
+                    try {
+                        const notionClient = new Client({ auth: process.env.NOTION_API_KEY });
+                        const notionService = new NotionService(notionClient, process.env.NOTION_DATABASE_ID);
+
+                        // Calculate metrics
+                        const metricsCalculator = new MetricsCalculator(process.env.NOTION_API_KEY, process.env.NOTION_DATABASE_ID);
+                        const metrics = await metricsCalculator.calculateAllMetrics(
+                            results.data.dataframe_2,
+                            results.data.dataframe_3,
+                            results.data.dataframe_5,
+                            workspaceId
+                        );
+
+                        // Create Notion entry
+                        const pageId = await notionService.createNotionEntry(workspaceId, metrics);
+                        console.log('Created Notion page:', pageId);
+
+                        return res.json({
+                            success: true,
+                            runId: hexResponse.runId,
+                            results: results,
+                            notionPageId: pageId
+                        });
+                    } catch (notionError) {
+                        console.error('Error creating Notion entry:', notionError);
+                        // Continue with the response even if Notion creation fails
+                        return res.json({
+                            success: true,
+                            runId: hexResponse.runId,
+                            results: results,
+                            notionError: notionError.message
+                        });
+                    }
+                }
+
                 return res.json({
                     success: true,
                     runId: hexResponse.runId,

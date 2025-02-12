@@ -4,6 +4,9 @@ import { ResultsManager } from '../services/ResultsManager.js';
 import { NotionService } from '../services/NotionService.js';
 import { Client } from '@notionhq/client';
 import { MetricsCalculator } from '../core/metrics/MetricsCalculator.js';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 const router = express.Router();
 const resultsManager = new ResultsManager();
@@ -24,6 +27,23 @@ const getHexService = () => {
     }
     return hexService;
 };
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadDir = path.join(process.cwd(), 'public', 'visualizations');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'tree-' + uniqueSuffix + '.png');
+    }
+});
+
+const upload = multer({ storage: storage });
 
 // Health check endpoint
 router.get('/health', (req, res) => {
@@ -363,6 +383,27 @@ router.get('/notion-config', (req, res) => {
         apiKey: req.session.notionToken,
         databaseId: process.env.NOTION_DATABASE_ID
     });
+});
+
+// Add upload visualization endpoint
+router.post('/upload-visualization', upload.single('image'), (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Generate public URL for the uploaded file
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const imageUrl = `${baseUrl}/visualizations/${req.file.filename}`;
+
+        res.json({ 
+            success: true, 
+            imageUrl 
+        });
+    } catch (error) {
+        console.error('Error uploading visualization:', error);
+        res.status(500).json({ error: 'Failed to upload visualization' });
+    }
 });
 
 export default router; 

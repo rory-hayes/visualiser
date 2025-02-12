@@ -2,6 +2,10 @@ export class NotionFormatter {
     createMetricsBlocks(metrics) {
         const sections = [
             {
+                title: 'Workspace Visualization',
+                metrics: []
+            },
+            {
                 title: 'Structure & Evolution Metrics',
                 metrics: [
                     // Basic Structure Metrics
@@ -103,7 +107,29 @@ export class NotionFormatter {
             }
         ];
 
-        return this.createBlocksFromSections(sections);
+        const blocks = [];
+
+        // Add title
+        blocks.push(this.createHeading('Workspace Analysis Report', 1));
+
+        // Add visualization image if available
+        if (metrics.visualizationUrl) {
+            blocks.push(
+                this.createHeading('Workspace Structure Visualization', 2),
+                this.createImage(metrics.visualizationUrl)
+            );
+        }
+
+        // Add sections
+        sections.forEach(section => {
+            if (section.metrics.length > 0) {
+                blocks.push(this.createHeading(section.title, 2));
+                blocks.push(...this.createBulletedList(section.metrics));
+                blocks.push(this.createDivider());
+            }
+        });
+
+        return blocks;
     }
 
     createBlocksFromSections(sections) {
@@ -172,5 +198,18 @@ export class NotionFormatter {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(numValue);
+    }
+
+    createImage(url) {
+        return {
+            object: 'block',
+            type: 'image',
+            image: {
+                type: 'external',
+                external: {
+                    url: url
+                }
+            }
+        };
     }
 } 

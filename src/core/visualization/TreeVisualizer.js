@@ -153,13 +153,72 @@ export class TreeVisualizer extends BaseVisualizer {
             // Render the graph
             await graphvizInstance.renderDot(dotString);
 
-            // Add interactivity
-            this.addInteractivity(container);
+            // Export as PNG
+            const svg = container.querySelector('svg');
+            const imageUrl = await this.exportAsPNG(svg);
 
-            // Return the DOT string for potential export
-            return dotString;
+            return {
+                dotString,
+                imageUrl
+            };
         } catch (error) {
             console.error('Error generating visualization:', error);
+            throw error;
+        }
+    }
+
+    async exportAsPNG(svg) {
+        try {
+            // Create a canvas element
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas dimensions
+            const svgRect = svg.getBoundingClientRect();
+            canvas.width = svgRect.width * 2; // 2x for better resolution
+            canvas.height = svgRect.height * 2;
+            ctx.scale(2, 2);
+
+            // Convert SVG to data URL
+            const svgData = new XMLSerializer().serializeToString(svg);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0);
+                    URL.revokeObjectURL(url);
+                    
+                    // Convert canvas to blob
+                    canvas.toBlob(async (blob) => {
+                        try {
+                            // Create form data
+                            const formData = new FormData();
+                            formData.append('image', blob, 'tree-visualization.png');
+
+                            // Upload to server
+                            const response = await fetch('/api/upload-visualization', {
+                                method: 'POST',
+                                body: formData
+                            });
+
+                            if (!response.ok) {
+                                throw new Error('Failed to upload visualization');
+                            }
+
+                            const { imageUrl } = await response.json();
+                            resolve(imageUrl);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    }, 'image/png');
+                };
+                img.onerror = reject;
+                img.src = url;
+            });
+        } catch (error) {
+            console.error('Error exporting PNG:', error);
             throw error;
         }
     }

@@ -46,9 +46,13 @@ export class NotionService {
                         ]
                     },
                     Status: {
-                        select: {
-                            name: "Generated"
-                        }
+                        rich_text: [
+                            {
+                                text: {
+                                    content: "Generated"
+                                }
+                            }
+                        ]
                     },
                     "Analysis Date": {
                         date: {

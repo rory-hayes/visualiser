@@ -26,20 +26,34 @@ export class ResultsManager {
 
             const { chunk, total_chunks } = metadata;
             
+            // Track received chunks
+            if (!existingResults.metadata.receivedChunks) {
+                existingResults.metadata.receivedChunks = new Set();
+            } else if (typeof existingResults.metadata.receivedChunks === 'number') {
+                // Convert old format to Set if needed
+                existingResults.metadata.receivedChunks = new Set([...Array(existingResults.metadata.receivedChunks).keys()].map(i => i + 1));
+            }
+
+            // Add current chunk to received chunks
+            existingResults.metadata.receivedChunks.add(chunk);
+
             // Initialize arrays if they don't exist
             if (!existingResults.data.dataframe_2) existingResults.data.dataframe_2 = [];
             if (!existingResults.data.dataframe_5) existingResults.data.dataframe_5 = [];
 
             // Append chunk data to respective dataframes
-            if (data.dataframe_2) {
+            if (Array.isArray(data.dataframe_2)) {
+                console.log(`Adding ${data.dataframe_2.length} records to dataframe_2`);
                 existingResults.data.dataframe_2.push(...data.dataframe_2);
             }
-            if (data.dataframe_5) {
+            if (Array.isArray(data.dataframe_5)) {
+                console.log(`Adding ${data.dataframe_5.length} records to dataframe_5`);
                 existingResults.data.dataframe_5.push(...data.dataframe_5);
             }
 
             // For dataframe_3, which is a single object, update it if present
             if (data.dataframe_3) {
+                console.log('Updating dataframe_3');
                 existingResults.data.dataframe_3 = data.dataframe_3;
             }
 
@@ -47,14 +61,33 @@ export class ResultsManager {
             existingResults.metadata = {
                 ...metadata,
                 lastUpdated: new Date().toISOString(),
-                receivedChunks: (existingResults.metadata?.receivedChunks || 0) + 1,
-                isComplete: metadata.chunk === metadata.total_chunks
+                receivedChunks: existingResults.metadata.receivedChunks,
+                totalChunks: total_chunks,
+                isComplete: existingResults.metadata.receivedChunks.size === total_chunks
+            };
+
+            // Convert Set to Array for JSON serialization
+            const jsonResults = {
+                ...existingResults,
+                metadata: {
+                    ...existingResults.metadata,
+                    receivedChunks: Array.from(existingResults.metadata.receivedChunks)
+                }
             };
 
             fs.writeFileSync(
                 this.resultsFile,
-                JSON.stringify(existingResults, null, 2)
+                JSON.stringify(jsonResults, null, 2)
             );
+
+            console.log('Results saved:', {
+                dataframe2Length: existingResults.data.dataframe_2.length,
+                hasDataframe3: !!existingResults.data.dataframe_3,
+                dataframe5Length: existingResults.data.dataframe_5.length,
+                receivedChunks: existingResults.metadata.receivedChunks.size,
+                totalChunks: total_chunks,
+                isComplete: existingResults.metadata.isComplete
+            });
 
             return true;
         } catch (error) {
@@ -67,7 +100,14 @@ export class ResultsManager {
         try {
             if (fs.existsSync(this.resultsFile)) {
                 const data = fs.readFileSync(this.resultsFile, 'utf8');
-                return JSON.parse(data);
+                const results = JSON.parse(data);
+                
+                // Convert receivedChunks array back to Set if it exists
+                if (results.metadata && Array.isArray(results.metadata.receivedChunks)) {
+                    results.metadata.receivedChunks = new Set(results.metadata.receivedChunks);
+                }
+                
+                return results;
             }
             return this.initializeResultsStructure();
         } catch (error) {
@@ -84,7 +124,8 @@ export class ResultsManager {
                 dataframe_5: []
             },
             metadata: {
-                receivedChunks: 0,
+                receivedChunks: new Set(),
+                totalChunks: 0,
                 isComplete: false,
                 lastUpdated: new Date().toISOString()
             }
@@ -110,7 +151,12 @@ export class ResultsManager {
     isResultsComplete() {
         try {
             const results = this.loadResults();
-            return results?.metadata?.isComplete || false;
+            if (!results?.metadata) return false;
+            
+            const { receivedChunks, totalChunks } = results.metadata;
+            if (!receivedChunks || !totalChunks) return false;
+            
+            return receivedChunks.size === totalChunks;
         } catch (error) {
             console.error('Error checking results completion:', error);
             return false;

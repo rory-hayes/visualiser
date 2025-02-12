@@ -29,16 +29,31 @@ router.get('/health', (req, res) => {
     res.json({ status: 'healthy' });
 });
 
+// Configure express.json middleware with larger limit for the hex-results endpoint
+const jsonParser = express.json({
+    limit: '50mb',
+    verify: (req, res, buf) => {
+        try {
+            JSON.parse(buf);
+        } catch (e) {
+            res.status(400).json({ error: 'Invalid JSON' });
+            throw new Error('Invalid JSON');
+        }
+    }
+});
+
 // Endpoint to receive results from Hex
-router.post('/hex-results', express.json({ limit: '50mb' }), async (req, res) => {
+router.post('/hex-results', jsonParser, async (req, res) => {
     try {
-        console.log('Received results from Hex:', {
+        console.log('Received results chunk from Hex:', {
             chunk: req.body.metadata?.chunk,
             totalChunks: req.body.metadata?.total_chunks,
             success: req.body.success,
-            hasDataframe2: !!req.body.data?.dataframe_2,
+            hasDataframe2: Array.isArray(req.body.data?.dataframe_2),
+            dataframe2Length: req.body.data?.dataframe_2?.length || 0,
             hasDataframe3: !!req.body.data?.dataframe_3,
-            hasDataframe5: !!req.body.data?.dataframe_5
+            hasDataframe5: Array.isArray(req.body.data?.dataframe_5),
+            dataframe5Length: req.body.data?.dataframe_5?.length || 0
         });
 
         if (!req.body.success || !req.body.data || !req.body.metadata) {
@@ -46,39 +61,40 @@ router.post('/hex-results', express.json({ limit: '50mb' }), async (req, res) =>
             return res.status(400).json({ error: 'Invalid results data structure' });
         }
 
-        // Validate required dataframes
         const { data, metadata } = req.body;
-        if (!data.dataframe_2 || !data.dataframe_3 || !data.dataframe_5) {
-            console.error('Missing required dataframes:', {
-                hasDataframe2: !!data.dataframe_2,
-                hasDataframe3: !!data.dataframe_3,
-                hasDataframe5: !!data.dataframe_5
-            });
-            return res.status(400).json({ error: 'Missing required dataframes' });
+        const { chunk, total_chunks } = metadata;
+
+        // Validate chunk information
+        if (typeof chunk !== 'number' || typeof total_chunks !== 'number') {
+            console.error('Invalid chunk metadata:', metadata);
+            return res.status(400).json({ error: 'Invalid chunk metadata' });
         }
 
-        // Save the results
+        // Save the chunk
         const saved = resultsManager.saveResults(req.body);
         if (!saved) {
-            return res.status(500).json({ error: 'Failed to save results' });
+            return res.status(500).json({ error: 'Failed to save results chunk' });
         }
 
         const isComplete = resultsManager.isResultsComplete();
-        console.log('Results status:', {
+        console.log('Results chunk status:', {
             saved: true,
             isComplete,
-            chunk: metadata.chunk,
-            totalChunks: metadata.total_chunks
+            chunk,
+            totalChunks: total_chunks,
+            dataframe2Count: data.dataframe_2?.length || 0,
+            dataframe5Count: data.dataframe_5?.length || 0
         });
 
         res.json({ 
             success: true,
             isComplete,
-            chunk: metadata.chunk,
-            totalChunks: metadata.total_chunks
+            chunk,
+            totalChunks: total_chunks,
+            message: isComplete ? 'All chunks received' : `Chunk ${chunk} of ${total_chunks} received`
         });
     } catch (error) {
-        console.error('Error handling Hex results:', error);
+        console.error('Error handling Hex results chunk:', error);
         res.status(500).json({ error: error.message });
     }
 });

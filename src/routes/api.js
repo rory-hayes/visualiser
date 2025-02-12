@@ -123,6 +123,14 @@ router.post('/analyze-workspace', async (req, res) => {
             headers: req.headers['content-type']
         });
 
+        // Log environment variables
+        console.log('Notion credentials check:', {
+            hasApiKey: !!process.env.NOTION_API_KEY,
+            apiKeyLength: process.env.NOTION_API_KEY?.length,
+            hasDatabaseId: !!process.env.NOTION_DATABASE_ID,
+            databaseId: process.env.NOTION_DATABASE_ID
+        });
+
         const { workspaceId } = req.body;
         
         if (!workspaceId) {
@@ -156,6 +164,16 @@ router.post('/analyze-workspace', async (req, res) => {
 
         while (attempts < maxAttempts) {
             const results = resultsManager.loadResults();
+            console.log('Checking results:', {
+                attempt: attempts + 1,
+                hasDataframe2: results?.data?.dataframe_2?.length > 0,
+                dataframe2Length: results?.data?.dataframe_2?.length,
+                hasDataframe3: !!results?.data?.dataframe_3,
+                hasDataframe5: results?.data?.dataframe_5?.length > 0,
+                dataframe5Length: results?.data?.dataframe_5?.length,
+                isComplete: results?.metadata?.isComplete
+            });
+
             if (results?.data?.dataframe_2?.length > 0 && 
                 results?.data?.dataframe_3 && 
                 results?.data?.dataframe_5?.length > 0 && 
@@ -164,19 +182,35 @@ router.post('/analyze-workspace', async (req, res) => {
                 // Initialize NotionService if we have credentials
                 if (process.env.NOTION_API_KEY && process.env.NOTION_DATABASE_ID) {
                     try {
+                        console.log('Initializing Notion service and calculating metrics...');
+                        
                         const notionClient = new Client({ auth: process.env.NOTION_API_KEY });
                         const notionService = new NotionService(notionClient, process.env.NOTION_DATABASE_ID);
 
                         // Calculate metrics
+                        console.log('Creating MetricsCalculator...');
                         const metricsCalculator = new MetricsCalculator(process.env.NOTION_API_KEY, process.env.NOTION_DATABASE_ID);
+                        
+                        console.log('Calculating metrics...');
                         const metrics = await metricsCalculator.calculateAllMetrics(
                             results.data.dataframe_2,
                             results.data.dataframe_3,
                             results.data.dataframe_5,
                             workspaceId
                         );
+                        
+                        console.log('Metrics calculated:', {
+                            hasMetrics: !!metrics,
+                            metricKeys: metrics ? Object.keys(metrics) : [],
+                            sampleMetrics: metrics ? {
+                                totalPages: metrics.total_pages,
+                                totalMembers: metrics.total_members,
+                                contentMaturityScore: metrics.content_maturity_score
+                            } : null
+                        });
 
                         // Create Notion entry
+                        console.log('Creating Notion entry...');
                         const pageId = await notionService.createNotionEntry(workspaceId, metrics);
                         console.log('Created Notion page:', pageId);
 
@@ -184,18 +218,25 @@ router.post('/analyze-workspace', async (req, res) => {
                             success: true,
                             runId: hexResponse.runId,
                             results: results,
-                            notionPageId: pageId
+                            notionPageId: pageId,
+                            metrics: metrics // Include metrics in response for debugging
                         });
                     } catch (notionError) {
-                        console.error('Error creating Notion entry:', notionError);
+                        console.error('Error in Notion process:', notionError);
+                        console.error('Error stack:', notionError.stack);
                         // Continue with the response even if Notion creation fails
                         return res.json({
                             success: true,
                             runId: hexResponse.runId,
                             results: results,
-                            notionError: notionError.message
+                            notionError: {
+                                message: notionError.message,
+                                stack: notionError.stack
+                            }
                         });
                     }
+                } else {
+                    console.log('Notion credentials not found, skipping Notion integration');
                 }
 
                 return res.json({
@@ -224,9 +265,11 @@ router.post('/analyze-workspace', async (req, res) => {
 
     } catch (error) {
         console.error('Error analyzing workspace:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            stack: error.stack
         });
     }
 });

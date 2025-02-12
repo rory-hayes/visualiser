@@ -30,16 +30,21 @@ router.post('/analyze-workspace', async (req, res) => {
             });
         }
 
+        console.log('Analyzing workspace:', workspaceId);
         const hexResponse = await hexService.triggerHexRun(workspaceId);
         
         if (!hexResponse.success) {
+            console.error('Hex run failed:', hexResponse.error);
             return res.status(500).json({ 
                 success: false, 
-                error: 'Failed to trigger Hex run' 
+                error: 'Failed to trigger Hex run',
+                details: hexResponse.error
             });
         }
 
-        resultsManager.saveResults(hexResponse.results);
+        if (hexResponse.results) {
+            resultsManager.saveResults(hexResponse.results);
+        }
 
         res.json({
             success: true,

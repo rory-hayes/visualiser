@@ -41,6 +41,9 @@ export class MetricsCalculator extends BaseMetrics {
             const evolutionMetrics = this.evolutionMetrics.calculateEvolutionMetrics(dataframe_2, dataframe_3, dataframe_5);
             const collaborationMetrics = this.collaborationMetrics.calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5);
 
+            // Calculate growth scenarios
+            const growthScenarios = this.calculateGrowthScenarios(dataframe_3, dataframe_5);
+
             // Combine all metrics
             const combinedMetrics = {
                 workspaceId,
@@ -50,11 +53,16 @@ export class MetricsCalculator extends BaseMetrics {
                 ...growthMetrics,
                 ...roiMetrics,
                 ...evolutionMetrics,
-                ...collaborationMetrics
+                ...collaborationMetrics,
+                growth_scenarios: growthScenarios
             };
 
-            // Create Notion entry
-            await this.notionService.createNotionEntry(workspaceId, combinedMetrics);
+            // Log the metrics being calculated
+            console.log('Calculated metrics:', {
+                workspaceId,
+                metricKeys: Object.keys(combinedMetrics),
+                timestamp: combinedMetrics.timestamp
+            });
 
             return combinedMetrics;
 
@@ -64,169 +72,20 @@ export class MetricsCalculator extends BaseMetrics {
         }
     }
 
-    async createNotionEntry(workspaceId, metrics) {
-        try {
-            if (!workspaceId) {
-                throw new Error('Workspace ID is required');
-            }
-
-            if (!this.notionDatabaseId) {
-                throw new Error('Notion database ID is not configured');
-            }
-
-            // Create page content
-            const blocks = this.createMetricsBlocks(metrics);
-
-            // Create the page in Notion
-            const response = await this.notion.pages.create({
-                parent: {
-                    database_id: this.notionDatabaseId,
-                    type: 'database_id'
-                },
-                properties: {
-                    Name: {
-                        title: [
-                            {
-                                text: {
-                                    content: `Workspace Analysis Report - ${new Date().toLocaleDateString()}`
-                                }
-                            }
-                        ]
-                    },
-                    "Workspace ID": {
-                        rich_text: [
-                            {
-                                text: {
-                                    content: workspaceId
-                                }
-                            }
-                        ]
-                    },
-                    Status: {
-                        select: {
-                            name: "Generated"
-                        }
-                    },
-                    "Analysis Date": {
-                        date: {
-                            start: new Date().toISOString()
-                        }
-                    }
-                },
-                children: blocks
-            });
-
-            console.log('Successfully created Notion page:', response.id);
-            return response.id;
-
-        } catch (error) {
-            console.error('Error in createNotionEntry:', error);
-            throw error;
-        }
+    calculateGrowthScenarios(dataframe_3, dataframe_5) {
+        const baseRevenue = this.calculateBaseRevenue(dataframe_3, dataframe_5);
+        return {
+            tenPercent: baseRevenue * 1.1,
+            twentyPercent: baseRevenue * 1.2,
+            fiftyPercent: baseRevenue * 1.5
+        };
     }
 
-    createMetricsBlocks(metrics) {
-        const sections = [
-            {
-                title: 'Structure & Evolution Metrics',
-                metrics: [
-                    `Total Pages: ${metrics.totalPages}`,
-                    `Max Depth: ${metrics.maxDepth}`,
-                    `Average Depth: ${this.formatDecimal(metrics.avgDepth)}`,
-                    `Deep Pages Count: ${metrics.deepPagesCount}`,
-                    `Orphaned Blocks: ${metrics.orphanedBlocks}`,
-                    `Collections Count: ${metrics.collectionsCount}`,
-                    `Content Diversity Score: ${this.formatPercentage(metrics.contentDiversityScore)}`,
-                    `Structure Quality Index: ${this.formatPercentage(metrics.structureQualityIndex)}`
-                ]
-            },
-            {
-                title: 'Usage & Team Metrics',
-                metrics: [
-                    `Total Members: ${metrics.totalMembers}`,
-                    `Active Members: ${metrics.activeMembers}`,
-                    `Daily Active Users: ${metrics.dailyActiveUsers}`,
-                    `Weekly Active Users: ${metrics.weeklyActiveUsers}`,
-                    `Monthly Active Users: ${metrics.monthlyActiveUsers}`,
-                    `Team Adoption Score: ${this.formatPercentage(metrics.teamAdoptionScore)}`,
-                    `Engagement Score: ${this.formatPercentage(metrics.engagementScore)}`
-                ]
-            },
-            {
-                title: 'Growth & Projections',
-                metrics: [
-                    `Monthly Member Growth Rate: ${this.formatPercentage(metrics.monthlyMemberGrowthRate)}`,
-                    `Monthly Content Growth Rate: ${this.formatPercentage(metrics.monthlyContentGrowthRate)}`,
-                    `Expected Members Next Year: ${Math.round(metrics.expectedMembersNextYear)}`,
-                    `Growth Consistency: ${this.formatPercentage(metrics.growthConsistency)}`,
-                    `Scaling Readiness Score: ${this.formatPercentage(metrics.scalingReadinessScore)}`
-                ]
-            },
-            {
-                title: 'ROI & Cost Analysis',
-                metrics: [
-                    `Current Plan Cost: ${this.formatCurrency(metrics.currentPlanCost)}/month`,
-                    `Enterprise Plan ROI: ${this.formatPercentage(metrics.enterprisePlanROI)}`,
-                    `Enterprise Plan Annual Savings: ${this.formatCurrency(metrics.enterprisePlanSavings)}`,
-                    `Enterprise + AI ROI: ${this.formatPercentage(metrics.enterpriseAIROI)}`,
-                    `Enterprise + AI Annual Savings: ${this.formatCurrency(metrics.enterpriseAISavings)}`,
-                    `Projected Time Savings: ${this.formatDecimal(metrics.projectedTimeSavings.hoursPerMember)} hours/member/month`,
-                    `Automation Potential: ${this.formatPercentage(metrics.automationPotential.score)}`
-                ]
-            }
-        ];
-
-        const blocks = [];
-
-        // Add title
-        blocks.push({
-            object: 'block',
-            type: 'heading_1',
-            heading_1: {
-                rich_text: [{
-                    type: 'text',
-                    text: { content: 'Workspace Analysis Report' }
-                }]
-            }
-        });
-
-        // Add sections
-        sections.forEach(section => {
-            // Add section heading
-            blocks.push({
-                object: 'block',
-                type: 'heading_2',
-                heading_2: {
-                    rich_text: [{
-                        type: 'text',
-                        text: { content: section.title }
-                    }]
-                }
-            });
-
-            // Add metrics as bulleted list
-            section.metrics.forEach(metric => {
-                blocks.push({
-                    object: 'block',
-                    type: 'bulleted_list_item',
-                    bulleted_list_item: {
-                        rich_text: [{
-                            type: 'text',
-                            text: { content: metric }
-                        }]
-                    }
-                });
-            });
-
-            // Add divider between sections
-            blocks.push({
-                object: 'block',
-                type: 'divider',
-                divider: {}
-            });
-        });
-
-        return blocks;
+    calculateBaseRevenue(dataframe_3, dataframe_5) {
+        // Calculate base revenue from current members and plan costs
+        const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
+        const planCost = dataframe_5.PLAN_COST || 0;
+        return totalMembers * planCost * 12; // Annual revenue
     }
 
     validateData(dataframe_2, dataframe_3, dataframe_5) {
@@ -239,5 +98,11 @@ export class MetricsCalculator extends BaseMetrics {
         if (!dataframe_5 || typeof dataframe_5 !== 'object') {
             throw new Error('dataframe_5 must be a valid object');
         }
+
+        // Log the data for debugging
+        console.log('Validating data:');
+        console.log('dataframe_2 length:', dataframe_2.length);
+        console.log('dataframe_3 keys:', Object.keys(dataframe_3));
+        console.log('dataframe_5 keys:', Object.keys(dataframe_5));
     }
 } 

@@ -5,6 +5,7 @@ export class NotionService {
         this.notion = notionClient;
         this.databaseId = databaseId;
         this.formatter = new NotionFormatter();
+        this.requestTracker = new Map(); // Track requests by workspaceId and timestamp
     }
 
     async createNotionEntry(workspaceId, metrics) {
@@ -17,8 +18,23 @@ export class NotionService {
                 throw new Error('Notion database ID is not configured');
             }
 
+            // Track this request
+            const requestKey = `${workspaceId}-${metrics.timestamp || new Date().toISOString()}`;
+            if (this.requestTracker.has(requestKey)) {
+                console.warn('Duplicate Notion entry creation detected:', {
+                    workspaceId,
+                    timestamp: metrics.timestamp,
+                    previousRequest: this.requestTracker.get(requestKey)
+                });
+                return this.requestTracker.get(requestKey);
+            }
+
+            console.log('Creating Notion entry for workspace:', workspaceId);
+            console.log('Available metrics:', Object.keys(metrics));
+            
             // Create page content
             const blocks = this.formatter.createMetricsBlocks(metrics);
+            console.log('Created blocks for Notion page:', blocks.length);
 
             // Create the page in Notion
             const response = await this.notion.pages.create({
@@ -63,11 +79,21 @@ export class NotionService {
                 children: blocks
             });
 
+            // Store the successful request
+            this.requestTracker.set(requestKey, response.id);
+
             console.log('Successfully created Notion page:', response.id);
+            console.log('Page URL:', `https://notion.so/${response.id.replace(/-/g, '')}`);
             return response.id;
 
         } catch (error) {
             console.error('Error in createNotionEntry:', error);
+            console.error('Error details:', {
+                message: error.message,
+                code: error.code,
+                status: error.status,
+                details: error.details
+            });
             throw error;
         }
     }

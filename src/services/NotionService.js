@@ -1,11 +1,53 @@
+import { Client } from '@notionhq/client';
 import { NotionFormatter } from '../core/formatters/NotionFormatter.js';
+import { MetricsCalculator } from '../core/metrics/MetricsCalculator.js';
+import { TreeVisualizer } from '../core/visualization/TreeVisualizer.js';
 
 export class NotionService {
-    constructor(notionClient, databaseId) {
-        this.notion = notionClient;
-        this.databaseId = databaseId;
+    constructor(authToken) {
+        this.notion = new Client({ auth: authToken });
         this.formatter = new NotionFormatter();
+        this.calculator = new MetricsCalculator();
+        this.visualizer = new TreeVisualizer();
         this.requestTracker = new Map(); // Track requests by workspaceId and timestamp
+    }
+
+    async analyzeWorkspace() {
+        try {
+            // Fetch workspace data
+            const data = await this.fetchWorkspaceData();
+            
+            // Calculate metrics
+            const metrics = await this.calculator.calculateMetrics(data);
+            
+            // Create visualization
+            const visualizationUrl = await this.visualizer.visualizeWorkspace(data);
+            if (visualizationUrl) {
+                metrics.visualizationUrl = visualizationUrl;
+            }
+
+            // Create blocks for the page
+            const blocks = await this.formatter.createMetricsBlocks(metrics);
+
+            // Create the page
+            const page = await this.notion.pages.create({
+                parent: { type: 'page_id', page_id: process.env.NOTION_PAGE_ID },
+                properties: {
+                    title: [
+                        {
+                            type: 'text',
+                            text: { content: 'Workspace Analysis Report' }
+                        }
+                    ]
+                },
+                children: blocks
+            });
+
+            return page;
+        } catch (error) {
+            console.error('Error analyzing workspace:', error);
+            throw error;
+        }
     }
 
     async createNotionEntry(workspaceId, metrics) {

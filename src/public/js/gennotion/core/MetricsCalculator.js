@@ -38,7 +38,7 @@ export class MetricsCalculator {
         const engagementMetrics = this.calculateEngagementMetrics(dataframe_2, dataframe_3);
         const teamMetrics = this.calculateTeamMetrics(dataframe_2, dataframe_3);
         const trendMetrics = this.calculateTrendMetrics(dataframe_2, dataframe_3);
-        const collectionMetrics = this.calculateCollectionMetrics(dataframe_2);
+        const collectionMetrics = this.calculateDetailedCollectionMetrics(dataframe_2, dataframe_3);
         const contentMetrics = this.calculateContentMetrics(dataframe_2);
         const evolutionMetrics = this.calculateEvolutionMetrics(dataframe_2, dataframe_3);
         const collaborationPatterns = this.calculateCollaborationPatterns(dataframe_2, dataframe_3);

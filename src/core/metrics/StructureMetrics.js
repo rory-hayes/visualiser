@@ -8,25 +8,96 @@ export class StructureMetrics extends BaseMetrics {
     calculateStructureMetrics(dataframe_2, dataframe_3) {
         this.validateData(dataframe_2, dataframe_3);
 
-        const depths = this.calculateDepths(dataframe_2);
-        const typeDistribution = this.getTypeDistribution(dataframe_2);
-        const depthStats = this.calculateDepthStatistics(dataframe_2);
+        // Calculate basic counts
+        const totalPages = dataframe_3.NUM_PAGES || 0;
+        const maxDepth = Math.max(...dataframe_2.map(page => parseInt(page.DEPTH) || 0));
+        const depths = dataframe_2.map(page => parseInt(page.DEPTH) || 0);
+        const avgDepth = this.average(depths);
+        const deepPagesCount = depths.filter(d => d > 3).length;
+        const rootPages = dataframe_2.filter(page => !page.PARENT_ID).length;
+        const orphanedBlocks = this.countOrphanedBlocks(dataframe_2);
+        const collectionsCount = dataframe_3.NUM_COLLECTIONS || 0;
+        const collectionViews = dataframe_3.NUM_COLLECTION_VIEWS || 0;
         
+        // Calculate advanced metrics
+        const navDepthScore = this.calculateNavigationDepthScore(depths);
+        const scatterIndex = this.calculateScatterIndex(dataframe_2);
+        const bottleneckCount = this.identifyBottlenecks(dataframe_2).length;
+        const duplicateCount = this.findDuplicates(dataframe_2).length;
+        const unfindablePages = this.countUnfindablePages(dataframe_2);
+        const navComplexity = this.calculateNavigationComplexity(dataframe_2);
+        const percentageUnlinked = this.calculateUnlinkedPercentage(dataframe_2);
+
         return {
-            totalPages: dataframe_2.length,
-            maxDepth: depthStats.maxDepth,
-            avgDepth: depthStats.avgDepth,
-            deepPagesCount: depthStats.deepPagesCount,
-            orphanedBlocks: this.countOrphanedBlocks(dataframe_2),
-            collectionsCount: typeDistribution.collection || 0,
-            contentDiversityScore: this.calculateContentDiversityScore(typeDistribution),
-            structureQualityIndex: this.calculateStructureQualityIndex({
-                avgDepth: depthStats.avgDepth,
-                deepPages: depthStats.deepPagesCount,
-                orphanedPages: this.countOrphanedPages(dataframe_2),
-                totalPages: dataframe_2.length
-            })
+            total_pages: totalPages,
+            max_depth: maxDepth,
+            avg_depth: avgDepth,
+            deep_pages_count: deepPagesCount,
+            root_pages: rootPages,
+            orphaned_blocks: orphanedBlocks,
+            percentage_unlinked: percentageUnlinked,
+            collections_count: collectionsCount,
+            page_count: totalPages,
+            collection_views: collectionViews,
+            nav_depth_score: navDepthScore,
+            scatter_index: scatterIndex,
+            bottleneck_count: bottleneckCount,
+            duplicate_count: duplicateCount,
+            unfindable_pages: unfindablePages,
+            nav_complexity: navComplexity
         };
+    }
+
+    calculateNavigationDepthScore(depths) {
+        const optimalDepth = 3;
+        const depthDeviations = depths.map(d => Math.abs(d - optimalDepth));
+        return 1 - (this.average(depthDeviations) / optimalDepth);
+    }
+
+    calculateScatterIndex(pages) {
+        const totalPages = pages.length;
+        const unconnectedPages = pages.filter(page => !page.PARENT_ID && !page.ANCESTORS?.length).length;
+        return unconnectedPages / totalPages;
+    }
+
+    identifyBottlenecks(pages) {
+        return pages.filter(page => {
+            const childCount = pages.filter(p => p.PARENT_ID === page.ID).length;
+            return childCount > 10; // Pages with more than 10 direct children
+        });
+    }
+
+    findDuplicates(pages) {
+        const titles = pages.map(p => p.TEXT).filter(Boolean);
+        return titles.filter((title, index) => titles.indexOf(title) !== index);
+    }
+
+    countUnfindablePages(pages) {
+        return pages.filter(page => 
+            !page.PARENT_ID && 
+            !page.ANCESTORS?.length && 
+            page.TYPE !== 'root'
+        ).length;
+    }
+
+    calculateNavigationComplexity(pages) {
+        const maxDepth = Math.max(...pages.map(p => parseInt(p.DEPTH) || 0));
+        const branchingFactor = this.average(
+            pages.map(page => 
+                pages.filter(p => p.PARENT_ID === page.ID).length
+            )
+        );
+        return (maxDepth * branchingFactor) / 100;
+    }
+
+    calculateUnlinkedPercentage(pages) {
+        const totalPages = pages.length;
+        const unlinkedPages = pages.filter(page => 
+            !page.PARENT_ID && 
+            !page.ANCESTORS?.length && 
+            page.TYPE !== 'root'
+        ).length;
+        return (unlinkedPages / totalPages) * 100;
     }
 
     calculateDepths(dataframe_2) {

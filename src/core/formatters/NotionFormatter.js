@@ -4,25 +4,30 @@ export class NotionFormatter {
             {
                 title: 'Structure & Evolution Metrics',
                 metrics: [
-                    `Total Pages: ${metrics.totalPages}`,
-                    `Max Depth: ${metrics.maxDepth}`,
-                    `Average Depth: ${this.formatDecimal(metrics.avgDepth)}`,
-                    `Deep Pages Count: ${metrics.deepPagesCount}`,
-                    `Orphaned Blocks: ${metrics.orphanedBlocks}`,
-                    `Collections Count: ${metrics.collectionsCount}`,
-                    `Content Diversity Score: ${this.formatPercentage(metrics.contentDiversityScore)}`,
-                    `Structure Quality Index: ${this.formatPercentage(metrics.structureQualityIndex)}`
+                    `Total Pages: ${metrics.total_pages}`,
+                    `Max Depth: ${metrics.max_depth}`,
+                    `Average Depth: ${this.formatDecimal(metrics.avg_depth)}`,
+                    `Deep Pages Count: ${metrics.deep_pages_count}`,
+                    `Orphaned Blocks: ${metrics.orphaned_blocks}`,
+                    `Collections Count: ${metrics.collections_count}`,
+                    `Content Maturity Score: ${this.formatPercentage(metrics.content_maturity_score)}`,
+                    `Knowledge Structure Score: ${this.formatPercentage(metrics.knowledge_structure_score)}`,
+                    `Workspace Complexity Score: ${this.formatPercentage(metrics.workspace_complexity_score)}`,
+                    `Growth Sustainability Index: ${this.formatPercentage(metrics.growth_sustainability_index)}`
                 ]
             },
             {
-                title: 'Usage & Team Metrics',
+                title: 'Collaboration & Team Metrics',
                 metrics: [
-                    `Total Members: ${metrics.totalMembers}`,
-                    `Active Members: ${metrics.activeMembers}`,
+                    `Team Adoption Score: ${this.formatPercentage(metrics.team_adoption_score)}`,
+                    `Collaboration Density: ${this.formatPercentage(metrics.collaboration_density)}`,
+                    `Knowledge Sharing Index: ${this.formatPercentage(metrics.knowledge_sharing_index)}`,
+                    `Cross-team Collaboration Score: ${this.formatPercentage(metrics.cross_team_collaboration_score)}`,
+                    `Total Members: ${metrics.total_members}`,
+                    `Active Members: ${metrics.active_members}`,
                     `Daily Active Users: ${metrics.dailyActiveUsers}`,
                     `Weekly Active Users: ${metrics.weeklyActiveUsers}`,
                     `Monthly Active Users: ${metrics.monthlyActiveUsers}`,
-                    `Team Adoption Score: ${this.formatPercentage(metrics.teamAdoptionScore)}`,
                     `Engagement Score: ${this.formatPercentage(metrics.engagementScore)}`
                 ]
             },
@@ -103,23 +108,15 @@ export class NotionFormatter {
         };
     }
 
-    formatDecimal(value, decimals = 2) {
-        if (value === null || value === undefined) return 'N/A';
-        return typeof value === 'number' ? value.toFixed(decimals) : value.toString();
+    formatDecimal(value) {
+        return value ? value.toFixed(2) : '0.00';
     }
 
-    formatPercentage(value, decimals = 1) {
-        if (value === null || value === undefined) return 'N/A';
-        return `${this.formatDecimal(value * 100, decimals)}%`;
+    formatPercentage(value) {
+        return value ? `${(value).toFixed(1)}%` : '0.0%';
     }
 
     formatCurrency(value) {
-        if (value === null || value === undefined) return 'N/A';
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(value);
+        return value ? `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '$0.00';
     }
 } 

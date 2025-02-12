@@ -5,6 +5,8 @@ import { ROIMetrics } from './ROIMetrics.js';
 import { BaseMetrics } from './BaseMetrics.js';
 import { NotionService } from '../../services/NotionService.js';
 import { Client } from '@notionhq/client';
+import { EvolutionMetrics } from './EvolutionMetrics.js';
+import { CollaborationPatterns } from './CollaborationPatterns.js';
 
 export class MetricsCalculator extends BaseMetrics {
     constructor(notionApiKey, notionDatabaseId) {
@@ -18,6 +20,8 @@ export class MetricsCalculator extends BaseMetrics {
         this.usageMetrics = new UsageMetrics();
         this.growthMetrics = new GrowthMetrics();
         this.roiMetrics = new ROIMetrics();
+        this.evolutionMetrics = new EvolutionMetrics();
+        this.collaborationMetrics = new CollaborationPatterns();
 
         // Initialize Notion service
         const notionClient = new Client({ auth: notionApiKey });
@@ -34,6 +38,8 @@ export class MetricsCalculator extends BaseMetrics {
             const usageMetrics = this.usageMetrics.calculateUsageMetrics(dataframe_3, dataframe_5);
             const growthMetrics = this.growthMetrics.calculateGrowthMetrics(dataframe_2, dataframe_3, dataframe_5);
             const roiMetrics = this.roiMetrics.calculateROIMetrics(dataframe_3, dataframe_5);
+            const evolutionMetrics = this.evolutionMetrics.calculateEvolutionMetrics(dataframe_2, dataframe_3, dataframe_5);
+            const collaborationMetrics = this.collaborationMetrics.calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5);
 
             // Combine all metrics
             const combinedMetrics = {
@@ -42,7 +48,9 @@ export class MetricsCalculator extends BaseMetrics {
                 ...structureMetrics,
                 ...usageMetrics,
                 ...growthMetrics,
-                ...roiMetrics
+                ...roiMetrics,
+                ...evolutionMetrics,
+                ...collaborationMetrics
             };
 
             // Create Notion entry
@@ -219,5 +227,17 @@ export class MetricsCalculator extends BaseMetrics {
         });
 
         return blocks;
+    }
+
+    validateData(dataframe_2, dataframe_3, dataframe_5) {
+        if (!Array.isArray(dataframe_2) || dataframe_2.length === 0) {
+            throw new Error('dataframe_2 must be a non-empty array');
+        }
+        if (!dataframe_3 || typeof dataframe_3 !== 'object') {
+            throw new Error('dataframe_3 must be a valid object');
+        }
+        if (!dataframe_5 || typeof dataframe_5 !== 'object') {
+            throw new Error('dataframe_5 must be a valid object');
+        }
     }
 } 

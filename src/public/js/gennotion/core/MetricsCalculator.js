@@ -39,9 +39,9 @@ export class MetricsCalculator extends BaseMetrics {
             const combinedMetrics = {
                 workspaceId,
                 timestamp: new Date().toISOString(),
-                ...structureMetrics,
-                ...usageMetrics,
-                ...growthMetrics,
+            ...structureMetrics,
+            ...usageMetrics,
+            ...growthMetrics,
                 ...roiMetrics
             };
 

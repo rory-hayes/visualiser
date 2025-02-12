@@ -1,7 +1,6 @@
 import { OpenAI } from 'openai';
 import { processWorkspaceData } from '../utils/dataProcessing.js';
 
-const HEX_API_KEY = '5b97b8d1945b14acc5c2faed5e314310438e038640df2ff475d357993d0217826b3db99144ebf236d189778cda42898e';
 const API_URL = "https://visualiser-xhjh.onrender.com/api/hex-results";
 
 export class AIInsightsService {
@@ -224,12 +223,16 @@ export class AIInsightsService {
             throw new Error('AI features are disabled due to missing API key');
         }
 
+        if (!process.env.HEX_API_KEY) {
+            throw new Error('HEX_API_KEY environment variable is not set');
+        }
+
         try {
             const response = await fetch('https://app.hex.tech/notion/hex/21c6c24a-60e8-487c-b03a-1f04dda4f918/draft/logic', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer 4fe1113357488bccca1d029756edd4c6c361be53f08201a733173e2e478e012a436eb9adfb73e93dc2aa179c241b81df`
+                    'Authorization': `Bearer ${process.env.HEX_API_KEY}`
                 },
                 body: JSON.stringify({
                     data: {
@@ -240,21 +243,6 @@ export class AIInsightsService {
                     }
                 })
             });
-
-            // call to the Domain Usage / Visualiser project
-            // has more domain usage metrics
-            // const response = await fetch('https://app.hex.tech/notion/hex/4b520026-8a4f-4df8-86b3-f79798b594db/draft/logic', {
-            //     method: 'POST',
-            //     headers: {
-            //         'Content-Type': 'application/json',
-            //         'Authorization': `Bearer 4fe1113357488bccca1d029756edd4c6c361be53f08201a733173e2e478e012a436eb9adfb73e93dc2aa179c241b81df`
-            //     },
-            //     body: JSON.stringify({
-            //         data: {
-            //             domains: workspaceId,
-            //         }
-            //     })
-            // });
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);

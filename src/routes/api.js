@@ -37,6 +37,13 @@ router.post('/analyze-workspace', async (req, res) => {
             headers: req.headers['content-type']
         });
 
+        // Debug environment variables
+        console.log('Environment variables check:', {
+            HEX_API_KEY_length: process.env.HEX_API_KEY?.length,
+            HEX_PROJECT_ID: process.env.HEX_PROJECT_ID,
+            NODE_ENV: process.env.NODE_ENV
+        });
+
         const { workspaceId } = req.body;
         
         if (!workspaceId) {
@@ -51,7 +58,9 @@ router.post('/analyze-workspace', async (req, res) => {
         try {
             console.log('Initializing Hex service with environment variables:', {
                 hasApiKey: !!process.env.HEX_API_KEY,
-                hasProjectId: !!process.env.HEX_PROJECT_ID
+                hasProjectId: !!process.env.HEX_PROJECT_ID,
+                apiKeyLength: process.env.HEX_API_KEY?.length,
+                projectId: process.env.HEX_PROJECT_ID
             });
 
             hexService = getHexService();

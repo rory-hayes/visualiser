@@ -13,6 +13,20 @@ export class HexService {
             throw new Error('workspaceId is required');
         }
 
+        console.log('Calling Hex API with:', {
+            url: `${this.HEX_API_URL}/projects/${this.HEX_PROJECT_ID}/runs`,
+            workspaceId
+        });
+
+        // Format request body according to Hex API requirements
+        const requestBody = {
+            inputParams: {
+                workspace_id: workspaceId
+            }
+        };
+
+        console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
         const response = await fetch(`${this.HEX_API_URL}/projects/${this.HEX_PROJECT_ID}/runs`, {
             method: 'POST',
             headers: {
@@ -20,17 +34,27 @@ export class HexService {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({
-                parameters: {
-                    workspace_id: workspaceId
-                }
-            })
+            body: JSON.stringify(requestBody)
         });
 
-        const data = await response.json();
+        const responseText = await response.text();
+        console.log('Raw API Response:', responseText);
+
+        let data;
+        try {
+            data = JSON.parse(responseText);
+        } catch (error) {
+            console.error('Failed to parse response:', error);
+            throw new Error('Invalid JSON response from Hex API');
+        }
 
         if (!response.ok) {
-            throw new Error(data.message || 'Failed to call Hex API');
+            console.error('Hex API error:', {
+                status: response.status,
+                statusText: response.statusText,
+                data
+            });
+            throw new Error(data.message || `Hex API error: ${response.statusText}`);
         }
 
         if (!data.run_id) {
@@ -49,6 +73,8 @@ export class HexService {
         const delay = 5000; // 5 seconds
 
         while (attempts < maxAttempts) {
+            console.log(`Checking run status (attempt ${attempts + 1}/${maxAttempts}):`, runId);
+
             const response = await fetch(`${this.HEX_API_URL}/runs/${runId}`, {
                 headers: {
                     'Authorization': `Bearer ${this.HEX_API_KEY}`,
@@ -57,6 +83,10 @@ export class HexService {
             });
 
             const data = await response.json();
+            console.log('Run status response:', {
+                status: response.status,
+                data
+            });
 
             if (!response.ok) {
                 throw new Error(data.message || 'Failed to check run status');
@@ -80,8 +110,11 @@ export class HexService {
 
     async triggerHexRun(workspaceId) {
         try {
+            console.log('Triggering Hex run for workspace:', workspaceId);
             const runId = await this.callHexAPI(workspaceId);
+            console.log('Successfully got run ID:', runId);
             const results = await this.waitForHexResults(runId);
+            console.log('Successfully got results');
             
             return {
                 success: true,
@@ -89,6 +122,7 @@ export class HexService {
                 results
             };
         } catch (error) {
+            console.error('Error in triggerHexRun:', error);
             return {
                 success: false,
                 error: error.message

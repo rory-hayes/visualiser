@@ -32,9 +32,15 @@ router.get('/health', (req, res) => {
 // Analyze workspace endpoint
 router.post('/analyze-workspace', async (req, res) => {
     try {
+        console.log('Received analyze-workspace request:', {
+            body: req.body,
+            headers: req.headers['content-type']
+        });
+
         const { workspaceId } = req.body;
         
         if (!workspaceId) {
+            console.log('Missing workspaceId in request');
             return res.status(400).json({ 
                 success: false, 
                 error: 'Workspace ID is required' 
@@ -43,8 +49,14 @@ router.post('/analyze-workspace', async (req, res) => {
 
         // Initialize service
         try {
+            console.log('Initializing Hex service with environment variables:', {
+                hasApiKey: !!process.env.HEX_API_KEY,
+                hasProjectId: !!process.env.HEX_PROJECT_ID
+            });
+
             hexService = getHexService();
         } catch (error) {
+            console.error('Failed to initialize Hex service:', error);
             return res.status(500).json({
                 success: false,
                 error: 'Hex service configuration error',
@@ -55,6 +67,13 @@ router.post('/analyze-workspace', async (req, res) => {
         console.log('Analyzing workspace:', workspaceId);
         const hexResponse = await hexService.triggerHexRun(workspaceId);
         
+        console.log('Hex response:', {
+            success: hexResponse.success,
+            hasRunId: !!hexResponse.runId,
+            hasResults: !!hexResponse.results,
+            error: hexResponse.error
+        });
+        
         if (!hexResponse.success) {
             return res.status(500).json({ 
                 success: false, 
@@ -64,12 +83,14 @@ router.post('/analyze-workspace', async (req, res) => {
 
         if (hexResponse.results) {
             try {
+                console.log('Saving results to ResultsManager');
                 resultsManager.saveResults(hexResponse.results);
             } catch (saveError) {
                 console.error('Failed to save results:', saveError);
             }
         }
 
+        console.log('Sending successful response');
         res.json({
             success: true,
             runId: hexResponse.runId,

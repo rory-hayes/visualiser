@@ -164,14 +164,19 @@ export class TreeVisualizer extends BaseVisualizer {
 
             // Use d3-graphviz to render the graph
             const graphvizInstance = graphviz(svg);
-            await new Promise((resolve, reject) => {
-                graphvizInstance
-                    .width(this.width)
-                    .height(this.height)
-                    .renderDot(dotString)
-                    .on('end', resolve)
-                    .on('error', reject);
-            });
+            
+            // Configure and render
+            graphvizInstance
+                .width(this.width)
+                .height(this.height)
+                .fit(true)
+                .scale(1);
+
+            // Render synchronously
+            graphvizInstance.renderDot(dotString);
+
+            // Wait a moment for rendering to complete
+            await new Promise(resolve => setTimeout(resolve, 1000));
 
             // Get the rendered SVG content
             const svgContent = document.querySelector('#graph').innerHTML;
@@ -182,6 +187,12 @@ export class TreeVisualizer extends BaseVisualizer {
             // Generate URL for the saved image
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
             const imageUrl = `${baseUrl}/visualizations/${path.basename(svgFile)}`;
+
+            console.log('Visualization generated successfully:', {
+                svgPath: svgFile,
+                imageUrl,
+                svgContentLength: svgContent.length
+            });
 
             return {
                 dotString,
@@ -194,9 +205,38 @@ export class TreeVisualizer extends BaseVisualizer {
                 message: error.message,
                 stack: error.stack,
                 cwd: process.cwd(),
-                nodeEnv: process.env.NODE_ENV
+                nodeEnv: process.env.NODE_ENV,
+                dotString: dotString || 'Not generated'
             });
-            throw error;
+
+            // Create a simple fallback SVG
+            const fallbackSvg = `
+            <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
+                <rect width="100%" height="100%" fill="#f8f9fa"/>
+                <text x="50%" y="50%" text-anchor="middle" fill="#dc3545">
+                    Error generating visualization
+                </text>
+                <text x="50%" y="60%" text-anchor="middle" fill="#6c757d" font-size="14">
+                    ${error.message}
+                </text>
+            </svg>`;
+
+            // Save the fallback SVG
+            const timestamp = Date.now();
+            const random = Math.round(Math.random() * 1E9);
+            const fallbackFile = path.join(this.visualizationsDir, `error-${timestamp}-${random}.svg`);
+            fs.writeFileSync(fallbackFile, fallbackSvg);
+
+            // Return fallback image URL
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            const fallbackUrl = `${baseUrl}/visualizations/${path.basename(fallbackFile)}`;
+
+            return {
+                dotString: '',
+                imageUrl: fallbackUrl,
+                visualizationPath: fallbackFile,
+                error: error.message
+            };
         }
     }
 

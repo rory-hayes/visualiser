@@ -20,5 +20,5 @@ services:
     buildOptimization: true
     buildCommand: |
       apt-get update && \
-      apt-get install -y chromium && \
+      apt-get install -y chromium graphviz && \
       npm install 

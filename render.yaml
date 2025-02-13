@@ -2,7 +2,10 @@ services:
   - type: web
     name: visualiser
     env: node
-    buildCommand: npm install
+    buildCommand: |
+      apt-get update && \
+      apt-get install -y google-chrome-stable graphviz && \
+      npm install
     startCommand: node src/server.js
     envVars:
       - key: NODE_ENV
@@ -17,8 +20,4 @@ services:
         - package.json
         - package-lock.json
         - render.yaml
-    buildOptimization: true
-    buildCommand: |
-      apt-get update && \
-      apt-get install -y google-chrome-stable graphviz && \
-      npm install 
+    buildOptimization: true 

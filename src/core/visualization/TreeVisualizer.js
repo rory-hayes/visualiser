@@ -5,7 +5,6 @@ import * as d3 from 'd3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
 
 export class TreeVisualizer extends BaseVisualizer {
     constructor() {
@@ -148,71 +147,46 @@ export class TreeVisualizer extends BaseVisualizer {
                 fs.mkdirSync(this.visualizationsDir, { recursive: true });
             }
 
-            // Generate unique filenames
+            // Generate unique filename
             const timestamp = Date.now();
             const random = Math.round(Math.random() * 1E9);
-            const dotFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.dot`);
             const svgFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.svg`);
-            const pngFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.png`);
 
-            // Write DOT file
-            fs.writeFileSync(dotFile, dotString);
+            // Create a virtual DOM environment
+            const dom = new JSDOM('<!DOCTYPE html><div id="graph"></div>');
+            const document = dom.window.document;
 
-            // Try to install graphviz if not already installed
-            try {
-                execSync('which dot');
-            } catch (error) {
-                console.log('Graphviz not found, attempting to install...');
-                try {
-                    execSync('sudo apt-get update && sudo apt-get install -y graphviz');
-                } catch (installError) {
-                    console.error('Failed to install graphviz:', installError);
-                }
-            }
+            // Create an SVG element
+            const svg = d3.select(document.querySelector('#graph'))
+                .append('svg')
+                .attr('width', this.width)
+                .attr('height', this.height);
 
-            // Try different graphviz paths
-            const possiblePaths = [
-                'dot',                           // System PATH
-                '/usr/bin/dot',                 // Standard location
-                '/usr/local/bin/dot',           // Alternate location
-                '/opt/homebrew/bin/dot'         // Homebrew location (Mac)
-            ];
+            // Use d3-graphviz to render the graph
+            const graphvizInstance = graphviz(svg);
+            await new Promise((resolve, reject) => {
+                graphvizInstance
+                    .width(this.width)
+                    .height(this.height)
+                    .renderDot(dotString)
+                    .on('end', resolve)
+                    .on('error', reject);
+            });
 
-            let dotCommand = null;
-            for (const path of possiblePaths) {
-                try {
-                    execSync(`${path} -V`);
-                    dotCommand = path;
-                    break;
-                } catch (e) {
-                    console.log(`Graphviz not found at ${path}`);
-                }
-            }
+            // Get the rendered SVG content
+            const svgContent = document.querySelector('#graph').innerHTML;
 
-            if (!dotCommand) {
-                throw new Error('Could not find graphviz dot command');
-            }
-
-            console.log('Using graphviz at:', dotCommand);
-
-            // Generate SVG using graphviz command line
-            execSync(`${dotCommand} -Tsvg "${dotFile}" -o "${svgFile}"`);
-
-            // Convert SVG to PNG using graphviz
-            execSync(`${dotCommand} -Tpng "${dotFile}" -o "${pngFile}"`);
-
-            // Clean up DOT and SVG files
-            fs.unlinkSync(dotFile);
-            fs.unlinkSync(svgFile);
+            // Save the SVG file
+            fs.writeFileSync(svgFile, svgContent);
 
             // Generate URL for the saved image
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const imageUrl = `${baseUrl}/visualizations/${path.basename(pngFile)}`;
+            const imageUrl = `${baseUrl}/visualizations/${path.basename(svgFile)}`;
 
             return {
                 dotString,
                 imageUrl,
-                visualizationPath: pngFile
+                visualizationPath: svgFile
             };
         } catch (error) {
             console.error('Error generating visualization:', error);
@@ -220,8 +194,7 @@ export class TreeVisualizer extends BaseVisualizer {
                 message: error.message,
                 stack: error.stack,
                 cwd: process.cwd(),
-                nodeEnv: process.env.NODE_ENV,
-                paths: process.env.PATH
+                nodeEnv: process.env.NODE_ENV
             });
             throw error;
         }

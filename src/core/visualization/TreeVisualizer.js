@@ -1,10 +1,15 @@
 import { graphviz } from 'd3-graphviz';
 import { BaseVisualizer } from './BaseVisualizer.js';
+import puppeteer from 'puppeteer';
+import { JSDOM } from 'jsdom';
+import * as d3 from 'd3';
 
 export class TreeVisualizer extends BaseVisualizer {
     constructor() {
         super();
         this.maxDepth = 4; // Limit visualization to 4 levels
+        this.width = 1200;
+        this.height = 800;
     }
 
     processHierarchy(data) {
@@ -118,7 +123,7 @@ export class TreeVisualizer extends BaseVisualizer {
         return dot;
     }
 
-    async generateVisualization(data, containerId) {
+    async generateVisualization(data) {
         try {
             // Process data into hierarchy
             const hierarchy = this.processHierarchy(data);
@@ -130,95 +135,88 @@ export class TreeVisualizer extends BaseVisualizer {
             // Generate DOT string
             const dotString = this.generateDotString(processedHierarchy);
 
-            // Render using d3-graphviz
-            const container = document.querySelector(`#${containerId}`);
-            if (!container) {
-                throw new Error(`Container #${containerId} not found`);
+            // Create a minimal HTML page with the visualization
+            const html = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <script src="https://d3js.org/d3.v7.min.js"></script>
+                    <script src="https://unpkg.com/@hpcc-js/wasm@1.14.1/dist/index.min.js"></script>
+                    <script src="https://unpkg.com/d3-graphviz@4.1.0/build/d3-graphviz.min.js"></script>
+                    <style>
+                        #graph { width: ${this.width}px; height: ${this.height}px; }
+                    </style>
+                </head>
+                <body>
+                    <div id="graph"></div>
+                    <script>
+                        // Initialize graphviz
+                        const graph = d3.select("#graph")
+                            .graphviz()
+                            .width(${this.width})
+                            .height(${this.height})
+                            .fit(true)
+                            .zoom(false);
+
+                        // Render the graph
+                        graph.renderDot(\`${dotString}\`);
+                    </script>
+                </body>
+                </html>
+            `;
+
+            // Launch Puppeteer
+            const browser = await puppeteer.launch({
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+            const page = await browser.newPage();
+            
+            // Set viewport
+            await page.setViewport({
+                width: this.width,
+                height: this.height,
+                deviceScaleFactor: 2
+            });
+
+            // Load the HTML
+            await page.setContent(html);
+
+            // Wait for the graph to be rendered
+            await page.waitForFunction(() => {
+                const svg = document.querySelector('svg');
+                return svg && svg.querySelector('g');
+            });
+
+            // Take a screenshot
+            const screenshot = await page.screenshot({
+                type: 'png',
+                encoding: 'binary'
+            });
+
+            // Close browser
+            await browser.close();
+
+            // Create form data and upload
+            const formData = new FormData();
+            formData.append('image', new Blob([screenshot], { type: 'image/png' }), 'tree-visualization.png');
+
+            // Upload to server
+            const response = await fetch('/api/upload-visualization', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to upload visualization');
             }
 
-            const graphvizInstance = graphviz(container)
-                .width(container.clientWidth || this.width)
-                .height(container.clientHeight || this.height)
-                .fit(true)
-                .zoom(false);
-
-            // Add transition for smooth rendering
-            graphvizInstance
-                .transition(function() {
-                    return d3.transition()
-                        .duration(1000)
-                        .ease(d3.easeLinear);
-                });
-
-            // Render the graph
-            await graphvizInstance.renderDot(dotString);
-
-            // Export as PNG
-            const svg = container.querySelector('svg');
-            const imageUrl = await this.exportAsPNG(svg);
-
+            const { imageUrl } = await response.json();
             return {
                 dotString,
                 imageUrl
             };
         } catch (error) {
             console.error('Error generating visualization:', error);
-            throw error;
-        }
-    }
-
-    async exportAsPNG(svg) {
-        try {
-            // Create a canvas element
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Set canvas dimensions
-            const svgRect = svg.getBoundingClientRect();
-            canvas.width = svgRect.width * 2; // 2x for better resolution
-            canvas.height = svgRect.height * 2;
-            ctx.scale(2, 2);
-
-            // Convert SVG to data URL
-            const svgData = new XMLSerializer().serializeToString(svg);
-            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(svgBlob);
-
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0);
-                    URL.revokeObjectURL(url);
-                    
-                    // Convert canvas to blob
-                    canvas.toBlob(async (blob) => {
-                        try {
-                            // Create form data
-                            const formData = new FormData();
-                            formData.append('image', blob, 'tree-visualization.png');
-
-                            // Upload to server
-                            const response = await fetch('/api/upload-visualization', {
-                                method: 'POST',
-                                body: formData
-                            });
-
-                            if (!response.ok) {
-                                throw new Error('Failed to upload visualization');
-                            }
-
-                            const { imageUrl } = await response.json();
-                            resolve(imageUrl);
-                        } catch (error) {
-                            reject(error);
-                        }
-                    }, 'image/png');
-                };
-                img.onerror = reject;
-                img.src = url;
-            });
-        } catch (error) {
-            console.error('Error exporting PNG:', error);
             throw error;
         }
     }

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: visualiser
+    env: node
+    buildCommand: npm install
+    startCommand: node src/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
+        value: true
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /usr/bin/chromium-browser
+    buildFilter:
+      paths:
+        - src/**
+        - package.json
+        - package-lock.json
+        - render.yaml
+    buildOptimization: true
+    buildCommand: |
+      apt-get update && \
+      apt-get install -y chromium && \
+      npm install 

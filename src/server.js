@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import apiRoutes from './routes/api.js';
 import staticRoutes from './routes/static.js';
 import authRoutes from './routes/auth.js';
+import fs from 'fs';
 
 // Load environment variables
 dotenv.config();
@@ -18,6 +19,12 @@ const PORT = process.env.PORT || 3000;
 // Get directory name in ES module
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Create visualizations directory if it doesn't exist
+const visualizationsDir = path.join(__dirname, 'public', 'visualizations');
+if (!fs.existsSync(visualizationsDir)) {
+    fs.mkdirSync(visualizationsDir, { recursive: true });
+}
 
 // Middleware
 app.use(cors());

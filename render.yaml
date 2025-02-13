@@ -9,6 +9,8 @@ services:
         value: production
       - key: BASE_URL
         value: https://visualiser-xhjh.onrender.com
+      - key: PORT
+        value: "10000"
     buildFilter:
       paths:
         - src/**

@@ -187,11 +187,28 @@ export class TreeVisualizer extends BaseVisualizer {
             console.log('Saved SVG visualization to:', svgFile);
 
             // Generate URL for the saved image
-            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            console.log('Environment variables:', {
+                NODE_ENV: process.env.NODE_ENV,
+                BASE_URL: process.env.BASE_URL
+            });
+
+            // Determine the base URL with fallbacks
+            let baseUrl = 'http://localhost:3000';
+            if (process.env.NODE_ENV === 'production') {
+                baseUrl = 'https://visualiser-xhjh.onrender.com';
+            }
+            if (process.env.BASE_URL) {
+                baseUrl = process.env.BASE_URL;
+            }
+
             const imageUrl = `${baseUrl}/visualizations/${filename}`;
             
-            console.log('Generated image URL:', imageUrl);
-            console.log('File exists check:', fs.existsSync(svgFile));
+            console.log('URL Generation:', {
+                baseUrl,
+                filename,
+                fullUrl: imageUrl,
+                fileExists: fs.existsSync(svgFile)
+            });
 
             return {
                 dotString,
@@ -235,9 +252,17 @@ export class TreeVisualizer extends BaseVisualizer {
                 throw writeError;
             }
 
-            // Generate error URL
-            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            // Determine the base URL with fallbacks
+            let baseUrl = 'http://localhost:3000';
+            if (process.env.NODE_ENV === 'production') {
+                baseUrl = 'https://visualiser-xhjh.onrender.com';
+            }
+            if (process.env.BASE_URL) {
+                baseUrl = process.env.BASE_URL;
+            }
+
             const errorUrl = `${baseUrl}/visualizations/${errorFilename}`;
+            console.log('Generated error URL:', errorUrl);
 
             return {
                 dotString: '',

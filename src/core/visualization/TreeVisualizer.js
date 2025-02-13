@@ -204,71 +204,99 @@ export class TreeVisualizer extends BaseVisualizer {
             svg.append('title').text('Workspace Structure Visualization');
             svg.append('desc').text(`Workspace visualization showing ${data.COLLECTION_COUNT} collections and ${data.PAGE_COUNT} pages`);
 
-            // Use d3-graphviz to render the graph
+            // Use d3-graphviz to render the graph with timeout
             const graphvizInstance = graphviz(svg);
             graphvizInstance
                 .width(this.width)
                 .height(this.height)
                 .fit(true);
 
-            // Wrap the rendering in a promise
-            await new Promise((resolve, reject) => {
-                try {
-                    graphvizInstance
-                        .onerror((error) => {
-                            console.error('Graphviz error:', error);
+            // Wrap the rendering in a promise with timeout
+            let renderingTimeout;
+            try {
+                await Promise.race([
+                    new Promise((resolve, reject) => {
+                        try {
+                            graphvizInstance
+                                .onerror((error) => {
+                                    console.error('Graphviz error:', error);
+                                    reject(new Error('Graphviz rendering failed: ' + error));
+                                })
+                                .render(dotString, () => {
+                                    try {
+                                        // Get the rendered SVG content
+                                        const svgContent = document.querySelector('#graph').innerHTML;
+                                        if (!svgContent) {
+                                            reject(new Error('No SVG content generated'));
+                                            return;
+                                        }
+                                        
+                                        // Save the SVG
+                                        fs.writeFileSync(svgFile, svgContent);
+                                        console.log('Saved SVG visualization to:', svgFile);
+                                        resolve();
+                                    } catch (error) {
+                                        reject(error);
+                                    }
+                                });
+                        } catch (error) {
                             reject(error);
-                        })
-                        .render(dotString, () => {
-                            try {
-                                // Get the rendered SVG content
-                                const svgContent = document.querySelector('#graph').innerHTML;
-                                if (!svgContent) {
-                                    reject(new Error('No SVG content generated'));
-                                    return;
-                                }
-                                
-                                // Save the SVG
-                                fs.writeFileSync(svgFile, svgContent);
-                                console.log('Saved SVG visualization to:', svgFile);
-                                resolve();
-                            } catch (error) {
-                                reject(error);
-                            }
-                        });
-                } catch (error) {
-                    reject(error);
-                }
-            }).catch((error) => {
+                        }
+                    }),
+                    new Promise((_, reject) => {
+                        renderingTimeout = setTimeout(() => {
+                            reject(new Error('Visualization generation timed out after 30 seconds'));
+                        }, 30000); // 30 second timeout
+                    })
+                ]);
+            } catch (error) {
                 console.error('Failed to render with d3-graphviz:', error);
                 // Fallback to basic tree visualization
                 const basicSvg = this.generateBasicTreeSvg(data, processedHierarchy[0]);
                 fs.writeFileSync(svgFile, basicSvg);
                 console.log('Saved fallback SVG visualization');
-            });
+            } finally {
+                if (renderingTimeout) {
+                    clearTimeout(renderingTimeout);
+                }
+            }
+
+            // Verify the file was created and has content
+            if (!fs.existsSync(svgFile)) {
+                throw new Error('SVG file was not created');
+            }
+
+            const fileStats = fs.statSync(svgFile);
+            if (fileStats.size === 0) {
+                throw new Error('SVG file is empty');
+            }
 
             // Generate URL for the saved image
             console.log('Environment variables:', {
                 NODE_ENV: process.env.NODE_ENV,
-                BASE_URL: process.env.BASE_URL
+                BASE_URL: process.env.BASE_URL,
+                visualizationsDir: this.visualizationsDir,
+                svgFile,
+                fileExists: fs.existsSync(svgFile),
+                fileSize: fileStats.size
             });
 
             // Determine the base URL with fallbacks
-            let baseUrl = 'http://localhost:3000';
-            if (process.env.NODE_ENV === 'production') {
-                baseUrl = 'https://visualiser-xhjh.onrender.com';
-            }
-            if (process.env.BASE_URL) {
-                baseUrl = process.env.BASE_URL;
+            let baseUrl = process.env.BASE_URL;
+            if (!baseUrl) {
+                baseUrl = process.env.NODE_ENV === 'production' 
+                    ? 'https://visualiser-xhjh.onrender.com'
+                    : 'http://localhost:3000';
             }
 
             const imageUrl = `${baseUrl}/visualizations/${filename}`;
             
-            console.log('URL Generation:', {
+            console.log('Generated visualization:', {
                 baseUrl,
                 filename,
                 fullUrl: imageUrl,
-                fileExists: fs.existsSync(svgFile)
+                fileExists: fs.existsSync(svgFile),
+                fileSize: fileStats.size
             });
 
             return {
@@ -308,13 +336,26 @@ export class TreeVisualizer extends BaseVisualizer {
             try {
                 fs.writeFileSync(errorFile, errorSvg);
                 console.log('Saved error SVG to:', errorFile);
+
+                // Verify error file was created
+                if (!fs.existsSync(errorFile)) {
+                    throw new Error('Error SVG file was not created');
+                }
+
+                const fileStats = fs.statSync(errorFile);
+                if (fileStats.size === 0) {
+                    throw new Error('Error SVG file is empty');
+                }
             } catch (writeError) {
                 console.error('Error saving error SVG:', writeError);
                 throw writeError;
             }
 
             // Generate error URL
-            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            const baseUrl = process.env.BASE_URL || 
+                (process.env.NODE_ENV === 'production' 
+                    ? 'https://visualiser-xhjh.onrender.com'
+                    : 'http://localhost:3000');
             const errorUrl = `${baseUrl}/visualizations/${errorFilename}`;
 
             return {

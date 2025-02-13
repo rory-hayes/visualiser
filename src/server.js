@@ -1,8 +1,8 @@
 import express from 'express';
-import cors from 'cors';
 import session from 'express-session';
 import dotenv from 'dotenv';
 import path from 'path';
+import cors from 'cors';
 import { fileURLToPath } from 'url';
 import apiRoutes from './routes/api.js';
 import staticRoutes from './routes/static.js';
@@ -35,15 +35,6 @@ app.use(session({
 app.use('/api', apiRoutes);
 app.use('/', staticRoutes);
 app.use('/', authRoutes);
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-    console.error(err.stack);
-    res.status(500).json({
-        success: false,
-        error: 'Something went wrong!'
-    });
-});
 
 // Start the Server
 app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`));

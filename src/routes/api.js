@@ -4,15 +4,9 @@ import { ResultsManager } from '../services/ResultsManager.js';
 import { NotionService } from '../services/NotionService.js';
 import { Client } from '@notionhq/client';
 import { MetricsCalculator } from '../core/metrics/MetricsCalculator.js';
-import pkg from 'multer';
-const { diskStorage } = pkg;
-const multer = pkg;
+import multer from 'multer';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import fs from 'fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 const resultsManager = new ResultsManager();
@@ -35,9 +29,9 @@ const getHexService = () => {
 };
 
 // Configure multer for file uploads
-const storage = diskStorage({
+const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const uploadDir = path.join(__dirname, '..', 'public', 'visualizations');
+        const uploadDir = path.join(process.cwd(), 'public', 'visualizations');
         if (!fs.existsSync(uploadDir)) {
             fs.mkdirSync(uploadDir, { recursive: true });
         }
@@ -144,24 +138,158 @@ router.post('/hex-results', jsonParser, async (req, res) => {
 // Analyze workspace endpoint
 router.post('/analyze-workspace', async (req, res) => {
     try {
-        const { authToken } = req.body;
+        console.log('Received analyze-workspace request:', {
+            body: req.body,
+            headers: req.headers['content-type']
+        });
+
+        // Log environment variables
+        console.log('Notion credentials check:', {
+            hasApiKey: !!process.env.NOTION_API_KEY,
+            apiKeyLength: process.env.NOTION_API_KEY?.length,
+            hasDatabaseId: !!process.env.NOTION_DATABASE_ID,
+            databaseId: process.env.NOTION_DATABASE_ID
+        });
+
+        const { workspaceId } = req.body;
         
-        if (!authToken) {
-            return res.status(400).json({ error: 'Auth token is required' });
+        if (!workspaceId) {
+            console.log('Missing workspaceId in request');
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Workspace ID is required' 
+            });
         }
 
-        const notionService = new NotionService(authToken);
-        const result = await notionService.analyzeWorkspace();
+        // Clear any existing results before starting new analysis
+        resultsManager.clearResults();
+        
+        // Initialize Hex service
+        const hexService = getHexService();
+        
+        // Trigger Hex analysis
+        const hexResponse = await hexService.triggerHexRun(workspaceId);
+        
+        if (!hexResponse.success) {
+            return res.status(500).json({ 
+                success: false, 
+                error: hexResponse.error
+            });
+        }
 
-        res.json({
-            success: true,
-            data: result
+        // Wait for results to be available (with timeout)
+        let attempts = 0;
+        const maxAttempts = 30;
+        const delay = 5000;
+
+        while (attempts < maxAttempts) {
+            const results = resultsManager.loadResults();
+            console.log('Checking results:', {
+                attempt: attempts + 1,
+                hasDataframe2: results?.data?.dataframe_2?.length > 0,
+                dataframe2Length: results?.data?.dataframe_2?.length,
+                hasDataframe3: !!results?.data?.dataframe_3,
+                hasDataframe5: results?.data?.dataframe_5?.length > 0,
+                dataframe5Length: results?.data?.dataframe_5?.length,
+                isComplete: results?.metadata?.isComplete
+            });
+
+            if (results?.data?.dataframe_2?.length > 0 && 
+                results?.data?.dataframe_3 && 
+                results?.data?.dataframe_5?.length > 0 && 
+                results?.metadata?.isComplete) {
+                
+                // Initialize NotionService if we have credentials
+                if (process.env.NOTION_API_KEY && process.env.NOTION_DATABASE_ID) {
+                    try {
+                        console.log('Initializing Notion service and calculating metrics...');
+                        
+                        const notionClient = new Client({ auth: process.env.NOTION_API_KEY });
+                        const notionService = new NotionService(notionClient, process.env.NOTION_DATABASE_ID);
+
+                        // Calculate metrics
+                        console.log('Creating MetricsCalculator...');
+                        const metricsCalculator = new MetricsCalculator(process.env.NOTION_API_KEY, process.env.NOTION_DATABASE_ID);
+                        
+                        console.log('Calculating metrics...');
+                        const metrics = await metricsCalculator.calculateAllMetrics(
+                            results.data.dataframe_2,
+                            results.data.dataframe_3,
+                            results.data.dataframe_5,
+                            workspaceId
+                        );
+                        
+                        console.log('Metrics calculated:', {
+                            hasMetrics: !!metrics,
+                            metricKeys: metrics ? Object.keys(metrics) : [],
+                            sampleMetrics: metrics ? {
+                                totalPages: metrics.total_pages,
+                                totalMembers: metrics.total_members,
+                                contentMaturityScore: metrics.content_maturity_score
+                            } : null
+                        });
+
+                        // Create Notion entry
+                        console.log('Creating Notion entry...');
+                        const pageId = await notionService.createNotionEntry(workspaceId, metrics);
+                        console.log('Created Notion page:', pageId);
+
+                        return res.json({
+                            success: true,
+                            runId: hexResponse.runId,
+                            results: results,
+                            notionPageId: pageId,
+                            metrics: metrics // Include metrics in response for debugging
+                        });
+                    } catch (notionError) {
+                        console.error('Error in Notion process:', notionError);
+                        console.error('Error stack:', notionError.stack);
+                        // Continue with the response even if Notion creation fails
+                        return res.json({
+                            success: true,
+                            runId: hexResponse.runId,
+                            results: results,
+                            notionError: {
+                                message: notionError.message,
+                                stack: notionError.stack
+                            }
+                        });
+                    }
+                } else {
+                    console.log('Notion credentials not found, skipping Notion integration');
+                }
+
+                return res.json({
+                    success: true,
+                    runId: hexResponse.runId,
+                    results: results
+                });
+            }
+
+            console.log('Waiting for results:', {
+                attempt: attempts + 1,
+                hasDataframe2: results?.data?.dataframe_2?.length > 0,
+                hasDataframe3: !!results?.data?.dataframe_3,
+                hasDataframe5: results?.data?.dataframe_5?.length > 0,
+                isComplete: results?.metadata?.isComplete
+            });
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+            attempts++;
+        }
+
+        return res.status(408).json({
+            success: false,
+            error: 'Timeout waiting for results'
         });
+
     } catch (error) {
         console.error('Error analyzing workspace:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            stack: error.stack
         });
     }
 });
@@ -266,17 +394,7 @@ router.post('/upload-visualization', upload.single('image'), (req, res) => {
 
         // Generate public URL for the uploaded file
         const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-        const relativePath = path.relative(
-            path.join(__dirname, '..', 'public'),
-            req.file.path
-        ).replace(/\\/g, '/');
-        const imageUrl = `${baseUrl}/${relativePath}`;
-
-        console.log('File uploaded successfully:', {
-            originalName: req.file.originalname,
-            savedPath: req.file.path,
-            publicUrl: imageUrl
-        });
+        const imageUrl = `${baseUrl}/visualizations/${req.file.filename}`;
 
         res.json({ 
             success: true, 

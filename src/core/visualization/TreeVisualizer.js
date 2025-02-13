@@ -179,12 +179,15 @@ export class TreeVisualizer extends BaseVisualizer {
 
             // Generate URL for the saved image
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const imageUrl = `${baseUrl}/visualizations/${path.basename(svgFile)}`;
-
-            console.log('Visualization generated successfully:', {
-                svgPath: svgFile,
-                imageUrl
-            });
+            console.log('Using base URL:', baseUrl);
+            
+            // Get the relative path from the public directory
+            const publicDir = path.join(__dirname, '..', '..', 'public');
+            const relativeToPublic = path.relative(publicDir, svgFile);
+            const normalizedPath = relativeToPublic.split(path.sep).join('/');
+            
+            const imageUrl = `${baseUrl}/${normalizedPath}`;
+            console.log('Generated image URL:', imageUrl);
 
             return {
                 dotString,
@@ -198,6 +201,7 @@ export class TreeVisualizer extends BaseVisualizer {
                 stack: error.stack,
                 cwd: process.cwd(),
                 nodeEnv: process.env.NODE_ENV,
+                baseUrl: process.env.BASE_URL,
                 dotString: dotString || 'Not generated'
             });
 
@@ -227,7 +231,11 @@ export class TreeVisualizer extends BaseVisualizer {
 
             // Return error image URL
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const errorUrl = `${baseUrl}/visualizations/${path.basename(errorFile)}`;
+            const publicDir = path.join(__dirname, '..', '..', 'public');
+            const relativeToPublic = path.relative(publicDir, errorFile);
+            const normalizedPath = relativeToPublic.split(path.sep).join('/');
+            
+            const errorUrl = `${baseUrl}/${normalizedPath}`;
 
             return {
                 dotString: '',

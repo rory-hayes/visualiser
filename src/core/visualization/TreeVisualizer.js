@@ -173,10 +173,32 @@ export class TreeVisualizer extends BaseVisualizer {
                 </html>
             `;
 
-            // Launch Puppeteer
-            const browser = await puppeteer.launch({
-                args: ['--no-sandbox', '--disable-setuid-sandbox']
-            });
+            // Configure Puppeteer launch options
+            const options = {
+                headless: "new",
+                args: [
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-2d-canvas',
+                    '--no-first-run',
+                    '--no-zygote',
+                    '--single-process',
+                    '--disable-gpu'
+                ]
+            };
+
+            // Add executable path if specified in environment
+            if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+                options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+                console.log('Using Chrome at:', process.env.PUPPETEER_EXECUTABLE_PATH);
+            }
+
+            // Launch browser with configured options
+            console.log('Launching browser with options:', JSON.stringify(options, null, 2));
+            const browser = await puppeteer.launch(options);
+            
+            // Create new page
             const page = await browser.newPage();
             
             // Set viewport
@@ -193,7 +215,7 @@ export class TreeVisualizer extends BaseVisualizer {
             await page.waitForFunction(() => {
                 const svg = document.querySelector('svg');
                 return svg && svg.querySelector('g');
-            });
+            }, { timeout: 10000 });
 
             // Create visualizations directory if it doesn't exist
             if (!fs.existsSync(this.visualizationsDir)) {
@@ -224,6 +246,13 @@ export class TreeVisualizer extends BaseVisualizer {
             };
         } catch (error) {
             console.error('Error generating visualization:', error);
+            console.error('Error details:', {
+                message: error.message,
+                stack: error.stack,
+                chromePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+                cwd: process.cwd(),
+                nodeEnv: process.env.NODE_ENV
+            });
             throw error;
         }
     }

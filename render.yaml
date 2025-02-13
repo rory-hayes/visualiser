@@ -10,7 +10,7 @@ services:
       - key: PUPPETEER_SKIP_CHROMIUM_DOWNLOAD
         value: true
       - key: PUPPETEER_EXECUTABLE_PATH
-        value: /usr/bin/chromium-browser
+        value: /usr/bin/google-chrome
     buildFilter:
       paths:
         - src/**
@@ -20,5 +20,5 @@ services:
     buildOptimization: true
     buildCommand: |
       apt-get update && \
-      apt-get install -y chromium graphviz && \
+      apt-get install -y google-chrome-stable graphviz && \
       npm install 

@@ -115,21 +115,47 @@ export class TreeVisualizer extends BaseVisualizer {
 
     generateDotString(hierarchy) {
         let dot = 'digraph G {\n';
-        dot += '  graph [rankdir=TB, splines=ortho];\n';
-        dot += '  node [shape=box, style=rounded, fontname="Arial"];\n';
+        // Configure graph layout
+        dot += '  graph [rankdir=TB, splines=ortho, ranksep=0.8, nodesep=0.8];\n';
+        dot += '  node [shape=box, style="rounded,filled", fontname="Arial", margin=0.2];\n';
+        dot += '  edge [color="#666666"];\n';
 
         const processNode = (node, parentId = null) => {
-            // Node definition
-            const color = this.getNodeColor(node.type);
+            // Node styling based on type
+            let color, fontcolor;
+            switch (node.type) {
+                case 'workspace':
+                    color = '#4A90E2';
+                    fontcolor = 'white';
+                    break;
+                case 'collection':
+                    color = '#7ED321';
+                    fontcolor = 'white';
+                    break;
+                case 'collection_view_page':
+                    color = '#F5A623';
+                    fontcolor = 'white';
+                    break;
+                case 'page':
+                    color = '#D0021B';
+                    fontcolor = 'white';
+                    break;
+                default:
+                    color = '#E8E8E8';
+                    fontcolor = 'black';
+            }
+
+            // Create label with HTML-like formatting
             const label = node.title.length > 30 ? 
                 node.title.substring(0, 27) + '...' : 
                 node.title;
             
-            dot += `  "${node.id}" [label="${label}", fillcolor="${color}", style="filled,rounded"];\n`;
+            // Add node definition with styling
+            dot += `  "${node.id}" [label="${label}", fillcolor="${color}", fontcolor="${fontcolor}"];\n`;
 
-            // Edge definition if there's a parent
+            // Add edge with styling if there's a parent
             if (parentId) {
-                dot += `  "${parentId}" -> "${node.id}";\n`;
+                dot += `  "${parentId}" -> "${node.id}" [penwidth=1.5];\n`;
             }
 
             // Process children if not aggregated
@@ -163,28 +189,43 @@ export class TreeVisualizer extends BaseVisualizer {
             const filename = `tree-${timestamp}-${random}.svg`;
             const svgFile = path.join(this.visualizationsDir, filename);
 
-            // Create a basic SVG
-            const basicSvg = `
-            <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
-                <style>
-                    .node { fill: #fff; stroke: #000; }
-                    .edge { stroke: #000; }
-                    text { font-family: Arial; }
-                </style>
-                <g transform="translate(10,10)">
-                    <rect width="${this.width-20}" height="${this.height-20}" fill="#f8f9fa" stroke="#dee2e6"/>
-                    <text x="${this.width/2}" y="${this.height/2}" text-anchor="middle">
-                        Workspace Structure
-                    </text>
-                    <text x="${this.width/2}" y="${this.height/2 + 30}" text-anchor="middle" font-size="14">
-                        Collections: ${data.COLLECTION_COUNT}, Pages: ${data.PAGE_COUNT}
-                    </text>
-                </g>
-            </svg>`;
+            // Create a virtual DOM environment
+            const dom = new JSDOM('<!DOCTYPE html><div id="graph"></div>');
+            const document = dom.window.document;
 
-            // Save the SVG
-            fs.writeFileSync(svgFile, basicSvg);
-            console.log('Saved SVG visualization to:', svgFile);
+            // Create an SVG element
+            const svg = d3.select(document.querySelector('#graph'))
+                .append('svg')
+                .attr('width', this.width)
+                .attr('height', this.height)
+                .attr('xmlns', 'http://www.w3.org/2000/svg');
+
+            // Add title and description
+            svg.append('title').text('Workspace Structure Visualization');
+            svg.append('desc').text(`Workspace visualization showing ${data.COLLECTION_COUNT} collections and ${data.PAGE_COUNT} pages`);
+
+            try {
+                // Use d3-graphviz to render the graph
+                const graphvizInstance = graphviz(svg);
+                graphvizInstance
+                    .width(this.width)
+                    .height(this.height)
+                    .fit(true)
+                    .renderDot(dotString);
+
+                // Get the rendered SVG content
+                const svgContent = document.querySelector('#graph').innerHTML;
+
+                // Save the SVG
+                fs.writeFileSync(svgFile, svgContent);
+                console.log('Saved SVG visualization to:', svgFile);
+            } catch (graphvizError) {
+                console.error('Graphviz rendering failed:', graphvizError);
+                // Fallback to basic tree visualization
+                const basicSvg = this.generateBasicTreeSvg(data, processedHierarchy[0]);
+                fs.writeFileSync(svgFile, basicSvg);
+                console.log('Saved fallback SVG visualization');
+            }
 
             // Generate URL for the saved image
             console.log('Environment variables:', {
@@ -252,17 +293,9 @@ export class TreeVisualizer extends BaseVisualizer {
                 throw writeError;
             }
 
-            // Determine the base URL with fallbacks
-            let baseUrl = 'http://localhost:3000';
-            if (process.env.NODE_ENV === 'production') {
-                baseUrl = 'https://visualiser-xhjh.onrender.com';
-            }
-            if (process.env.BASE_URL) {
-                baseUrl = process.env.BASE_URL;
-            }
-
+            // Generate error URL
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
             const errorUrl = `${baseUrl}/visualizations/${errorFilename}`;
-            console.log('Generated error URL:', errorUrl);
 
             return {
                 dotString: '',
@@ -271,6 +304,72 @@ export class TreeVisualizer extends BaseVisualizer {
                 error: error.message || 'Unknown error'
             };
         }
+    }
+
+    generateBasicTreeSvg(data, root) {
+        // Helper function to calculate node positions
+        const calculatePositions = (node, x = 0, y = 0, level = 0, width = this.width) => {
+            const nodeWidth = 200;
+            const nodeHeight = 40;
+            const verticalGap = 60;
+            
+            node.x = x;
+            node.y = y;
+            
+            if (node.children && node.children.length > 0) {
+                const childWidth = width / node.children.length;
+                node.children.forEach((child, index) => {
+                    const childX = x - width/2 + childWidth * (index + 0.5);
+                    const childY = y + nodeHeight + verticalGap;
+                    calculatePositions(child, childX, childY, level + 1, childWidth);
+                });
+            }
+        };
+
+        // Calculate positions for all nodes
+        calculatePositions(root, this.width/2, 50);
+
+        // Generate SVG
+        let svg = `
+        <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
+                </marker>
+            </defs>
+            <style>
+                .node { filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.2)); }
+                .link { stroke: #666; stroke-width: 1.5px; marker-end: url(#arrowhead); }
+                text { font-family: Arial; fill: white; }
+            </style>`;
+
+        // Helper function to render a node and its children
+        const renderNode = (node) => {
+            // Add node
+            const color = node.type === 'workspace' ? '#4A90E2' : 
+                         node.type === 'collection' ? '#7ED321' : 
+                         node.type === 'collection_view_page' ? '#F5A623' : '#D0021B';
+            
+            svg += `
+            <g class="node" transform="translate(${node.x-100},${node.y})">
+                <rect width="200" height="40" rx="5" fill="${color}" class="node"/>
+                <text x="100" y="25" text-anchor="middle">${node.title}</text>
+            </g>`;
+
+            // Add links to children
+            if (node.children) {
+                node.children.forEach(child => {
+                    svg += `
+                    <path class="link" d="M ${node.x} ${node.y+40} L ${node.x} ${node.y+50} L ${child.x} ${child.y-10} L ${child.x} ${child.y}"/>`;
+                    renderNode(child);
+                });
+            }
+        };
+
+        // Render the tree
+        renderNode(root);
+        svg += '</svg>';
+        return svg;
     }
 
     addInteractivity(container) {

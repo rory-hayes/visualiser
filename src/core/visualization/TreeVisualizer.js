@@ -204,28 +204,48 @@ export class TreeVisualizer extends BaseVisualizer {
             svg.append('title').text('Workspace Structure Visualization');
             svg.append('desc').text(`Workspace visualization showing ${data.COLLECTION_COUNT} collections and ${data.PAGE_COUNT} pages`);
 
-            try {
-                // Use d3-graphviz to render the graph
-                const graphvizInstance = graphviz(svg);
-                graphvizInstance
-                    .width(this.width)
-                    .height(this.height)
-                    .fit(true)
-                    .renderDot(dotString);
+            // Use d3-graphviz to render the graph
+            const graphvizInstance = graphviz(svg);
+            graphvizInstance
+                .width(this.width)
+                .height(this.height)
+                .fit(true);
 
-                // Get the rendered SVG content
-                const svgContent = document.querySelector('#graph').innerHTML;
-
-                // Save the SVG
-                fs.writeFileSync(svgFile, svgContent);
-                console.log('Saved SVG visualization to:', svgFile);
-            } catch (graphvizError) {
-                console.error('Graphviz rendering failed:', graphvizError);
+            // Wrap the rendering in a promise
+            await new Promise((resolve, reject) => {
+                try {
+                    graphvizInstance
+                        .onerror((error) => {
+                            console.error('Graphviz error:', error);
+                            reject(error);
+                        })
+                        .render(dotString, () => {
+                            try {
+                                // Get the rendered SVG content
+                                const svgContent = document.querySelector('#graph').innerHTML;
+                                if (!svgContent) {
+                                    reject(new Error('No SVG content generated'));
+                                    return;
+                                }
+                                
+                                // Save the SVG
+                                fs.writeFileSync(svgFile, svgContent);
+                                console.log('Saved SVG visualization to:', svgFile);
+                                resolve();
+                            } catch (error) {
+                                reject(error);
+                            }
+                        });
+                } catch (error) {
+                    reject(error);
+                }
+            }).catch((error) => {
+                console.error('Failed to render with d3-graphviz:', error);
                 // Fallback to basic tree visualization
                 const basicSvg = this.generateBasicTreeSvg(data, processedHierarchy[0]);
                 fs.writeFileSync(svgFile, basicSvg);
                 console.log('Saved fallback SVG visualization');
-            }
+            });
 
             // Generate URL for the saved image
             console.log('Environment variables:', {

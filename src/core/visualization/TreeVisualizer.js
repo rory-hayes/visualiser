@@ -206,7 +206,6 @@ export class TreeVisualizer extends BaseVisualizer {
     }
 
     async generateVisualization(data) {
-        let dotString = '';
         try {
             // Process data into hierarchy
             const hierarchy = this.processHierarchy(data);
@@ -217,75 +216,86 @@ export class TreeVisualizer extends BaseVisualizer {
             const filename = `tree-${timestamp}-${random}.svg`;
             const svgFile = path.join(this.visualizationsDir, filename);
 
-            // Generate treemap visualization
+            // Generate SVG content
             const svg = this.generateBasicTreeSvg(data, hierarchy[0]);
             
-            // Save the SVG
-            fs.writeFileSync(svgFile, svg);
-            console.log('Saved SVG visualization to:', svgFile);
-
-            // Verify the file was created and has content
-            if (!fs.existsSync(svgFile)) {
-                throw new Error('SVG file was not created');
-            }
-
-            const fileStats = fs.statSync(svgFile);
-            if (fileStats.size === 0) {
-                throw new Error('SVG file is empty');
-            }
-
-            // Generate URL for the saved image
-            console.log('Environment variables:', {
-                NODE_ENV: process.env.NODE_ENV,
-                BASE_URL: process.env.BASE_URL,
-                visualizationsDir: this.visualizationsDir,
-                svgFile,
-                fileExists: fs.existsSync(svgFile),
-                fileSize: fileStats.size
-            });
-
-            // Determine the base URL with fallbacks
-            let baseUrl = process.env.BASE_URL;
-            if (!baseUrl) {
-                baseUrl = process.env.NODE_ENV === 'production' 
-                    ? 'https://visualiser-xhjh.onrender.com'
-                    : 'http://localhost:3000';
-            }
-
-            const imageUrl = `${baseUrl}/visualizations/${filename}`;
+            // Ensure visualizations directory exists
+            await fs.promises.mkdir(this.visualizationsDir, { recursive: true });
             
-            console.log('Generated visualization:', {
-                baseUrl,
-                filename,
-                fullUrl: imageUrl,
-                fileExists: fs.existsSync(svgFile),
-                fileSize: fileStats.size
-            });
+            // Save the SVG with proper permissions
+            try {
+                await fs.promises.writeFile(svgFile, svg, { 
+                    encoding: 'utf8',
+                    mode: 0o644 // Readable by all, writable by owner
+                });
+                
+                console.log('Successfully wrote SVG file:', {
+                    path: svgFile,
+                    size: (await fs.promises.stat(svgFile)).size
+                });
+                
+                // Verify the file was created and has content
+                if (!fs.existsSync(svgFile)) {
+                    throw new Error('SVG file was not created');
+                }
 
-            return {
-                dotString,
-                imageUrl,
-                visualizationPath: svgFile
-            };
+                const fileStats = fs.statSync(svgFile);
+                if (fileStats.size === 0) {
+                    throw new Error('SVG file is empty');
+                }
+
+                // Log environment and file information
+                console.log('Environment variables:', {
+                    NODE_ENV: process.env.NODE_ENV,
+                    BASE_URL: process.env.BASE_URL,
+                    visualizationsDir: this.visualizationsDir,
+                    svgFile,
+                    fileExists: fs.existsSync(svgFile),
+                    fileSize: fileStats.size
+                });
+
+                // Determine the base URL with fallbacks
+                let baseUrl = process.env.BASE_URL;
+                if (!baseUrl) {
+                    baseUrl = process.env.NODE_ENV === 'production' 
+                        ? 'https://visualiser-xhjh.onrender.com'
+                        : 'http://localhost:3000';
+                }
+
+                // Ensure the base URL doesn't have a trailing slash
+                baseUrl = baseUrl.replace(/\/$/, '');
+
+                // Generate the full URL for the image
+                const imageUrl = `${baseUrl}/visualizations/${filename}`;
+                
+                console.log('Generated visualization:', {
+                    baseUrl,
+                    filename,
+                    fullUrl: imageUrl,
+                    fileExists: fs.existsSync(svgFile),
+                    fileSize: fileStats.size
+                });
+
+                return {
+                    imageUrl,
+                    visualizationPath: svgFile
+                };
+
+            } catch (writeError) {
+                console.error('Error writing SVG file:', writeError);
+                throw writeError;
+            }
+
         } catch (error) {
             console.error('Error generating visualization:', error);
-            console.error('Error details:', {
-                message: error.message,
-                stack: error.stack,
-                cwd: process.cwd(),
-                nodeEnv: process.env.NODE_ENV,
-                baseUrl: process.env.BASE_URL,
-                visualizationsDir: this.visualizationsDir,
-                dotString: dotString || 'Not generated'
-            });
-
-            // Create a simple error SVG
+            
+            // Create error SVG
             const timestamp = Date.now();
             const random = Math.round(Math.random() * 1E9);
             const errorFilename = `error-${timestamp}-${random}.svg`;
             const errorFile = path.join(this.visualizationsDir, errorFilename);
             
-            const errorSvg = `
+            const errorSvg = `<?xml version="1.0" encoding="UTF-8"?>
             <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
                 <rect width="100%" height="100%" fill="#f8f9fa"/>
                 <text x="50%" y="45%" text-anchor="middle" fill="#dc3545" font-family="Arial">
@@ -297,7 +307,12 @@ export class TreeVisualizer extends BaseVisualizer {
             </svg>`;
 
             try {
-                fs.writeFileSync(errorFile, errorSvg);
+                await fs.promises.mkdir(this.visualizationsDir, { recursive: true });
+                await fs.promises.writeFile(errorFile, errorSvg, {
+                    encoding: 'utf8',
+                    mode: 0o644
+                });
+                
                 console.log('Saved error SVG to:', errorFile);
 
                 // Verify error file was created
@@ -309,24 +324,24 @@ export class TreeVisualizer extends BaseVisualizer {
                 if (fileStats.size === 0) {
                     throw new Error('Error SVG file is empty');
                 }
+
+                // Determine base URL
+                const baseUrl = process.env.BASE_URL || 
+                    (process.env.NODE_ENV === 'production' 
+                        ? 'https://visualiser-xhjh.onrender.com'
+                        : 'http://localhost:3000');
+
+                const errorUrl = `${baseUrl}/visualizations/${errorFilename}`;
+
+                return {
+                    imageUrl: errorUrl,
+                    visualizationPath: errorFile,
+                    error: error.message || 'Unknown error'
+                };
             } catch (writeError) {
                 console.error('Error saving error SVG:', writeError);
                 throw writeError;
             }
-
-            // Generate error URL
-            const baseUrl = process.env.BASE_URL || 
-                (process.env.NODE_ENV === 'production' 
-                    ? 'https://visualiser-xhjh.onrender.com'
-                    : 'http://localhost:3000');
-            const errorUrl = `${baseUrl}/visualizations/${errorFilename}`;
-
-            return {
-                dotString: '',
-                imageUrl: errorUrl,
-                visualizationPath: errorFile,
-                error: error.message || 'Unknown error'
-            };
         }
     }
 

@@ -222,6 +222,8 @@ router.post('/analyze-workspace', async (req, res) => {
                         console.log('Metrics calculated:', {
                             hasMetrics: !!metrics,
                             metricKeys: metrics ? Object.keys(metrics) : [],
+                            hasVisualization: !!metrics.visualizationUrl,
+                            visualizationUrl: metrics.visualizationUrl,
                             sampleMetrics: metrics ? {
                                 totalPages: metrics.total_pages,
                                 totalMembers: metrics.total_members,
@@ -234,12 +236,16 @@ router.post('/analyze-workspace', async (req, res) => {
                         const pageId = await notionService.createNotionEntry(workspaceId, metrics);
                         console.log('Created Notion page:', pageId);
 
+                        // Return response with visualization URL
                         return res.json({
                             success: true,
                             runId: hexResponse.runId,
                             results: results,
                             notionPageId: pageId,
-                            metrics: metrics // Include metrics in response for debugging
+                            metrics: {
+                                ...metrics,
+                                visualizationUrl: metrics.visualizationUrl // Ensure this is included
+                            }
                         });
                     } catch (notionError) {
                         console.error('Error in Notion process:', notionError);

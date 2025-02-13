@@ -158,11 +158,48 @@ export class TreeVisualizer extends BaseVisualizer {
             // Write DOT file
             fs.writeFileSync(dotFile, dotString);
 
+            // Try to install graphviz if not already installed
+            try {
+                execSync('which dot');
+            } catch (error) {
+                console.log('Graphviz not found, attempting to install...');
+                try {
+                    execSync('sudo apt-get update && sudo apt-get install -y graphviz');
+                } catch (installError) {
+                    console.error('Failed to install graphviz:', installError);
+                }
+            }
+
+            // Try different graphviz paths
+            const possiblePaths = [
+                'dot',                           // System PATH
+                '/usr/bin/dot',                 // Standard location
+                '/usr/local/bin/dot',           // Alternate location
+                '/opt/homebrew/bin/dot'         // Homebrew location (Mac)
+            ];
+
+            let dotCommand = null;
+            for (const path of possiblePaths) {
+                try {
+                    execSync(`${path} -V`);
+                    dotCommand = path;
+                    break;
+                } catch (e) {
+                    console.log(`Graphviz not found at ${path}`);
+                }
+            }
+
+            if (!dotCommand) {
+                throw new Error('Could not find graphviz dot command');
+            }
+
+            console.log('Using graphviz at:', dotCommand);
+
             // Generate SVG using graphviz command line
-            execSync(`dot -Tsvg "${dotFile}" -o "${svgFile}"`);
+            execSync(`${dotCommand} -Tsvg "${dotFile}" -o "${svgFile}"`);
 
             // Convert SVG to PNG using graphviz
-            execSync(`dot -Tpng "${dotFile}" -o "${pngFile}"`);
+            execSync(`${dotCommand} -Tpng "${dotFile}" -o "${pngFile}"`);
 
             // Clean up DOT and SVG files
             fs.unlinkSync(dotFile);
@@ -183,7 +220,8 @@ export class TreeVisualizer extends BaseVisualizer {
                 message: error.message,
                 stack: error.stack,
                 cwd: process.cwd(),
-                nodeEnv: process.env.NODE_ENV
+                nodeEnv: process.env.NODE_ENV,
+                paths: process.env.PATH
             });
             throw error;
         }

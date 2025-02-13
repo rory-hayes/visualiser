@@ -206,96 +206,23 @@ export class TreeVisualizer extends BaseVisualizer {
     }
 
     async generateVisualization(data) {
-        let dotString;
+        let dotString = '';
         try {
             // Process data into hierarchy
             const hierarchy = this.processHierarchy(data);
             
-            // Aggregate deep branches
-            const processedHierarchy = hierarchy.map(root => 
-                this.aggregateDeepBranches(root));
-
-            // Generate DOT string
-            dotString = this.generateDotString(processedHierarchy);
-            console.log('Generated DOT string:', dotString.substring(0, 100) + '...');
-
             // Generate unique filename for SVG
             const timestamp = Date.now();
             const random = Math.round(Math.random() * 1E9);
             const filename = `tree-${timestamp}-${random}.svg`;
             const svgFile = path.join(this.visualizationsDir, filename);
 
-            // Create a virtual DOM environment
-            const dom = new JSDOM('<!DOCTYPE html><div id="graph"></div>');
-            const document = dom.window.document;
-
-            // Create an SVG element
-            const svg = d3.select(document.querySelector('#graph'))
-                .append('svg')
-                .attr('width', this.width)
-                .attr('height', this.height)
-                .attr('xmlns', 'http://www.w3.org/2000/svg');
-
-            // Add title and description
-            svg.append('title').text('Workspace Structure Visualization');
-            svg.append('desc').text(`Workspace visualization showing ${data.COLLECTION_COUNT} collections and ${data.PAGE_COUNT} pages`);
-
-            // Use d3-graphviz to render the graph with timeout
-            const graphvizInstance = graphviz(svg);
-            graphvizInstance
-                .width(this.width)
-                .height(this.height)
-                .fit(true);
-
-            // Wrap the rendering in a promise with timeout
-            let renderingTimeout;
-            try {
-                await Promise.race([
-                    new Promise((resolve, reject) => {
-                        try {
-                            graphvizInstance
-                                .onerror((error) => {
-                                    console.error('Graphviz error:', error);
-                                    reject(new Error('Graphviz rendering failed: ' + error));
-                                })
-                                .render(dotString, () => {
-                                    try {
-                                        // Get the rendered SVG content
-                                        const svgContent = document.querySelector('#graph').innerHTML;
-                                        if (!svgContent) {
-                                            reject(new Error('No SVG content generated'));
-                                            return;
-                                        }
-                                        
-                                        // Save the SVG
-                                        fs.writeFileSync(svgFile, svgContent);
-                                        console.log('Saved SVG visualization to:', svgFile);
-                                        resolve();
-                                    } catch (error) {
-                                        reject(error);
-                                    }
-                                });
-                        } catch (error) {
-                            reject(error);
-                        }
-                    }),
-                    new Promise((_, reject) => {
-                        renderingTimeout = setTimeout(() => {
-                            reject(new Error('Visualization generation timed out after 30 seconds'));
-                        }, 30000); // 30 second timeout
-                    })
-                ]);
-            } catch (error) {
-                console.error('Failed to render with d3-graphviz:', error);
-                // Fallback to basic tree visualization
-                const basicSvg = this.generateBasicTreeSvg(data, processedHierarchy[0]);
-                fs.writeFileSync(svgFile, basicSvg);
-                console.log('Saved fallback SVG visualization');
-            } finally {
-                if (renderingTimeout) {
-                    clearTimeout(renderingTimeout);
-                }
-            }
+            // Generate treemap visualization
+            const svg = this.generateBasicTreeSvg(data, hierarchy[0]);
+            
+            // Save the SVG
+            fs.writeFileSync(svgFile, svg);
+            console.log('Saved SVG visualization to:', svgFile);
 
             // Verify the file was created and has content
             if (!fs.existsSync(svgFile)) {
@@ -404,45 +331,44 @@ export class TreeVisualizer extends BaseVisualizer {
     }
 
     generateBasicTreeSvg(data, root) {
-        // Helper function to calculate node positions with better spacing
-        const calculatePositions = (node, x = 0, y = 0, level = 0, width = this.width) => {
-            const nodeWidth = 240;  // Increased for better readability
-            const nodeHeight = 60;  // Increased to accommodate two lines of text
-            const verticalGap = 80; // Increased for better separation
-            const horizontalGap = 40; // Minimum gap between nodes
-            
-            node.x = x;
-            node.y = y;
-            
-            if (node.children && node.children.length > 0) {
-                const totalWidth = Math.max(
-                    nodeWidth * node.children.length + horizontalGap * (node.children.length - 1),
-                    width
-                );
-                
-                node.children.forEach((child, index) => {
-                    const childX = x - totalWidth/2 + (nodeWidth + horizontalGap) * index + nodeWidth/2;
-                    const childY = y + nodeHeight + verticalGap;
-                    calculatePositions(child, childX, childY, level + 1, width);
-                });
-            }
-        };
+        // Convert the data to a hierarchy
+        const hierarchy = d3.hierarchy(root)
+            .sum(d => {
+                // Use different weights for different types
+                switch (d.type) {
+                    case 'collection':
+                        return 100;
+                    case 'collection_view_page':
+                        return 80;
+                    case 'page':
+                        return 60;
+                    default:
+                        return 50;
+                }
+            })
+            .sort((a, b) => b.value - a.value);
 
-        // Calculate positions for all nodes
-        calculatePositions(root, this.width/2, 80); // Start lower to accommodate title
+        // Create treemap layout
+        const treemap = d3.treemap()
+            .size([this.width, this.height])
+            .paddingTop(20)
+            .paddingRight(3)
+            .paddingBottom(3)
+            .paddingLeft(3)
+            .round(true);
 
-        // Generate SVG with improved styling
+        // Compute the layout
+        const rootNode = treemap(hierarchy);
+
+        // Generate SVG
         let svg = `
         <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
             <defs>
-                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                    <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
-                </marker>
                 <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
-                    <feOffset dx="2" dy="2"/>
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+                    <feOffset dx="1" dy="1"/>
                     <feComponentTransfer>
-                        <feFuncA type="linear" slope="0.3"/>
+                        <feFuncA type="linear" slope="0.2"/>
                     </feComponentTransfer>
                     <feMerge>
                         <feMergeNode/>
@@ -452,71 +378,79 @@ export class TreeVisualizer extends BaseVisualizer {
             </defs>
             <style>
                 .node { filter: url(#dropShadow); }
-                .link { stroke: #666; stroke-width: 1.5px; marker-end: url(#arrowhead); }
-                .node-title { font-family: Arial; font-weight: bold; fill: white; }
-                .node-type { font-family: Arial; font-style: italic; fill: white; opacity: 0.9; }
+                .node-label { font-family: Arial; fill: white; }
+                .node-value { font-family: Arial; fill: white; opacity: 0.7; }
+                .title { font-family: Arial; font-size: 20px; fill: #333; }
             </style>
-            <text x="${this.width/2}" y="40" text-anchor="middle" font-family="Arial" font-size="20" fill="#333">
+            <text x="${this.width/2}" y="30" text-anchor="middle" class="title">
                 Workspace Structure
             </text>`;
 
-        // Add legend
-        const legendY = this.height - 60;
-        svg += `
-            <g transform="translate(20,${legendY})">
-                <rect width="120" height="40" rx="5" fill="#4A90E2" class="node"/>
-                <text x="60" y="25" text-anchor="middle" class="node-title">Workspace</text>
-            </g>
-            <g transform="translate(160,${legendY})">
-                <rect width="120" height="40" rx="5" fill="#7ED321" class="node"/>
-                <text x="60" y="25" text-anchor="middle" class="node-title">Collection</text>
-            </g>
-            <g transform="translate(300,${legendY})">
-                <rect width="120" height="40" rx="5" fill="#F5A623" class="node"/>
-                <text x="60" y="25" text-anchor="middle" class="node-title">Collection View</text>
-            </g>
-            <g transform="translate(440,${legendY})">
-                <rect width="120" height="40" rx="5" fill="#D0021B" class="node"/>
-                <text x="60" y="25" text-anchor="middle" class="node-title">Page</text>
-            </g>`;
-
-        // Helper function to render a node and its children
+        // Helper function to render a node
         const renderNode = (node) => {
-            const color = node.type === 'workspace' ? '#4A90E2' : 
-                         node.type === 'collection' ? '#7ED321' : 
-                         node.type === 'collection_view_page' ? '#F5A623' : '#D0021B';
-            
-            // Add node with two lines of text
-            svg += `
-            <g class="node" transform="translate(${node.x-120},${node.y})">
-                <rect width="240" height="60" rx="5" fill="${color}"/>
-                <text x="120" y="25" text-anchor="middle" class="node-type">
-                    ${node.type.charAt(0).toUpperCase() + node.type.slice(1).replace(/_/g, ' ')}
-                </text>
-                <text x="120" y="45" text-anchor="middle" class="node-title">${node.title}</text>
-            </g>`;
+            if (!node.children) {
+                const color = node.data.type === 'workspace' ? '#4A90E2' : 
+                             node.data.type === 'collection' ? '#7ED321' : 
+                             node.data.type === 'collection_view_page' ? '#F5A623' : '#D0021B';
 
-            // Add links to children with improved path
-            if (node.children) {
-                node.children.forEach(child => {
-                    const startX = node.x;
-                    const startY = node.y + 60;
-                    const endX = child.x;
-                    const endY = child.y;
-                    const midY = (startY + endY) / 2;
+                const width = Math.max(0, node.x1 - node.x0);
+                const height = Math.max(0, node.y1 - node.y0);
+
+                // Skip tiny rectangles
+                if (width < 1 || height < 1) return;
+
+                svg += `
+                <g class="node" transform="translate(${node.x0},${node.y0})">
+                    <rect 
+                        width="${width}"
+                        height="${height}"
+                        fill="${color}"
+                        fill-opacity="0.8"
+                        rx="4"
+                    />`;
+
+                // Only add text if the rectangle is big enough
+                if (width > 50 && height > 30) {
+                    const typeLabel = node.data.type.charAt(0).toUpperCase() + 
+                                    node.data.type.slice(1).replace(/_/g, ' ');
+                    const title = node.data.title.length > 20 ? 
+                        node.data.title.substring(0, 17) + '...' : 
+                        node.data.title;
 
                     svg += `
-                    <path class="link" d="M ${startX} ${startY} 
-                                       L ${startX} ${midY} 
-                                       L ${endX} ${midY} 
-                                       L ${endX} ${endY}"/>`;
-                    renderNode(child);
-                });
+                        <text x="5" y="15" class="node-label" style="font-size: ${Math.min(width/15, 12)}px">
+                            ${typeLabel}
+                        </text>
+                        <text x="5" y="${Math.min(height/2 + 10, height - 5)}" class="node-value" style="font-size: ${Math.min(width/20, 10)}px">
+                            ${title}
+                        </text>`;
+                }
+
+                svg += `</g>`;
             }
         };
 
-        // Render the tree
-        renderNode(root);
+        // Render all leaf nodes
+        rootNode.leaves().forEach(renderNode);
+
+        // Add legend
+        const legendY = this.height - 40;
+        const legendItems = [
+            { type: 'Workspace', color: '#4A90E2' },
+            { type: 'Collection', color: '#7ED321' },
+            { type: 'Collection View', color: '#F5A623' },
+            { type: 'Page', color: '#D0021B' }
+        ];
+
+        legendItems.forEach((item, i) => {
+            const x = 20 + i * 150;
+            svg += `
+                <g transform="translate(${x},${legendY})">
+                    <rect width="20" height="20" rx="4" fill="${item.color}" fill-opacity="0.8"/>
+                    <text x="30" y="15" font-family="Arial" font-size="12">${item.type}</text>
+                </g>`;
+        });
+
         svg += '</svg>';
         return svg;
     }

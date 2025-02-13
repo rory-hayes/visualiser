@@ -115,54 +115,90 @@ export class TreeVisualizer extends BaseVisualizer {
 
     generateDotString(hierarchy) {
         let dot = 'digraph G {\n';
-        // Configure graph layout
-        dot += '  graph [rankdir=TB, splines=ortho, ranksep=0.8, nodesep=0.8];\n';
-        dot += '  node [shape=box, style="rounded,filled", fontname="Arial", margin=0.2];\n';
-        dot += '  edge [color="#666666"];\n';
+        // Configure graph layout for better readability
+        dot += '  graph [rankdir=TB, splines=polyline, ranksep=1.2, nodesep=1.0];\n';
+        dot += '  node [shape=box, style="rounded,filled", fontname="Arial", fontsize=12, margin=0.3];\n';
+        dot += '  edge [color="#666666", penwidth=1.5, arrowsize=0.8];\n\n';
+
+        // Add graph title
+        dot += '  labelloc="t";\n';
+        dot += '  label="Workspace Structure";\n';
+        dot += '  fontname="Arial";\n';
+        dot += '  fontsize=16;\n\n';
 
         const processNode = (node, parentId = null) => {
             // Node styling based on type
-            let color, fontcolor;
+            let color, fontcolor, shape;
             switch (node.type) {
                 case 'workspace':
                     color = '#4A90E2';
                     fontcolor = 'white';
+                    shape = 'box';
                     break;
                 case 'collection':
                     color = '#7ED321';
                     fontcolor = 'white';
+                    shape = 'box';
                     break;
                 case 'collection_view_page':
                     color = '#F5A623';
                     fontcolor = 'white';
+                    shape = 'box';
                     break;
                 case 'page':
                     color = '#D0021B';
                     fontcolor = 'white';
+                    shape = 'box';
                     break;
                 default:
                     color = '#E8E8E8';
                     fontcolor = 'black';
+                    shape = 'box';
             }
 
-            // Create label with HTML-like formatting
-            const label = node.title.length > 30 ? 
+            // Create HTML-like label with type and title
+            const typeLabel = node.type.charAt(0).toUpperCase() + node.type.slice(1).replace(/_/g, ' ');
+            const titleLabel = node.title.length > 30 ? 
                 node.title.substring(0, 27) + '...' : 
                 node.title;
-            
-            // Add node definition with styling
-            dot += `  "${node.id}" [label="${label}", fillcolor="${color}", fontcolor="${fontcolor}"];\n`;
+
+            // Add node definition with enhanced styling
+            dot += `  "${node.id}" [label=<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="4">
+                <TR><TD><FONT COLOR="${fontcolor}" POINT-SIZE="10"><I>${typeLabel}</I></FONT></TD></TR>
+                <TR><TD><FONT COLOR="${fontcolor}" POINT-SIZE="12"><B>${titleLabel}</B></FONT></TD></TR>
+                </TABLE>>, 
+                shape="${shape}", 
+                fillcolor="${color}", 
+                style="rounded,filled"];\n`;
 
             // Add edge with styling if there's a parent
             if (parentId) {
-                dot += `  "${parentId}" -> "${node.id}" [penwidth=1.5];\n`;
+                dot += `  "${parentId}" -> "${node.id}" [dir=forward];\n`;
             }
 
             // Process children if not aggregated
             if (!node.isAggregated && node.children) {
+                // Create invisible subgraph for better layout
+                dot += `  subgraph cluster_${node.id} {\n`;
+                dot += `    style=invis;\n`;
                 node.children.forEach(child => processNode(child, node.id));
+                dot += `  }\n`;
             }
         };
+
+        // Add legend
+        dot += '  subgraph cluster_legend {\n';
+        dot += '    label="Legend";\n';
+        dot += '    fontname="Arial";\n';
+        dot += '    fontsize=12;\n';
+        dot += '    style="rounded";\n';
+        dot += '    color="#666666";\n';
+        dot += '    legend_workspace [label="Workspace", shape=box, style="rounded,filled", fillcolor="#4A90E2", fontcolor="white"];\n';
+        dot += '    legend_collection [label="Collection", shape=box, style="rounded,filled", fillcolor="#7ED321", fontcolor="white"];\n';
+        dot += '    legend_cvp [label="Collection View Page", shape=box, style="rounded,filled", fillcolor="#F5A623", fontcolor="white"];\n';
+        dot += '    legend_page [label="Page", shape=box, style="rounded,filled", fillcolor="#D0021B", fontcolor="white"];\n';
+        dot += '    {rank=same; legend_workspace legend_collection legend_cvp legend_page}\n';
+        dot += '  }\n\n';
 
         hierarchy.forEach(root => processNode(root));
         dot += '}';
@@ -368,60 +404,112 @@ export class TreeVisualizer extends BaseVisualizer {
     }
 
     generateBasicTreeSvg(data, root) {
-        // Helper function to calculate node positions
+        // Helper function to calculate node positions with better spacing
         const calculatePositions = (node, x = 0, y = 0, level = 0, width = this.width) => {
-            const nodeWidth = 200;
-            const nodeHeight = 40;
-            const verticalGap = 60;
+            const nodeWidth = 240;  // Increased for better readability
+            const nodeHeight = 60;  // Increased to accommodate two lines of text
+            const verticalGap = 80; // Increased for better separation
+            const horizontalGap = 40; // Minimum gap between nodes
             
             node.x = x;
             node.y = y;
             
             if (node.children && node.children.length > 0) {
-                const childWidth = width / node.children.length;
+                const totalWidth = Math.max(
+                    nodeWidth * node.children.length + horizontalGap * (node.children.length - 1),
+                    width
+                );
+                
                 node.children.forEach((child, index) => {
-                    const childX = x - width/2 + childWidth * (index + 0.5);
+                    const childX = x - totalWidth/2 + (nodeWidth + horizontalGap) * index + nodeWidth/2;
                     const childY = y + nodeHeight + verticalGap;
-                    calculatePositions(child, childX, childY, level + 1, childWidth);
+                    calculatePositions(child, childX, childY, level + 1, width);
                 });
             }
         };
 
         // Calculate positions for all nodes
-        calculatePositions(root, this.width/2, 50);
+        calculatePositions(root, this.width/2, 80); // Start lower to accommodate title
 
-        // Generate SVG
+        // Generate SVG with improved styling
         let svg = `
         <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
                     <polygon points="0 0, 10 3.5, 0 7" fill="#666"/>
                 </marker>
+                <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+                    <feOffset dx="2" dy="2"/>
+                    <feComponentTransfer>
+                        <feFuncA type="linear" slope="0.3"/>
+                    </feComponentTransfer>
+                    <feMerge>
+                        <feMergeNode/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
             </defs>
             <style>
-                .node { filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.2)); }
+                .node { filter: url(#dropShadow); }
                 .link { stroke: #666; stroke-width: 1.5px; marker-end: url(#arrowhead); }
-                text { font-family: Arial; fill: white; }
-            </style>`;
+                .node-title { font-family: Arial; font-weight: bold; fill: white; }
+                .node-type { font-family: Arial; font-style: italic; fill: white; opacity: 0.9; }
+            </style>
+            <text x="${this.width/2}" y="40" text-anchor="middle" font-family="Arial" font-size="20" fill="#333">
+                Workspace Structure
+            </text>`;
+
+        // Add legend
+        const legendY = this.height - 60;
+        svg += `
+            <g transform="translate(20,${legendY})">
+                <rect width="120" height="40" rx="5" fill="#4A90E2" class="node"/>
+                <text x="60" y="25" text-anchor="middle" class="node-title">Workspace</text>
+            </g>
+            <g transform="translate(160,${legendY})">
+                <rect width="120" height="40" rx="5" fill="#7ED321" class="node"/>
+                <text x="60" y="25" text-anchor="middle" class="node-title">Collection</text>
+            </g>
+            <g transform="translate(300,${legendY})">
+                <rect width="120" height="40" rx="5" fill="#F5A623" class="node"/>
+                <text x="60" y="25" text-anchor="middle" class="node-title">Collection View</text>
+            </g>
+            <g transform="translate(440,${legendY})">
+                <rect width="120" height="40" rx="5" fill="#D0021B" class="node"/>
+                <text x="60" y="25" text-anchor="middle" class="node-title">Page</text>
+            </g>`;
 
         // Helper function to render a node and its children
         const renderNode = (node) => {
-            // Add node
             const color = node.type === 'workspace' ? '#4A90E2' : 
                          node.type === 'collection' ? '#7ED321' : 
                          node.type === 'collection_view_page' ? '#F5A623' : '#D0021B';
             
+            // Add node with two lines of text
             svg += `
-            <g class="node" transform="translate(${node.x-100},${node.y})">
-                <rect width="200" height="40" rx="5" fill="${color}" class="node"/>
-                <text x="100" y="25" text-anchor="middle">${node.title}</text>
+            <g class="node" transform="translate(${node.x-120},${node.y})">
+                <rect width="240" height="60" rx="5" fill="${color}"/>
+                <text x="120" y="25" text-anchor="middle" class="node-type">
+                    ${node.type.charAt(0).toUpperCase() + node.type.slice(1).replace(/_/g, ' ')}
+                </text>
+                <text x="120" y="45" text-anchor="middle" class="node-title">${node.title}</text>
             </g>`;
 
-            // Add links to children
+            // Add links to children with improved path
             if (node.children) {
                 node.children.forEach(child => {
+                    const startX = node.x;
+                    const startY = node.y + 60;
+                    const endX = child.x;
+                    const endY = child.y;
+                    const midY = (startY + endY) / 2;
+
                     svg += `
-                    <path class="link" d="M ${node.x} ${node.y+40} L ${node.x} ${node.y+50} L ${child.x} ${child.y-10} L ${child.x} ${child.y}"/>`;
+                    <path class="link" d="M ${startX} ${startY} 
+                                       L ${startX} ${midY} 
+                                       L ${endX} ${midY} 
+                                       L ${endX} ${endY}"/>`;
                     renderNode(child);
                 });
             }

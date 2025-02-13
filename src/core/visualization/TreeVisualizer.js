@@ -1,11 +1,11 @@
 import { graphviz } from 'd3-graphviz';
 import { BaseVisualizer } from './BaseVisualizer.js';
-import puppeteer from 'puppeteer';
 import { JSDOM } from 'jsdom';
 import * as d3 from 'd3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 export class TreeVisualizer extends BaseVisualizer {
     constructor() {
@@ -143,113 +143,45 @@ export class TreeVisualizer extends BaseVisualizer {
             // Generate DOT string
             const dotString = this.generateDotString(processedHierarchy);
 
-            // Create a minimal HTML page with the visualization
-            const html = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <script src="https://d3js.org/d3.v7.min.js"></script>
-                    <script src="https://unpkg.com/@hpcc-js/wasm@1.14.1/dist/index.min.js"></script>
-                    <script src="https://unpkg.com/d3-graphviz@4.1.0/build/d3-graphviz.min.js"></script>
-                    <style>
-                        #graph { width: ${this.width}px; height: ${this.height}px; }
-                    </style>
-                </head>
-                <body>
-                    <div id="graph"></div>
-                    <script>
-                        // Initialize graphviz
-                        const graph = d3.select("#graph")
-                            .graphviz()
-                            .width(${this.width})
-                            .height(${this.height})
-                            .fit(true)
-                            .zoom(false);
-
-                        // Render the graph
-                        graph.renderDot(\`${dotString}\`);
-                    </script>
-                </body>
-                </html>
-            `;
-
-            // Configure Puppeteer launch options
-            const options = {
-                headless: "new",
-                args: [
-                    '--no-sandbox',
-                    '--disable-setuid-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-accelerated-2d-canvas',
-                    '--no-first-run',
-                    '--no-zygote',
-                    '--single-process',
-                    '--disable-gpu'
-                ]
-            };
-
-            // Add executable path if specified in environment
-            if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-                options.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-                console.log('Using Chrome at:', process.env.PUPPETEER_EXECUTABLE_PATH);
-            }
-
-            // Launch browser with configured options
-            console.log('Launching browser with options:', JSON.stringify(options, null, 2));
-            const browser = await puppeteer.launch(options);
-            
-            // Create new page
-            const page = await browser.newPage();
-            
-            // Set viewport
-            await page.setViewport({
-                width: this.width,
-                height: this.height,
-                deviceScaleFactor: 2
-            });
-
-            // Load the HTML
-            await page.setContent(html);
-
-            // Wait for the graph to be rendered
-            await page.waitForFunction(() => {
-                const svg = document.querySelector('svg');
-                return svg && svg.querySelector('g');
-            }, { timeout: 10000 });
-
             // Create visualizations directory if it doesn't exist
             if (!fs.existsSync(this.visualizationsDir)) {
                 fs.mkdirSync(this.visualizationsDir, { recursive: true });
             }
 
-            // Generate unique filename
-            const filename = `tree-${Date.now()}-${Math.round(Math.random() * 1E9)}.png`;
-            const filepath = path.join(this.visualizationsDir, filename);
+            // Generate unique filenames
+            const timestamp = Date.now();
+            const random = Math.round(Math.random() * 1E9);
+            const dotFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.dot`);
+            const svgFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.svg`);
+            const pngFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.png`);
 
-            // Take a screenshot and save directly to file
-            await page.screenshot({
-                path: filepath,
-                type: 'png'
-            });
+            // Write DOT file
+            fs.writeFileSync(dotFile, dotString);
 
-            // Close browser
-            await browser.close();
+            // Generate SVG using graphviz command line
+            execSync(`dot -Tsvg "${dotFile}" -o "${svgFile}"`);
+
+            // Convert SVG to PNG using graphviz
+            execSync(`dot -Tpng "${dotFile}" -o "${pngFile}"`);
+
+            // Clean up DOT and SVG files
+            fs.unlinkSync(dotFile);
+            fs.unlinkSync(svgFile);
 
             // Generate URL for the saved image
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const imageUrl = `${baseUrl}/visualizations/${filename}`;
+            const imageUrl = `${baseUrl}/visualizations/${path.basename(pngFile)}`;
 
             return {
                 dotString,
                 imageUrl,
-                visualizationPath: filepath
+                visualizationPath: pngFile
             };
         } catch (error) {
             console.error('Error generating visualization:', error);
             console.error('Error details:', {
                 message: error.message,
                 stack: error.stack,
-                chromePath: process.env.PUPPETEER_EXECUTABLE_PATH,
                 cwd: process.cwd(),
                 nodeEnv: process.env.NODE_ENV
             });

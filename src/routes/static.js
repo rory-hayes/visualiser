@@ -15,4 +15,7 @@ router.get('/gennotion', (req, res) => {
     res.sendFile(path.join(__dirname, '../public', 'gennotion.html'));
 });
 
+// Serve visualization files
+router.use('/visualizations', express.static(path.join(__dirname, '../public/visualizations')));
+
 export default router; 

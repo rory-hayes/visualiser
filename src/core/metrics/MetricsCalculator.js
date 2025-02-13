@@ -7,6 +7,7 @@ import { NotionService } from '../../services/NotionService.js';
 import { Client } from '@notionhq/client';
 import { EvolutionMetrics } from './EvolutionMetrics.js';
 import { CollaborationPatterns } from './CollaborationPatterns.js';
+import { TreeVisualizer } from '../visualization/TreeVisualizer.js';
 
 export class MetricsCalculator extends BaseMetrics {
     constructor(notionApiKey, notionDatabaseId) {
@@ -22,6 +23,7 @@ export class MetricsCalculator extends BaseMetrics {
         this.roiMetrics = new ROIMetrics();
         this.evolutionMetrics = new EvolutionMetrics();
         this.collaborationMetrics = new CollaborationPatterns();
+        this.treeVisualizer = new TreeVisualizer();
 
         // Initialize Notion service
         const notionClient = new Client({ auth: notionApiKey });
@@ -32,6 +34,14 @@ export class MetricsCalculator extends BaseMetrics {
         try {
             // Validate input data
             this.validateData(dataframe_2, dataframe_3, dataframe_5);
+
+            // Generate visualization
+            console.log('Generating workspace visualization...');
+            const visualization = await this.treeVisualizer.generateVisualization(dataframe_2[0]);
+            console.log('Visualization generated:', {
+                hasUrl: !!visualization?.imageUrl,
+                path: visualization?.visualizationPath
+            });
 
             // Calculate metrics from each specialized calculator
             const structureMetrics = this.structureMetrics.calculateStructureMetrics(dataframe_2, dataframe_3);
@@ -48,6 +58,7 @@ export class MetricsCalculator extends BaseMetrics {
             const combinedMetrics = {
                 workspaceId,
                 timestamp: new Date().toISOString(),
+                visualizationUrl: visualization?.imageUrl,
                 ...structureMetrics,
                 ...usageMetrics,
                 ...growthMetrics,
@@ -61,7 +72,8 @@ export class MetricsCalculator extends BaseMetrics {
             console.log('Calculated metrics:', {
                 workspaceId,
                 metricKeys: Object.keys(combinedMetrics),
-                timestamp: combinedMetrics.timestamp
+                timestamp: combinedMetrics.timestamp,
+                hasVisualization: !!combinedMetrics.visualizationUrl
             });
 
             return combinedMetrics;

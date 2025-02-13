@@ -3,6 +3,9 @@ import { BaseVisualizer } from './BaseVisualizer.js';
 import puppeteer from 'puppeteer';
 import { JSDOM } from 'jsdom';
 import * as d3 from 'd3';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 export class TreeVisualizer extends BaseVisualizer {
     constructor() {
@@ -10,6 +13,11 @@ export class TreeVisualizer extends BaseVisualizer {
         this.maxDepth = 4; // Limit visualization to 4 levels
         this.width = 1200;
         this.height = 800;
+        
+        // Get directory name in ES module
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        this.visualizationsDir = path.join(__dirname, '..', '..', 'public', 'visualizations');
     }
 
     processHierarchy(data) {
@@ -187,33 +195,32 @@ export class TreeVisualizer extends BaseVisualizer {
                 return svg && svg.querySelector('g');
             });
 
-            // Take a screenshot
-            const screenshot = await page.screenshot({
-                type: 'png',
-                encoding: 'binary'
+            // Create visualizations directory if it doesn't exist
+            if (!fs.existsSync(this.visualizationsDir)) {
+                fs.mkdirSync(this.visualizationsDir, { recursive: true });
+            }
+
+            // Generate unique filename
+            const filename = `tree-${Date.now()}-${Math.round(Math.random() * 1E9)}.png`;
+            const filepath = path.join(this.visualizationsDir, filename);
+
+            // Take a screenshot and save directly to file
+            await page.screenshot({
+                path: filepath,
+                type: 'png'
             });
 
             // Close browser
             await browser.close();
 
-            // Create form data and upload
-            const formData = new FormData();
-            formData.append('image', new Blob([screenshot], { type: 'image/png' }), 'tree-visualization.png');
+            // Generate URL for the saved image
+            const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+            const imageUrl = `${baseUrl}/visualizations/${filename}`;
 
-            // Upload to server
-            const response = await fetch('/api/upload-visualization', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to upload visualization');
-            }
-
-            const { imageUrl } = await response.json();
             return {
                 dotString,
-                imageUrl
+                imageUrl,
+                visualizationPath: filepath
             };
         } catch (error) {
             console.error('Error generating visualization:', error);

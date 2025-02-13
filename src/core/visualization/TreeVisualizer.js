@@ -36,49 +36,60 @@ export class TreeVisualizer extends BaseVisualizer {
         // Create a single root node for the workspace
         const rootNode = {
             id: data.SPACE_ID,
-            title: 'Workspace Root',
+            title: 'Workspace',
             type: 'workspace',
             depth: 0,
-            children: []
-        };
-
-        // Add collections as first level children
-        if (data.COLLECTION_COUNT > 0) {
-            for (let i = 0; i < data.COLLECTION_COUNT; i++) {
-                rootNode.children.push({
-                    id: `collection_${i}`,
-                    title: `Collection ${i + 1}`,
-                    type: 'collection',
+            children: [
+                {
+                    id: `${data.SPACE_ID}_pages`,
+                    title: `Pages`,
+                    value: data.PAGE_COUNT,
+                    type: 'pages',
                     depth: 1,
                     children: []
-                });
-            }
-        }
-
-        // Add collection views and pages as second level
-        const remainingPages = data.PAGE_COUNT - data.COLLECTION_VIEW_PAGE_COUNT;
-        
-        // Add collection view pages
-        if (data.COLLECTION_VIEW_PAGE_COUNT > 0) {
-            rootNode.children.push({
-                id: 'collection_view_pages',
-                title: `Collection View Pages (${data.COLLECTION_VIEW_PAGE_COUNT})`,
-                type: 'collection_view_page',
-                depth: 1,
-                children: []
-            });
-        }
-
-        // Add regular pages
-        if (remainingPages > 0) {
-            rootNode.children.push({
-                id: 'pages',
-                title: `Pages (${remainingPages})`,
-                type: 'page',
-                depth: 1,
-                children: []
-            });
-        }
+                },
+                {
+                    id: `${data.SPACE_ID}_collections`,
+                    title: `Collections`,
+                    value: data.COLLECTION_COUNT,
+                    type: 'collections',
+                    depth: 1,
+                    children: []
+                },
+                {
+                    id: `${data.SPACE_ID}_collection_views`,
+                    title: `Collection Views`,
+                    value: data.COLLECTION_VIEW_COUNT,
+                    type: 'collection_views',
+                    depth: 1,
+                    children: []
+                },
+                {
+                    id: `${data.SPACE_ID}_collection_view_pages`,
+                    title: `Collection View Pages`,
+                    value: data.COLLECTION_VIEW_PAGE_COUNT,
+                    type: 'collection_view_pages',
+                    depth: 1,
+                    children: []
+                },
+                {
+                    id: `${data.SPACE_ID}_tables`,
+                    title: `Tables`,
+                    value: data.TABLE_COUNT,
+                    type: 'tables',
+                    depth: 1,
+                    children: []
+                },
+                {
+                    id: `${data.SPACE_ID}_table_rows`,
+                    title: `Table Rows`,
+                    value: data.TABLE_ROW_COUNT,
+                    type: 'table_rows',
+                    depth: 1,
+                    children: []
+                }
+            ]
+        };
 
         return [rootNode];
     }
@@ -349,24 +360,18 @@ export class TreeVisualizer extends BaseVisualizer {
         // Convert the data to a hierarchy
         const hierarchy = d3.hierarchy(root)
             .sum(d => {
-                // Use different weights for different types
-                switch (d.type) {
-                    case 'collection':
-                        return 100;
-                    case 'collection_view_page':
-                        return 80;
-                    case 'page':
-                        return 60;
-                    default:
-                        return 50;
+                // Use the actual values for sizing
+                if (d.value !== undefined) {
+                    return Math.max(d.value, 10); // Ensure minimum size for visibility
                 }
+                return 100; // Default size for root
             })
             .sort((a, b) => b.value - a.value);
 
         // Create treemap layout
         const treemap = d3.treemap()
             .size([this.width, this.height])
-            .paddingTop(20)
+            .paddingTop(28) // Increased padding for better readability
             .paddingRight(3)
             .paddingBottom(3)
             .paddingLeft(3)
@@ -394,7 +399,7 @@ export class TreeVisualizer extends BaseVisualizer {
             <style>
                 .node { filter: url(#dropShadow); }
                 .node-label { font-family: Arial; fill: white; }
-                .node-value { font-family: Arial; fill: white; opacity: 0.7; }
+                .node-value { font-family: Arial; fill: white; opacity: 0.9; }
                 .title { font-family: Arial; font-size: 20px; fill: #333; }
             </style>
             <text x="${this.width/2}" y="30" text-anchor="middle" class="title">
@@ -404,10 +409,17 @@ export class TreeVisualizer extends BaseVisualizer {
         // Helper function to render a node
         const renderNode = (node) => {
             if (!node.children) {
-                const color = node.data.type === 'workspace' ? '#4A90E2' : 
-                             node.data.type === 'collection' ? '#7ED321' : 
-                             node.data.type === 'collection_view_page' ? '#F5A623' : '#D0021B';
+                const colorMap = {
+                    pages: '#4A90E2',
+                    collections: '#7ED321',
+                    collection_views: '#F5A623',
+                    collection_view_pages: '#BD10E0',
+                    tables: '#9013FE',
+                    table_rows: '#D0021B',
+                    default: '#94A3B8'
+                };
 
+                const color = colorMap[node.data.type] || colorMap.default;
                 const width = Math.max(0, node.x1 - node.x0);
                 const height = Math.max(0, node.y1 - node.y0);
 
@@ -426,18 +438,15 @@ export class TreeVisualizer extends BaseVisualizer {
 
                 // Only add text if the rectangle is big enough
                 if (width > 50 && height > 30) {
-                    const typeLabel = node.data.type.charAt(0).toUpperCase() + 
-                                    node.data.type.slice(1).replace(/_/g, ' ');
-                    const title = node.data.title.length > 20 ? 
-                        node.data.title.substring(0, 17) + '...' : 
-                        node.data.title;
+                    const typeLabel = node.data.title;
+                    const value = node.data.value.toLocaleString();
 
                     svg += `
                         <text x="5" y="15" class="node-label" style="font-size: ${Math.min(width/15, 12)}px">
                             ${typeLabel}
                         </text>
-                        <text x="5" y="${Math.min(height/2 + 10, height - 5)}" class="node-value" style="font-size: ${Math.min(width/20, 10)}px">
-                            ${title}
+                        <text x="5" y="${Math.min(height/2 + 10, height - 5)}" class="node-value" style="font-size: ${Math.min(width/15, 14)}px">
+                            ${value}
                         </text>`;
                 }
 
@@ -451,14 +460,16 @@ export class TreeVisualizer extends BaseVisualizer {
         // Add legend
         const legendY = this.height - 40;
         const legendItems = [
-            { type: 'Workspace', color: '#4A90E2' },
-            { type: 'Collection', color: '#7ED321' },
-            { type: 'Collection View', color: '#F5A623' },
-            { type: 'Page', color: '#D0021B' }
+            { type: 'Pages', color: '#4A90E2' },
+            { type: 'Collections', color: '#7ED321' },
+            { type: 'Collection Views', color: '#F5A623' },
+            { type: 'Collection View Pages', color: '#BD10E0' },
+            { type: 'Tables', color: '#9013FE' },
+            { type: 'Table Rows', color: '#D0021B' }
         ];
 
         legendItems.forEach((item, i) => {
-            const x = 20 + i * 150;
+            const x = 20 + i * 180; // Increased spacing for longer labels
             svg += `
                 <g transform="translate(${x},${legendY})">
                     <rect width="20" height="20" rx="4" fill="${item.color}" fill-opacity="0.8"/>

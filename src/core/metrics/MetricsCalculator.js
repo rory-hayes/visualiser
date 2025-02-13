@@ -37,11 +37,20 @@ export class MetricsCalculator extends BaseMetrics {
 
             // Generate visualization
             console.log('Generating workspace visualization...');
-            const visualization = await this.treeVisualizer.generateVisualization(dataframe_2[0]);
-            console.log('Visualization generated:', {
-                hasUrl: !!visualization?.imageUrl,
-                path: visualization?.visualizationPath
-            });
+            let visualization = null;
+            try {
+                visualization = await this.treeVisualizer.generateVisualization(dataframe_2[0]);
+                console.log('Visualization generated:', {
+                    hasUrl: !!visualization?.imageUrl,
+                    path: visualization?.visualizationPath
+                });
+            } catch (visualizationError) {
+                console.error('Error in visualization generation:', visualizationError);
+                visualization = {
+                    imageUrl: null,
+                    error: visualizationError.message
+                };
+            }
 
             // Calculate metrics from each specialized calculator
             const structureMetrics = this.structureMetrics.calculateStructureMetrics(dataframe_2, dataframe_3);
@@ -59,6 +68,7 @@ export class MetricsCalculator extends BaseMetrics {
                 workspaceId,
                 timestamp: new Date().toISOString(),
                 visualizationUrl: visualization?.imageUrl,
+                visualizationError: visualization?.error,
                 ...structureMetrics,
                 ...usageMetrics,
                 ...growthMetrics,
@@ -73,7 +83,8 @@ export class MetricsCalculator extends BaseMetrics {
                 workspaceId,
                 metricKeys: Object.keys(combinedMetrics),
                 timestamp: combinedMetrics.timestamp,
-                hasVisualization: !!combinedMetrics.visualizationUrl
+                hasVisualization: !!combinedMetrics.visualizationUrl,
+                visualizationError: combinedMetrics.visualizationError
             });
 
             return combinedMetrics;

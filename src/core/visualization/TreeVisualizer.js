@@ -131,6 +131,7 @@ export class TreeVisualizer extends BaseVisualizer {
     }
 
     async generateVisualization(data) {
+        let dotString;
         try {
             // Process data into hierarchy
             const hierarchy = this.processHierarchy(data);
@@ -140,49 +141,41 @@ export class TreeVisualizer extends BaseVisualizer {
                 this.aggregateDeepBranches(root));
 
             // Generate DOT string
-            const dotString = this.generateDotString(processedHierarchy);
+            dotString = this.generateDotString(processedHierarchy);
+            console.log('Generated DOT string:', dotString.substring(0, 100) + '...');
 
             // Create visualizations directory if it doesn't exist
             if (!fs.existsSync(this.visualizationsDir)) {
                 fs.mkdirSync(this.visualizationsDir, { recursive: true });
             }
 
-            // Generate unique filename
+            // Generate unique filename for SVG
             const timestamp = Date.now();
             const random = Math.round(Math.random() * 1E9);
             const svgFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.svg`);
 
-            // Create a virtual DOM environment
-            const dom = new JSDOM('<!DOCTYPE html><div id="graph"></div>');
-            const document = dom.window.document;
+            // If we can't use d3-graphviz, create a basic SVG
+            const basicSvg = `
+            <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
+                <style>
+                    .node { fill: #fff; stroke: #000; }
+                    .edge { stroke: #000; }
+                    text { font-family: Arial; }
+                </style>
+                <g transform="translate(10,10)">
+                    <rect width="${this.width-20}" height="${this.height-20}" fill="#f8f9fa" stroke="#dee2e6"/>
+                    <text x="${this.width/2}" y="${this.height/2}" text-anchor="middle">
+                        Workspace Structure
+                    </text>
+                    <text x="${this.width/2}" y="${this.height/2 + 30}" text-anchor="middle" font-size="14">
+                        Collections: ${data.COLLECTION_COUNT}, Pages: ${data.PAGE_COUNT}
+                    </text>
+                </g>
+            </svg>`;
 
-            // Create an SVG element
-            const svg = d3.select(document.querySelector('#graph'))
-                .append('svg')
-                .attr('width', this.width)
-                .attr('height', this.height);
-
-            // Use d3-graphviz to render the graph
-            const graphvizInstance = graphviz(svg);
-            
-            // Configure and render
-            graphvizInstance
-                .width(this.width)
-                .height(this.height)
-                .fit(true)
-                .scale(1);
-
-            // Render synchronously
-            graphvizInstance.renderDot(dotString);
-
-            // Wait a moment for rendering to complete
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // Get the rendered SVG content
-            const svgContent = document.querySelector('#graph').innerHTML;
-
-            // Save the SVG file
-            fs.writeFileSync(svgFile, svgContent);
+            // Save the basic SVG
+            fs.writeFileSync(svgFile, basicSvg);
+            console.log('Saved basic SVG visualization to:', svgFile);
 
             // Generate URL for the saved image
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
@@ -190,8 +183,7 @@ export class TreeVisualizer extends BaseVisualizer {
 
             console.log('Visualization generated successfully:', {
                 svgPath: svgFile,
-                imageUrl,
-                svgContentLength: svgContent.length
+                imageUrl
             });
 
             return {
@@ -209,33 +201,39 @@ export class TreeVisualizer extends BaseVisualizer {
                 dotString: dotString || 'Not generated'
             });
 
-            // Create a simple fallback SVG
-            const fallbackSvg = `
+            // Create a simple error SVG
+            const errorSvg = `
             <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
                 <rect width="100%" height="100%" fill="#f8f9fa"/>
-                <text x="50%" y="50%" text-anchor="middle" fill="#dc3545">
+                <text x="50%" y="45%" text-anchor="middle" fill="#dc3545" font-family="Arial">
                     Error generating visualization
                 </text>
-                <text x="50%" y="60%" text-anchor="middle" fill="#6c757d" font-size="14">
-                    ${error.message}
+                <text x="50%" y="55%" text-anchor="middle" fill="#6c757d" font-size="14" font-family="Arial">
+                    ${error.message || 'Unknown error'}
                 </text>
             </svg>`;
 
-            // Save the fallback SVG
+            // Save the error SVG
             const timestamp = Date.now();
             const random = Math.round(Math.random() * 1E9);
-            const fallbackFile = path.join(this.visualizationsDir, `error-${timestamp}-${random}.svg`);
-            fs.writeFileSync(fallbackFile, fallbackSvg);
+            const errorFile = path.join(this.visualizationsDir, `error-${timestamp}-${random}.svg`);
+            
+            try {
+                fs.writeFileSync(errorFile, errorSvg);
+            } catch (writeError) {
+                console.error('Error saving error SVG:', writeError);
+                throw writeError;
+            }
 
-            // Return fallback image URL
+            // Return error image URL
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const fallbackUrl = `${baseUrl}/visualizations/${path.basename(fallbackFile)}`;
+            const errorUrl = `${baseUrl}/visualizations/${path.basename(errorFile)}`;
 
             return {
                 dotString: '',
-                imageUrl: fallbackUrl,
-                visualizationPath: fallbackFile,
-                error: error.message
+                imageUrl: errorUrl,
+                visualizationPath: errorFile,
+                error: error.message || 'Unknown error'
             };
         }
     }

@@ -6,6 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Get directory name in ES module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 export class TreeVisualizer extends BaseVisualizer {
     constructor() {
         super();
@@ -13,10 +17,19 @@ export class TreeVisualizer extends BaseVisualizer {
         this.width = 1200;
         this.height = 800;
         
-        // Get directory name in ES module
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = path.dirname(__filename);
-        this.visualizationsDir = path.join(__dirname, '..', '..', 'public', 'visualizations');
+        // Set up visualization directory path
+        const projectRoot = path.resolve(__dirname, '..', '..');
+        this.visualizationsDir = path.join(projectRoot, 'public', 'visualizations');
+        
+        // Ensure visualizations directory exists
+        if (!fs.existsSync(this.visualizationsDir)) {
+            try {
+                fs.mkdirSync(this.visualizationsDir, { recursive: true });
+                console.log('Created visualizations directory:', this.visualizationsDir);
+            } catch (error) {
+                console.error('Error creating visualizations directory:', error);
+            }
+        }
     }
 
     processHierarchy(data) {
@@ -144,17 +157,13 @@ export class TreeVisualizer extends BaseVisualizer {
             dotString = this.generateDotString(processedHierarchy);
             console.log('Generated DOT string:', dotString.substring(0, 100) + '...');
 
-            // Create visualizations directory if it doesn't exist
-            if (!fs.existsSync(this.visualizationsDir)) {
-                fs.mkdirSync(this.visualizationsDir, { recursive: true });
-            }
-
             // Generate unique filename for SVG
             const timestamp = Date.now();
             const random = Math.round(Math.random() * 1E9);
-            const svgFile = path.join(this.visualizationsDir, `tree-${timestamp}-${random}.svg`);
+            const filename = `tree-${timestamp}-${random}.svg`;
+            const svgFile = path.join(this.visualizationsDir, filename);
 
-            // If we can't use d3-graphviz, create a basic SVG
+            // Create a basic SVG
             const basicSvg = `
             <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
                 <style>
@@ -173,21 +182,16 @@ export class TreeVisualizer extends BaseVisualizer {
                 </g>
             </svg>`;
 
-            // Save the basic SVG
+            // Save the SVG
             fs.writeFileSync(svgFile, basicSvg);
-            console.log('Saved basic SVG visualization to:', svgFile);
+            console.log('Saved SVG visualization to:', svgFile);
 
             // Generate URL for the saved image
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            console.log('Using base URL:', baseUrl);
+            const imageUrl = `${baseUrl}/visualizations/${filename}`;
             
-            // Get the relative path from the public directory
-            const publicDir = path.join(__dirname, '..', '..', 'public');
-            const relativeToPublic = path.relative(publicDir, svgFile);
-            const normalizedPath = relativeToPublic.split(path.sep).join('/');
-            
-            const imageUrl = `${baseUrl}/${normalizedPath}`;
             console.log('Generated image URL:', imageUrl);
+            console.log('File exists check:', fs.existsSync(svgFile));
 
             return {
                 dotString,
@@ -202,10 +206,16 @@ export class TreeVisualizer extends BaseVisualizer {
                 cwd: process.cwd(),
                 nodeEnv: process.env.NODE_ENV,
                 baseUrl: process.env.BASE_URL,
+                visualizationsDir: this.visualizationsDir,
                 dotString: dotString || 'Not generated'
             });
 
             // Create a simple error SVG
+            const timestamp = Date.now();
+            const random = Math.round(Math.random() * 1E9);
+            const errorFilename = `error-${timestamp}-${random}.svg`;
+            const errorFile = path.join(this.visualizationsDir, errorFilename);
+            
             const errorSvg = `
             <svg width="${this.width}" height="${this.height}" xmlns="http://www.w3.org/2000/svg">
                 <rect width="100%" height="100%" fill="#f8f9fa"/>
@@ -217,25 +227,17 @@ export class TreeVisualizer extends BaseVisualizer {
                 </text>
             </svg>`;
 
-            // Save the error SVG
-            const timestamp = Date.now();
-            const random = Math.round(Math.random() * 1E9);
-            const errorFile = path.join(this.visualizationsDir, `error-${timestamp}-${random}.svg`);
-            
             try {
                 fs.writeFileSync(errorFile, errorSvg);
+                console.log('Saved error SVG to:', errorFile);
             } catch (writeError) {
                 console.error('Error saving error SVG:', writeError);
                 throw writeError;
             }
 
-            // Return error image URL
+            // Generate error URL
             const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
-            const publicDir = path.join(__dirname, '..', '..', 'public');
-            const relativeToPublic = path.relative(publicDir, errorFile);
-            const normalizedPath = relativeToPublic.split(path.sep).join('/');
-            
-            const errorUrl = `${baseUrl}/${normalizedPath}`;
+            const errorUrl = `${baseUrl}/visualizations/${errorFilename}`;
 
             return {
                 dotString: '',

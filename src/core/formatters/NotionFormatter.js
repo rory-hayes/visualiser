@@ -17,6 +17,9 @@ export class NotionFormatter {
                     `Orphaned Blocks: ${metrics.orphaned_blocks || metrics.orphanedBlocks || 0}`,
                     `Collections Count: ${metrics.collections_count || metrics.collectionsCount || 0}`,
                     `Collection Views: ${metrics.collection_views || metrics.collectionViews || 0}`,
+                    `Collection View Pages: ${metrics.collection_view_pages || metrics.collectionViewPages || 0}`,
+                    `Total Table Rows: ${metrics.total_table_rows || metrics.totalTableRows || 0}`,
+                    `Structured Pages Ratio: ${this.formatPercentage(metrics.structured_pages_ratio || metrics.structuredPagesRatio)}`,
                     
                     // Navigation & Structure Quality
                     `Navigation Depth Score: ${this.formatPercentage(metrics.nav_depth_score || metrics.navDepthScore)}`,
@@ -26,12 +29,20 @@ export class NotionFormatter {
                     `Bottleneck Count: ${metrics.bottleneck_count || metrics.bottleneckCount || 0}`,
                     `Duplicate Count: ${metrics.duplicate_count || metrics.duplicateCount || 0}`,
                     `Unfindable Pages: ${metrics.unfindable_pages || metrics.unfindablePages || 0}`,
+                    `Content Diversity Score: ${this.formatPercentage(metrics.content_diversity_score || metrics.contentDiversityScore)}`,
+                    `Structure Health Score: ${this.formatPercentage(metrics.structure_health_score || metrics.structureHealthScore)}`,
+                    `Content Organization Score: ${this.formatPercentage(metrics.content_organization_score || metrics.contentOrganizationScore)}`,
+                    `Structure Quality Index: ${this.formatPercentage(metrics.structure_quality_index || metrics.structureQualityIndex)}`,
                     
                     // Evolution Metrics
                     `Content Maturity Score: ${this.formatPercentage(metrics.content_maturity_score || metrics.contentMaturityScore)}`,
                     `Knowledge Structure Score: ${this.formatPercentage(metrics.knowledge_structure_score || metrics.knowledgeStructureScore)}`,
                     `Workspace Complexity Score: ${this.formatPercentage(metrics.workspace_complexity_score || metrics.workspaceComplexityScore)}`,
-                    `Growth Sustainability Index: ${this.formatPercentage(metrics.growth_sustainability_index || metrics.growthSustainabilityIndex)}`
+                    `Growth Sustainability Index: ${this.formatPercentage(metrics.growth_sustainability_index || metrics.growthSustainabilityIndex)}`,
+                    `Content Evolution Rate: ${this.formatPercentage(metrics.content_evolution_rate || metrics.contentEvolutionRate)}`,
+                    `Structure Evolution Score: ${this.formatPercentage(metrics.structure_evolution_score || metrics.structureEvolutionScore)}`,
+                    `Adaptation Score: ${this.formatPercentage(metrics.adaptation_score || metrics.adaptationScore)}`,
+                    `Change Velocity: ${this.formatPercentage(metrics.change_velocity || metrics.changeVelocity)}`
                 ]
             },
             {
@@ -55,7 +66,11 @@ export class NotionFormatter {
                     `Knowledge Sharing Index: ${this.formatPercentage(metrics.knowledge_sharing_index || metrics.knowledgeSharingIndex)}`,
                     `Cross-team Collaboration Score: ${this.formatPercentage(metrics.cross_team_collaboration_score || metrics.crossTeamCollaborationScore)}`,
                     `Engagement Score: ${this.formatPercentage(metrics.engagement_score || metrics.engagementScore)}`,
-                    `Collaboration Rate: ${this.formatPercentage(metrics.collaboration_rate || metrics.collaborationRate)}`
+                    `Collaboration Rate: ${this.formatPercentage(metrics.collaboration_rate || metrics.collaborationRate)}`,
+                    `Collaboration Efficiency: ${this.formatPercentage(metrics.collaboration_efficiency || metrics.collaborationEfficiency)}`,
+                    `Team Interaction Score: ${this.formatPercentage(metrics.team_interaction_score || metrics.teamInteractionScore)}`,
+                    `Collaboration Factor: ${this.formatPercentage(metrics.collaboration_factor || metrics.collaborationFactor)}`,
+                    `Usage Factor: ${this.formatPercentage(metrics.usage_factor || metrics.usageFactor)}`
                 ]
             },
             {
@@ -79,7 +94,10 @@ export class NotionFormatter {
                     // Growth Scenarios
                     `10% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.tenPercent || 0)}/year`,
                     `20% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.twentyPercent || 0)}/year`,
-                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fiftyPercent || 0)}/year`
+                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fiftyPercent || 0)}/year`,
+                    
+                    // Predicted Issues
+                    `Predicted Bottlenecks: ${(metrics.predicted_bottlenecks || metrics.predictedBottlenecks || []).join(', ') || 'None'}`
                 ]
             },
             {
@@ -96,13 +114,15 @@ export class NotionFormatter {
                     // AI Benefits
                     `Enterprise + AI ROI: ${this.formatPercentage(metrics.enterprise_ai_roi || metrics.enterpriseAIROI)}`,
                     `Enterprise + AI Annual Savings: ${this.formatCurrency(metrics.enterprise_ai_savings || metrics.enterpriseAISavings)}`,
+                    `AI Productivity Boost: ${this.formatPercentage(metrics.ai_productivity_boost || metrics.aiProductivityBoost)}`,
                     
                     // Time & Automation
                     `Projected Time Savings: ${this.formatDecimal(metrics.projected_time_savings?.hours_per_member || metrics.projectedTimeSavings?.hoursPerMember)} hours/member/month`,
                     `Total Hours Saved: ${this.formatDecimal(metrics.projected_time_savings?.total_hours || metrics.projectedTimeSavings?.totalHours)} hours/month`,
                     `Monetary Value of Time Saved: ${this.formatCurrency(metrics.projected_time_savings?.monetary_value || metrics.projectedTimeSavings?.monetaryValue)}/month`,
                     `Automation Potential Score: ${this.formatPercentage(metrics.automation_potential?.score || metrics.automationPotential?.score)}`,
-                    `Potential Automation Savings: ${this.formatCurrency(metrics.automation_potential?.potential_savings || metrics.automationPotential?.potentialSavings)}/year`
+                    `Potential Automation Savings: ${this.formatCurrency(metrics.automation_potential?.potential_savings || metrics.automationPotential?.potentialSavings)}/year`,
+                    `Productivity Gain: ${this.formatPercentage(metrics.productivity_gain || metrics.productivityGain)}`
                 ]
             }
         ];

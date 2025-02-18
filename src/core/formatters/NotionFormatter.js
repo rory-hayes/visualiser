@@ -9,16 +9,16 @@ export class NotionFormatter {
                 title: 'Structure & Evolution Metrics',
                 metrics: [
                     // Basic Structure Metrics
-                    `Total Pages: ${metrics.total_pages || metrics.totalPages || 0}`,
+                    `Total Pages: ${metrics.total_pages || 0}`,
                     `Max Depth: ${metrics.max_depth || metrics.maxDepth || 0}`,
                     `Average Depth: ${this.formatDecimal(metrics.avg_depth || metrics.avgDepth)}`,
                     `Deep Pages Count: ${metrics.deep_pages_count || metrics.deepPagesCount || 0}`,
                     `Root Pages: ${metrics.root_pages || metrics.rootPages || 0}`,
                     `Orphaned Blocks: ${metrics.orphaned_blocks || metrics.orphanedBlocks || 0}`,
-                    `Collections Count: ${metrics.collections_count || metrics.collectionsCount || 0}`,
-                    `Collection Views: ${metrics.collection_views || metrics.collectionViews || 0}`,
-                    `Collection View Pages: ${metrics.collection_view_pages || metrics.collectionViewPages || 0}`,
-                    `Total Table Rows: ${metrics.total_table_rows || metrics.totalTableRows || 0}`,
+                    `Collections Count: ${metrics.collections_count || 0}`,
+                    `Collection Views: ${metrics.collection_views || 0}`,
+                    `Collection View Pages: ${metrics.collection_view_pages || 0}`,
+                    `Total Table Rows: ${metrics.total_table_rows || 0}`,
                     `Structured Pages Ratio: ${this.formatPercentage(metrics.structured_pages_ratio || metrics.structuredPagesRatio)}`,
                     
                     // Navigation & Structure Quality
@@ -42,23 +42,47 @@ export class NotionFormatter {
                     `Content Evolution Rate: ${this.formatPercentage(metrics.content_evolution_rate || metrics.contentEvolutionRate)}`,
                     `Structure Evolution Score: ${this.formatPercentage(metrics.structure_evolution_score || metrics.structureEvolutionScore)}`,
                     `Adaptation Score: ${this.formatPercentage(metrics.adaptation_score || metrics.adaptationScore)}`,
-                    `Change Velocity: ${this.formatPercentage(metrics.change_velocity || metrics.changeVelocity)}`
+                    `Change Velocity: ${this.formatPercentage(metrics.change_velocity || metrics.changeVelocity)}`,
+                    
+                    // Block and Page Health
+                    `Total Blocks: ${metrics.total_blocks || 0}`,
+                    `Alive Blocks: ${metrics.alive_blocks || 0}`,
+                    `Total Pages (All): ${metrics.total_pages_all || 0}`,
+                    `Alive Pages: ${metrics.alive_pages_all || 0}`,
+                    `Public Pages: ${metrics.public_pages || 0}`,
+                    `Private Pages: ${metrics.private_pages || 0}`,
+                    
+                    // Content Health
+                    `Content Health Ratio: ${this.formatPercentage(metrics.content_health_ratio)}`,
+                    `Page Health Ratio: ${this.formatPercentage(metrics.page_health_ratio)}`,
+                    `Structured Content Ratio: ${this.formatPercentage(metrics.structured_content_ratio)}`,
+                    `Public Content Ratio: ${this.formatPercentage(metrics.public_content_ratio)}`,
+                    
+                    // Structure Quality
+                    `Collection Density: ${this.formatPercentage(metrics.collection_density)}`,
+                    `Database Complexity Score: ${this.formatPercentage(metrics.database_complexity_score)}`
                 ]
             },
             {
                 title: 'Collaboration & Team Metrics',
                 metrics: [
                     // Team & Member Metrics
-                    `Total Members: ${metrics.total_members || metrics.totalMembers || 0}`,
+                    `Total Members: ${metrics.total_members || 0}`,
                     `Active Members: ${metrics.active_members || metrics.activeMembers || 0}`,
-                    `Total Guests: ${metrics.total_guests || metrics.totalGuests || 0}`,
-                    `Total Teamspaces: ${metrics.total_teamspaces || metrics.totalTeamspaces || 0}`,
+                    `Total Guests: ${metrics.total_guests || 0}`,
+                    `Total Teamspaces: ${metrics.total_teamspaces || 0}`,
                     `Average Teamspace Members: ${this.formatDecimal(metrics.average_teamspace_members || metrics.averageTeamspaceMembers)}`,
                     
                     // Activity Metrics
                     `Daily Active Users: ${metrics.daily_active_users || metrics.dailyActiveUsers || 0}`,
                     `Weekly Active Users: ${metrics.weekly_active_users || metrics.weeklyActiveUsers || 0}`,
                     `Monthly Active Users: ${metrics.monthly_active_users || metrics.monthlyActiveUsers || 0}`,
+                    
+                    // Teamspace Structure
+                    `Open Teamspaces: ${metrics.open_teamspaces || 0}`,
+                    `Closed Teamspaces: ${metrics.closed_teamspaces || 0}`,
+                    `Private Teamspaces: ${metrics.private_teamspaces || 0}`,
+                    `Permission Groups: ${metrics.permission_groups || 0}`,
                     
                     // Collaboration Metrics
                     `Team Adoption Score: ${this.formatPercentage(metrics.team_adoption_score || metrics.teamAdoptionScore)}`,
@@ -70,7 +94,16 @@ export class NotionFormatter {
                     `Collaboration Efficiency: ${this.formatPercentage(metrics.collaboration_efficiency || metrics.collaborationEfficiency)}`,
                     `Team Interaction Score: ${this.formatPercentage(metrics.team_interaction_score || metrics.teamInteractionScore)}`,
                     `Collaboration Factor: ${this.formatPercentage(metrics.collaboration_factor || metrics.collaborationFactor)}`,
-                    `Usage Factor: ${this.formatPercentage(metrics.usage_factor || metrics.usageFactor)}`
+                    `Usage Factor: ${this.formatPercentage(metrics.usage_factor || metrics.usageFactor)}`,
+                    
+                    // Team Composition
+                    `Total Bots: ${metrics.total_bots || 0}`,
+                    `Total Integrations: ${metrics.total_integrations || 0}`,
+                    
+                    // Permission Complexity
+                    `Permission Complexity: ${this.formatPercentage(metrics.permission_complexity)}`,
+                    `Guest Ratio: ${this.formatPercentage(metrics.guest_ratio)}`,
+                    `Automation Level: ${this.formatPercentage(metrics.automation_level)}`
                 ]
             },
             {
@@ -78,26 +111,36 @@ export class NotionFormatter {
                 metrics: [
                     // Growth Rates
                     `Monthly Member Growth Rate: ${this.formatPercentage(metrics.monthly_member_growth_rate || metrics.monthlyMemberGrowthRate)}`,
+                    `Monthly Guest Growth Rate: ${this.formatPercentage(metrics.monthly_guest_growth_rate || metrics.monthlyGuestGrowthRate)}`,
+                    `Total Member Growth: ${this.formatPercentage(metrics.total_member_growth || metrics.totalMemberGrowth)}`,
                     `Monthly Content Growth Rate: ${this.formatPercentage(metrics.monthly_content_growth_rate || metrics.monthlyContentGrowthRate)}`,
+                    `Alive Content Growth Rate: ${this.formatPercentage(metrics.alive_content_growth_rate || metrics.aliveContentGrowthRate)}`,
+                    `Content Retention Rate: ${this.formatPercentage(metrics.content_retention_rate || metrics.contentRetentionRate)}`,
+                    
+                    // Structure Growth
+                    `Teamspace Growth Rate: ${this.formatPercentage(metrics.teamspace_growth_rate || metrics.teamspaceGrowthRate)}`,
+                    `Permission Group Growth: ${this.formatPercentage(metrics.permission_group_growth || metrics.permissionGroupGrowth)}`,
                     
                     // Projections
                     `Expected Members Next Year: ${Math.round(metrics.expected_members_next_year || metrics.expectedMembersNextYear || 0)}`,
-                    `Growth Consistency: ${this.formatPercentage(metrics.growth_consistency || metrics.growthConsistency)}`,
-                    `Growth Trajectory: ${this.formatPercentage(metrics.growth_trajectory || metrics.growthTrajectory)}`,
+                    `Expected Pages Next Year: ${metrics.expected_pages_next_year || metrics.expectedPagesNextYear || 0}`,
+                    `Expected Teamspaces Next Year: ${metrics.expected_teamspaces_next_year || metrics.expectedTeamspacesNextYear || 0}`,
                     
                     // Growth Quality
+                    `Growth Consistency: ${this.formatPercentage(metrics.growth_consistency || metrics.growthConsistency)}`,
+                    `Growth Sustainability: ${this.formatPercentage(metrics.growth_sustainability || metrics.growthSustainability)}`,
                     `Scaling Readiness Score: ${this.formatPercentage(metrics.scaling_readiness_score || metrics.scalingReadinessScore)}`,
-                    `Growth Potential Score: ${this.formatPercentage(metrics.growth_potential_score || metrics.growthPotentialScore)}`,
-                    `Structure Readiness: ${this.formatPercentage(metrics.structure_readiness || metrics.structureReadiness)}`,
-                    `Team Readiness: ${this.formatPercentage(metrics.team_readiness || metrics.teamReadiness)}`,
+                    `Growth Efficiency: ${this.formatPercentage(metrics.growth_efficiency || metrics.growthEfficiency)}`,
                     
                     // Growth Scenarios
-                    `10% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.tenPercent || 0)}/year`,
-                    `20% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.twentyPercent || 0)}/year`,
-                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fiftyPercent || 0)}/year`,
+                    `10% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.ten_percent || 0)}/year`,
+                    `20% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.twenty_percent || 0)}/year`,
+                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fifty_percent || 0)}/year`,
                     
-                    // Predicted Issues
-                    `Predicted Bottlenecks: ${(metrics.predicted_bottlenecks || metrics.predictedBottlenecks || []).join(', ') || 'None'}`
+                    // Additional Insights
+                    `Member to Content Ratio: ${this.formatDecimal(metrics.member_to_content_ratio || metrics.memberToContentRatio)}`,
+                    `Teamspace Density: ${this.formatDecimal(metrics.teamspace_density || metrics.teamspaceDensity)}`,
+                    `Growth Balance Score: ${this.formatPercentage(metrics.growth_balance_score || metrics.growthBalanceScore)}`
                 ]
             },
             {
@@ -122,7 +165,23 @@ export class NotionFormatter {
                     `Monetary Value of Time Saved: ${this.formatCurrency(metrics.projected_time_savings?.monetary_value || metrics.projectedTimeSavings?.monetaryValue)}/month`,
                     `Automation Potential Score: ${this.formatPercentage(metrics.automation_potential?.score || metrics.automationPotential?.score)}`,
                     `Potential Automation Savings: ${this.formatCurrency(metrics.automation_potential?.potential_savings || metrics.automationPotential?.potentialSavings)}/year`,
-                    `Productivity Gain: ${this.formatPercentage(metrics.productivity_gain || metrics.productivityGain)}`
+                    `Productivity Gain: ${this.formatPercentage(metrics.productivity_gain || metrics.productivityGain)}`,
+                    
+                    // Usage Metrics
+                    `Total Paid Seats: ${metrics.total_paid_seats || 0}`,
+                    `Seat Utilization: ${this.formatPercentage(metrics.seat_utilization || metrics.seatUtilization)}`,
+                    `Content Efficiency: ${this.formatPercentage(metrics.content_efficiency || metrics.contentEfficiency)}`,
+                    `Revenue Growth: ${this.formatPercentage(metrics.revenue_growth || metrics.revenueGrowth)}`,
+                    
+                    // ROI and Savings
+                    `Enterprise ROI: ${this.formatPercentage(metrics.enterprise_roi || metrics.enterpriseROI)}`,
+                    `Enterprise Annual Savings: ${this.formatCurrency(metrics.enterprise_annual_savings || metrics.enterpriseAnnualSavings)}`,
+                    `Projected Savings: ${this.formatCurrency(metrics.projected_savings || metrics.projectedSavings)}`,
+                    
+                    // Additional Insights
+                    `Revenue per Member: ${this.formatCurrency(metrics.revenue_per_member || metrics.revenuePerMember)}`,
+                    `Revenue per Page: ${this.formatCurrency(metrics.revenue_per_page || metrics.revenuePerPage)}`,
+                    `Efficiency Score: ${this.formatPercentage(metrics.efficiency_score || metrics.efficiencyScore)}`
                 ]
             }
         ];
@@ -203,21 +262,23 @@ export class NotionFormatter {
     }
 
     formatDecimal(value) {
-        return value ? value.toFixed(2) : '0.00';
+        const num = Number(value);
+        return isNaN(num) ? '0.00' : num.toFixed(2);
     }
 
     formatPercentage(value) {
-        return value ? `${(value).toFixed(1)}%` : '0.0%';
+        const num = Number(value);
+        return isNaN(num) ? '0.0%' : `${(num * 100).toFixed(1)}%`;
     }
 
     formatCurrency(value) {
-        const numValue = Number(value) || 0;
-        return new Intl.NumberFormat('en-US', {
+        const num = Number(value);
+        return isNaN(num) ? '$0.00' : new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD',
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
-        }).format(numValue);
+        }).format(num);
     }
 
     createImage(url) {

@@ -4,59 +4,108 @@ export class CollaborationPatterns extends BaseMetrics {
     calculateCollaborationPatterns(dataframe_2, dataframe_3, dataframe_5) {
         this.validateData(dataframe_2, dataframe_3, dataframe_5);
 
-        const teamAdoptionScore = this.calculateTeamAdoptionScore(dataframe_5);
-        const collaborationDensity = this.calculateCollaborationDensity(dataframe_3);
-        const knowledgeSharingIndex = this.calculateKnowledgeSharingIndex(dataframe_2, dataframe_3);
-        const crossTeamCollaborationScore = this.calculateCrossTeamCollaborationScore(dataframe_3, dataframe_5);
+        // Team Composition Metrics
+        const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
+        const totalGuests = dataframe_3.TOTAL_NUM_GUESTS || 0;
+        const totalBots = dataframe_3.TOTAL_NUM_BOTS || 0;
+        const totalIntegrations = dataframe_3.TOTAL_NUM_INTEGRATIONS || 0;
+
+        // Teamspace Metrics
+        const totalTeamspaces = dataframe_3.TOTAL_NUM_TEAMSPACES || 0;
+        const openTeamspaces = dataframe_3.TOTAL_NUM_OPEN_TEAMSPACES || 0;
+        const closedTeamspaces = dataframe_3.TOTAL_NUM_CLOSED_TEAMSPACES || 0;
+        const privateTeamspaces = dataframe_3.TOTAL_NUM_PRIVATE_TEAMSPACES || 0;
+        const permissionGroups = dataframe_3.TOTAL_NUM_PERMISSION_GROUPS || 0;
+
+        // Calculate Advanced Metrics
+        const averageTeamspaceMembers = totalMembers / totalTeamspaces;
+        const teamspaceDistribution = this.calculateTeamspaceDistribution({
+            openTeamspaces,
+            closedTeamspaces,
+            privateTeamspaces,
+            totalTeamspaces
+        });
+
+        const collaborationMetrics = this.calculateCollaborationMetrics({
+            totalMembers,
+            totalGuests,
+            totalTeamspaces,
+            permissionGroups
+        });
+
+        const teamAdoption = this.calculateTeamAdoption({
+            totalMembers,
+            totalTeamspaces,
+            openTeamspaces
+        });
 
         return {
-            team_adoption_score: teamAdoptionScore,
-            collaboration_density: collaborationDensity,
-            knowledge_sharing_index: knowledgeSharingIndex,
-            cross_team_collaboration_score: crossTeamCollaborationScore
+            // Team Composition
+            total_members: totalMembers,
+            total_guests: totalGuests,
+            total_bots: totalBots,
+            total_integrations: totalIntegrations,
+            
+            // Teamspace Structure
+            total_teamspaces: totalTeamspaces,
+            open_teamspaces: openTeamspaces,
+            closed_teamspaces: closedTeamspaces,
+            private_teamspaces: privateTeamspaces,
+            permission_groups: permissionGroups,
+            
+            // Derived Metrics
+            average_teamspace_members: this.formatDecimal(averageTeamspaceMembers),
+            teamspace_distribution: teamspaceDistribution,
+            
+            // Collaboration Scores
+            team_adoption_score: this.formatPercentage(teamAdoption),
+            collaboration_density: this.formatPercentage(collaborationMetrics.density),
+            cross_team_collaboration: this.formatPercentage(collaborationMetrics.crossTeam),
+            
+            // Additional Insights
+            workspace_accessibility: this.formatPercentage(openTeamspaces / totalTeamspaces),
+            permission_complexity: this.formatPercentage(permissionGroups / totalTeamspaces),
+            guest_ratio: this.formatPercentage(totalGuests / totalMembers),
+            automation_level: this.formatPercentage((totalBots + totalIntegrations) / totalMembers)
         };
     }
 
-    calculateTeamAdoptionScore(workspace) {
-        const totalMembers = workspace.NUM_MEMBERS;
-        const activeMembers = workspace.NUM_MEMBERS - workspace.NUM_GUESTS;
-        const teamspaceUtilization = workspace.NUM_TEAMSPACES > 0 ? 
-            workspace.NUM_MEMBERS / workspace.NUM_TEAMSPACES : 0;
-        
-        const membershipScore = activeMembers / totalMembers;
-        const teamspaceScore = Math.min(teamspaceUtilization / 10, 1); // Normalize to 10 members per teamspace
-        
-        return ((membershipScore + teamspaceScore) / 2) * 100;
+    calculateTeamspaceDistribution({ openTeamspaces, closedTeamspaces, privateTeamspaces, totalTeamspaces }) {
+        if (totalTeamspaces === 0) return { open: '0%', closed: '0%', private: '0%' };
+
+        return {
+            open: this.formatPercentage(openTeamspaces / totalTeamspaces),
+            closed: this.formatPercentage(closedTeamspaces / totalTeamspaces),
+            private: this.formatPercentage(privateTeamspaces / totalTeamspaces)
+        };
     }
 
-    calculateCollaborationDensity(workspace) {
-        const totalInteractions = workspace.NUM_BLOCKS;
-        const potentialInteractions = workspace.TOTAL_NUM_MEMBERS * workspace.NUM_PAGES;
+    calculateCollaborationMetrics({ totalMembers, totalGuests, totalTeamspaces, permissionGroups }) {
+        if (totalMembers === 0) return { density: 0, crossTeam: 0 };
+
+        const density = (totalTeamspaces * (totalMembers + totalGuests)) / 
+                       (totalMembers * totalMembers);
         
-        return potentialInteractions > 0 ? 
-            (totalInteractions / potentialInteractions) * 100 : 0;
+        const crossTeam = Math.min(
+            permissionGroups / (totalTeamspaces || 1),
+            1
+        );
+
+        return {
+            density: Math.min(density, 1),
+            crossTeam
+        };
     }
 
-    calculateKnowledgeSharingIndex(pages, workspace) {
-        const sharedPages = pages.filter(p => 
-            p.TYPE === 'collection_view_page' || 
-            p.TYPE === 'collection_view'
-        ).length;
-        
-        const sharingRatio = sharedPages / workspace.NUM_PAGES;
-        const memberContribution = workspace.NUM_BLOCKS / workspace.TOTAL_NUM_MEMBERS;
-        
-        return ((sharingRatio + (memberContribution / 100)) / 2) * 100;
-    }
+    calculateTeamAdoption({ totalMembers, totalTeamspaces, openTeamspaces }) {
+        if (totalMembers === 0 || totalTeamspaces === 0) return 0;
 
-    calculateCrossTeamCollaborationScore(workspace, workspaceDetails) {
-        const teamspaces = workspaceDetails.NUM_TEAMSPACES;
-        const totalCollaborations = workspace.NUM_COLLECTION_VIEWS;
-        const potentialCollaborations = teamspaces * (teamspaces - 1) / 2;
-        
-        const collaborationScore = potentialCollaborations > 0 ? 
-            totalCollaborations / potentialCollaborations : 0;
-        
-        return Math.min(collaborationScore * 100, 100);
+        const openTeamspaceRatio = openTeamspaces / totalTeamspaces;
+        const teamspacePerMember = totalTeamspaces / totalMembers;
+
+        return Math.min(
+            (openTeamspaceRatio * 0.6) + (teamspacePerMember * 0.4),
+            1
+        );
     }
 } 

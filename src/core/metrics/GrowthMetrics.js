@@ -10,21 +10,137 @@ export class GrowthMetrics extends BaseMetrics {
     calculateGrowthMetrics(dataframe_2, dataframe_3, dataframe_5) {
         this.validateData(dataframe_2, dataframe_3, dataframe_5);
 
-        const growthPatterns = this.analyzeGrowthPatterns(dataframe_2);
-        const memberGrowth = this.calculateMemberGrowth(dataframe_3);
-        const contentGrowth = this.calculateContentGrowthRate(dataframe_2);
-        const scalingReadiness = this.calculateScalingReadiness(dataframe_2, dataframe_3);
+        // Member Growth Metrics
+        const currentMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
+        const maxMembers = dataframe_3.MAX_NUM_MEMBERS || 0;
+        const currentGuests = dataframe_3.TOTAL_NUM_GUESTS || 0;
+        const maxGuests = dataframe_3.MAX_NUM_GUESTS || 0;
+
+        // Content Growth Metrics
+        const currentPages = dataframe_3.TOTAL_NUM_TOTAL_PAGES || 0;
+        const maxPages = dataframe_3.MAX_NUM_TOTAL_PAGES || 0;
+        const currentAlivePages = dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES || 0;
+        const maxAlivePages = dataframe_3.MAX_NUM_ALIVE_TOTAL_PAGES || 0;
+
+        // Team Structure Growth
+        const currentTeamspaces = dataframe_3.TOTAL_NUM_TEAMSPACES || 0;
+        const maxTeamspaces = dataframe_3.MAX_NUM_TEAMSPACES || 0;
+        const currentPermissionGroups = dataframe_3.TOTAL_NUM_PERMISSION_GROUPS || 0;
+        const maxPermissionGroups = dataframe_3.MAX_NUM_PERMISSION_GROUPS || 0;
+
+        // Calculate Growth Rates
+        const memberGrowthRate = this.calculateGrowthRate(currentMembers, maxMembers);
+        const guestGrowthRate = this.calculateGrowthRate(currentGuests, maxGuests);
+        const pageGrowthRate = this.calculateGrowthRate(currentPages, maxPages);
+        const alivePageGrowthRate = this.calculateGrowthRate(currentAlivePages, maxAlivePages);
+        const teamspaceGrowthRate = this.calculateGrowthRate(currentTeamspaces, maxTeamspaces);
+
+        // Calculate Projections
+        const projections = this.calculateProjections({
+            currentMembers,
+            memberGrowthRate,
+            currentPages,
+            pageGrowthRate,
+            currentTeamspaces,
+            teamspaceGrowthRate
+        });
+
+        // Calculate Growth Quality Metrics
+        const growthQuality = this.calculateGrowthQuality({
+            alivePageGrowthRate,
+            pageGrowthRate,
+            teamspaceGrowthRate,
+            memberGrowthRate
+        });
 
         return {
-            monthlyMemberGrowthRate: memberGrowth.monthlyRate,
-            monthlyContentGrowthRate: contentGrowth.monthlyRate,
-            expectedMembersNextYear: this.predictMemberGrowth(dataframe_3, memberGrowth.monthlyRate),
-            growthConsistency: this.calculateGrowthConsistency(growthPatterns.monthlyValues),
-            growthTrajectory: this.calculateGrowthTrajectory(growthPatterns),
-            scalingReadinessScore: scalingReadiness.score,
-            growthPotentialScore: this.calculateGrowthPotential(dataframe_2, dataframe_3),
-            predictedBottlenecks: this.predictBottlenecks(growthPatterns)
+            // Member Growth
+            monthly_member_growth_rate: this.formatPercentage(memberGrowthRate),
+            monthly_guest_growth_rate: this.formatPercentage(guestGrowthRate),
+            total_member_growth: this.formatPercentage((currentMembers - maxMembers) / maxMembers),
+            
+            // Content Growth
+            monthly_content_growth_rate: this.formatPercentage(pageGrowthRate),
+            alive_content_growth_rate: this.formatPercentage(alivePageGrowthRate),
+            content_retention_rate: this.formatPercentage(currentAlivePages / currentPages),
+            
+            // Structure Growth
+            teamspace_growth_rate: this.formatPercentage(teamspaceGrowthRate),
+            permission_group_growth: this.formatPercentage(
+                this.calculateGrowthRate(currentPermissionGroups, maxPermissionGroups)
+            ),
+            
+            // Projections
+            expected_members_next_year: projections.expectedMembers,
+            expected_pages_next_year: projections.expectedPages,
+            expected_teamspaces_next_year: projections.expectedTeamspaces,
+            
+            // Growth Quality Metrics
+            growth_consistency: this.formatPercentage(growthQuality.consistency),
+            growth_sustainability: this.formatPercentage(growthQuality.sustainability),
+            scaling_readiness_score: this.formatPercentage(growthQuality.scalingReadiness),
+            growth_efficiency: this.formatPercentage(growthQuality.efficiency),
+            
+            // Additional Insights
+            member_to_content_ratio: this.formatDecimal(currentPages / currentMembers),
+            teamspace_density: this.formatDecimal(currentTeamspaces / currentMembers),
+            growth_balance_score: this.formatPercentage(
+                this.calculateGrowthBalance(memberGrowthRate, pageGrowthRate, teamspaceGrowthRate)
+            )
         };
+    }
+
+    calculateGrowthRate(current, max) {
+        if (!max || max === 0) return 0;
+        return (current - max) / max;
+    }
+
+    calculateProjections({ currentMembers, memberGrowthRate, currentPages, pageGrowthRate, currentTeamspaces, teamspaceGrowthRate }) {
+        const monthsInYear = 12;
+        const compoundGrowth = (base, rate) => base * Math.pow(1 + rate, monthsInYear);
+
+        return {
+            expectedMembers: Math.ceil(compoundGrowth(currentMembers, memberGrowthRate)),
+            expectedPages: Math.ceil(compoundGrowth(currentPages, pageGrowthRate)),
+            expectedTeamspaces: Math.ceil(compoundGrowth(currentTeamspaces, teamspaceGrowthRate))
+        };
+    }
+
+    calculateGrowthQuality({ alivePageGrowthRate, pageGrowthRate, teamspaceGrowthRate, memberGrowthRate }) {
+        // Consistency: How well aligned are different growth metrics
+        const growthRates = [alivePageGrowthRate, pageGrowthRate, teamspaceGrowthRate, memberGrowthRate];
+        const avgGrowth = this.average(growthRates);
+        const consistency = 1 - this.calculateVariance(growthRates, avgGrowth);
+
+        // Sustainability: How well is content being maintained as it grows
+        const sustainability = alivePageGrowthRate / pageGrowthRate;
+
+        // Scaling Readiness: How well the structure supports growth
+        const scalingReadiness = (teamspaceGrowthRate / memberGrowthRate + sustainability) / 2;
+
+        // Efficiency: How effectively the workspace is growing
+        const efficiency = Math.min(1, (alivePageGrowthRate + teamspaceGrowthRate) / (2 * memberGrowthRate));
+
+        return {
+            consistency: Math.max(0, Math.min(1, consistency)),
+            sustainability: Math.max(0, Math.min(1, sustainability)),
+            scalingReadiness: Math.max(0, Math.min(1, scalingReadiness)),
+            efficiency: Math.max(0, Math.min(1, efficiency))
+        };
+    }
+
+    calculateVariance(values, mean) {
+        const squareDiffs = values.map(value => Math.pow(value - mean, 2));
+        return this.average(squareDiffs);
+    }
+
+    calculateGrowthBalance(memberGrowthRate, pageGrowthRate, teamspaceGrowthRate) {
+        const rates = [memberGrowthRate, pageGrowthRate, teamspaceGrowthRate];
+        const maxRate = Math.max(...rates);
+        const minRate = Math.min(...rates);
+
+        if (maxRate <= 0) return 0;
+        return 1 - ((maxRate - minRate) / maxRate);
     }
 
     analyzeGrowthPatterns(dataframe_2) {

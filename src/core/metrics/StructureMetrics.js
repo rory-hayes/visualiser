@@ -8,76 +8,132 @@ export class StructureMetrics extends BaseMetrics {
     calculateStructureMetrics(dataframe_2, dataframe_3) {
         this.validateData(dataframe_2, dataframe_3);
 
-        // Log data structure for debugging
-        console.log('Structure Metrics Data:', {
-            first_page: dataframe_2[0],
-            has_depth: dataframe_2.some(p => p.DEPTH !== undefined),
-            has_parent_id: dataframe_2.some(p => p.PARENT_ID !== undefined),
-            total_pages: dataframe_2.length,
-            sample_fields: Object.keys(dataframe_2[0] || {}),
-            parent_ids_sample: dataframe_2.slice(0, 5).map(p => p.PARENT_ID),
-            depth_values_sample: dataframe_2.slice(0, 5).map(p => p.DEPTH)
-        });
+        // Basic Counts from dataframe_2
+        const totalPages = dataframe_2[0]?.PAGE_COUNT || 0;
+        const collectionsCount = dataframe_2[0]?.COLLECTION_COUNT || 0;
+        const collectionViews = dataframe_2[0]?.COLLECTION_VIEW_COUNT || 0;
+        const collectionViewPages = dataframe_2[0]?.COLLECTION_VIEW_PAGE_COUNT || 0;
+        const tableRows = dataframe_2[0]?.TABLE_ROW_COUNT || 0;
 
-        // Calculate depths using parent-child relationships
-        const calculatedDepths = this.calculateDepths(dataframe_2);
-        console.log('Calculated Depths:', {
-            max_depth: Math.max(...calculatedDepths, 0),
-            avg_depth: this.average(calculatedDepths),
-            depth_distribution: this.getDepthDistribution(calculatedDepths),
-            sample_depths: calculatedDepths.slice(0, 5)
-        });
+        // Advanced Metrics from dataframe_3
+        const totalBlocks = dataframe_3.NUM_BLOCKS || 0;
+        const aliveBlocks = dataframe_3.NUM_ALIVE_BLOCKS || 0;
+        const totalTotalPages = dataframe_3.TOTAL_NUM_TOTAL_PAGES || 0;
+        const aliveTotalPages = dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES || 0;
+        const publicPages = dataframe_3.TOTAL_NUM_PUBLIC_PAGES || 0;
+        const privatePages = dataframe_3.TOTAL_NUM_PRIVATE_PAGES || 0;
 
-        // Calculate basic counts
-        const totalPages = dataframe_3.NUM_PAGES || dataframe_2.length;
-        const maxDepth = Math.max(...calculatedDepths, 0);
-        const avgDepth = this.average(calculatedDepths);
-        const deepPagesCount = calculatedDepths.filter(d => d > 3).length;
-        const rootPages = dataframe_2.filter(page => !page.PARENT_ID).length;
-        const orphanedBlocks = this.countOrphanedBlocks(dataframe_2);
-        const collectionsCount = dataframe_3.NUM_COLLECTIONS || 0;
-        const collectionViews = dataframe_3.NUM_COLLECTION_VIEWS || 0;
+        // Calculate derived metrics
+        const contentHealthRatio = aliveBlocks / totalBlocks;
+        const pageHealthRatio = aliveTotalPages / totalTotalPages;
+        const structuredContentRatio = (collectionsCount + collectionViewPages) / totalPages;
+        const publicContentRatio = publicPages / totalTotalPages;
+        const averageRowsPerCollection = collectionsCount > 0 ? tableRows / collectionsCount : 0;
         
-        // Calculate advanced metrics
-        const navDepthScore = this.calculateNavigationDepthScore(calculatedDepths);
-        const scatterIndex = this.calculateScatterIndex(dataframe_2);
-        const bottleneckCount = this.identifyBottlenecks(dataframe_2).length;
-        const duplicateCount = this.findDuplicates(dataframe_2).length;
-        const unfindablePages = this.countUnfindablePages(dataframe_2);
-        const percentageUnlinked = this.calculateUnlinkedPercentage(dataframe_2);
+        // Calculate structure quality scores
+        const structureHealthScore = this.calculateStructureHealthScore({
+            contentHealthRatio,
+            pageHealthRatio,
+            structuredContentRatio
+        });
 
-        // Log calculated metrics
-        console.log('Structure Metrics Results:', {
-            maxDepth,
-            avgDepth,
-            deepPagesCount,
-            rootPages,
-            orphanedBlocks,
-            navDepthScore,
-            scatterIndex,
-            bottleneckCount,
-            unfindablePages,
-            percentageUnlinked
+        const contentOrganizationScore = this.calculateContentOrganizationScore({
+            collectionsCount,
+            collectionViews,
+            totalPages
+        });
+
+        const knowledgeStructureScore = this.calculateKnowledgeStructureScore({
+            publicContentRatio,
+            structuredContentRatio,
+            averageRowsPerCollection
         });
 
         return {
+            // Basic Metrics
             total_pages: totalPages,
-            max_depth: maxDepth,
-            avg_depth: avgDepth,
-            deep_pages_count: deepPagesCount,
-            root_pages: rootPages,
-            orphaned_blocks: orphanedBlocks,
-            percentage_unlinked: percentageUnlinked,
             collections_count: collectionsCount,
-            page_count: totalPages,
             collection_views: collectionViews,
-            nav_depth_score: navDepthScore,
-            scatter_index: scatterIndex,
-            bottleneck_count: bottleneckCount,
-            duplicate_count: duplicateCount,
-            unfindable_pages: unfindablePages,
-            nav_complexity: this.calculateNavigationComplexity(dataframe_2)
+            collection_view_pages: collectionViewPages,
+            total_table_rows: tableRows,
+            
+            // Block and Page Health
+            total_blocks: totalBlocks,
+            alive_blocks: aliveBlocks,
+            total_pages_all: totalTotalPages,
+            alive_pages_all: aliveTotalPages,
+            public_pages: publicPages,
+            private_pages: privatePages,
+            
+            // Derived Ratios (as percentages)
+            content_health_ratio: this.formatPercentage(contentHealthRatio),
+            page_health_ratio: this.formatPercentage(pageHealthRatio),
+            structured_content_ratio: this.formatPercentage(structuredContentRatio),
+            public_content_ratio: this.formatPercentage(publicContentRatio),
+            
+            // Derived Metrics
+            average_rows_per_collection: this.formatDecimal(averageRowsPerCollection),
+            
+            // Quality Scores (as percentages)
+            structure_health_score: this.formatPercentage(structureHealthScore),
+            content_organization_score: this.formatPercentage(contentOrganizationScore),
+            knowledge_structure_score: this.formatPercentage(knowledgeStructureScore),
+            
+            // Additional Derived Metrics
+            collection_density: this.formatPercentage(collectionsCount / totalPages),
+            view_per_collection_ratio: this.formatDecimal(collectionViews / collectionsCount),
+            database_complexity_score: this.formatPercentage(this.calculateDatabaseComplexity({
+                tableRows,
+                collectionsCount,
+                totalPages
+            }))
         };
+    }
+
+    calculateStructureHealthScore({ contentHealthRatio, pageHealthRatio, structuredContentRatio }) {
+        const weights = {
+            contentHealth: 0.4,
+            pageHealth: 0.4,
+            structuredContent: 0.2
+        };
+
+        return (
+            contentHealthRatio * weights.contentHealth +
+            pageHealthRatio * weights.pageHealth +
+            structuredContentRatio * weights.structuredContent
+        );
+    }
+
+    calculateContentOrganizationScore({ collectionsCount, collectionViews, totalPages }) {
+        if (totalPages === 0) return 0;
+
+        const collectionDensity = collectionsCount / totalPages;
+        const viewDiversity = collectionViews / (collectionsCount || 1);
+
+        return Math.min(
+            ((collectionDensity * 0.5) + (viewDiversity * 0.5)),
+            1
+        );
+    }
+
+    calculateKnowledgeStructureScore({ publicContentRatio, structuredContentRatio, averageRowsPerCollection }) {
+        const normalizedRowsScore = Math.min(averageRowsPerCollection / 1000, 1);
+        
+        return (
+            publicContentRatio * 0.3 +
+            structuredContentRatio * 0.4 +
+            normalizedRowsScore * 0.3
+        );
+    }
+
+    calculateDatabaseComplexity({ tableRows, collectionsCount, totalPages }) {
+        if (totalPages === 0 || collectionsCount === 0) return 0;
+
+        const avgRowsPerCollection = tableRows / collectionsCount;
+        const normalizedRowsScore = Math.min(avgRowsPerCollection / 1000, 1);
+        const collectionDensity = collectionsCount / totalPages;
+
+        return (normalizedRowsScore * 0.6 + collectionDensity * 0.4);
     }
 
     calculateDepths(dataframe_2) {

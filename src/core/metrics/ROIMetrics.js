@@ -15,25 +15,111 @@ export class ROIMetrics extends BaseMetrics {
     calculateROIMetrics(dataframe_3, dataframe_5) {
         this.validateData([], dataframe_3, dataframe_5);
 
-        const currentPlan = this.calculateCurrentPlanCost(dataframe_3);
-        const enterpriseROI = this.calculateEnterpriseROI(dataframe_3, dataframe_5);
-        const aiROI = this.calculateEnterpriseWithAIROI(dataframe_3, dataframe_5);
-        const growthScenarios = this.calculateGrowthScenarios(dataframe_3);
+        // Cost and Revenue Metrics
+        const totalARR = dataframe_3.TOTAL_ARR || 0;
+        const maxARR = dataframe_3.MAX_ARR || 0;
+        const paidSeats = dataframe_3.TOTAL_PAID_SEATS || 0;
+        const maxPaidSeats = dataframe_3.MAX_PAID_SEATS || 0;
+
+        // Usage Metrics
+        const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
+        const totalGuests = dataframe_3.TOTAL_NUM_GUESTS || 0;
+        const totalPages = dataframe_3.TOTAL_NUM_TOTAL_PAGES || 0;
+        const alivePages = dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES || 0;
+
+        // Calculate Monthly and Annual Costs
+        const monthlyCost = totalARR / 12;
+        const annualCost = totalARR;
+        const costPerMember = totalMembers > 0 ? monthlyCost / totalMembers : 0;
+        const costPerPage = totalPages > 0 ? annualCost / totalPages : 0;
+
+        // Calculate ROI Metrics
+        const utilizationRate = paidSeats > 0 ? totalMembers / paidSeats : 0;
+        const contentEfficiency = totalPages > 0 ? alivePages / totalPages : 0;
+        const revenueGrowthRate = maxARR > 0 ? (totalARR - maxARR) / maxARR : 0;
+
+        // Calculate Savings and Projections
+        const savingsMetrics = this.calculateSavingsMetrics({
+            totalARR,
+            totalMembers,
+            utilizationRate,
+            contentEfficiency
+        });
+
+        const growthScenarios = this.calculateGrowthScenarios({
+            currentARR: totalARR,
+            totalMembers,
+            paidSeats
+        });
 
         return {
-            currentPlanCost: currentPlan.monthlyCost,
-            annualCost: currentPlan.annualCost,
-            enterprisePlanROI: enterpriseROI.roi,
-            enterprisePlanSavings: enterpriseROI.annualSavings,
-            enterpriseAIROI: aiROI.roi,
-            enterpriseAISavings: aiROI.annualSavings,
-            growthScenarios: {
-                tenPercent: growthScenarios[10],
-                twentyPercent: growthScenarios[20],
-                fiftyPercent: growthScenarios[50]
+            // Cost Metrics
+            current_monthly_cost: this.formatCurrency(monthlyCost),
+            current_annual_cost: this.formatCurrency(annualCost),
+            cost_per_member: this.formatCurrency(costPerMember),
+            cost_per_page: this.formatCurrency(costPerPage),
+            
+            // Usage Metrics
+            total_paid_seats: paidSeats,
+            seat_utilization: this.formatPercentage(utilizationRate),
+            content_efficiency: this.formatPercentage(contentEfficiency),
+            revenue_growth: this.formatPercentage(revenueGrowthRate),
+            
+            // ROI and Savings
+            enterprise_roi: this.formatPercentage(savingsMetrics.enterpriseROI),
+            enterprise_annual_savings: this.formatCurrency(savingsMetrics.enterpriseSavings),
+            ai_productivity_boost: this.formatPercentage(savingsMetrics.aiProductivityBoost),
+            projected_savings: this.formatCurrency(savingsMetrics.projectedSavings),
+            
+            // Growth Scenarios
+            growth_scenarios: {
+                ten_percent: this.formatCurrency(growthScenarios.tenPercent),
+                twenty_percent: this.formatCurrency(growthScenarios.twentyPercent),
+                fifty_percent: this.formatCurrency(growthScenarios.fiftyPercent)
             },
-            projectedTimeSavings: this.calculateProjectedTimeSavings(dataframe_3, dataframe_5),
-            automationPotential: this.calculateAutomationPotential(dataframe_3)
+            
+            // Additional Insights
+            revenue_per_member: this.formatCurrency(totalMembers > 0 ? totalARR / totalMembers : 0),
+            revenue_per_page: this.formatCurrency(totalPages > 0 ? totalARR / totalPages : 0),
+            efficiency_score: this.formatPercentage(
+                (utilizationRate + contentEfficiency) / 2
+            )
+        };
+    }
+
+    calculateSavingsMetrics({ totalARR, totalMembers, utilizationRate, contentEfficiency }) {
+        // Enterprise ROI calculation
+        const baseEnterpriseDiscount = 0.15; // 15% base discount for enterprise
+        const utilizationBonus = Math.max(0, utilizationRate - 0.8) * 0.1; // Up to 10% additional discount
+        const efficiencyBonus = contentEfficiency * 0.05; // Up to 5% additional discount
+        
+        const totalDiscount = baseEnterpriseDiscount + utilizationBonus + efficiencyBonus;
+        const enterpriseSavings = totalARR * totalDiscount;
+        const enterpriseROI = totalDiscount;
+
+        // AI Productivity calculation
+        const baseAIBoost = 0.2; // 20% base productivity boost
+        const scaleBoost = Math.min(totalMembers / 1000, 0.1); // Up to 10% additional boost based on scale
+        const aiProductivityBoost = baseAIBoost + scaleBoost;
+
+        // Projected savings calculation
+        const projectedSavings = enterpriseSavings * (1 + aiProductivityBoost);
+
+        return {
+            enterpriseROI,
+            enterpriseSavings,
+            aiProductivityBoost,
+            projectedSavings
+        };
+    }
+
+    calculateGrowthScenarios({ currentARR, totalMembers, paidSeats }) {
+        const baseGrowthMultiplier = Math.min(paidSeats / totalMembers, 2);
+        
+        return {
+            tenPercent: currentARR * (1.1 * baseGrowthMultiplier),
+            twentyPercent: currentARR * (1.2 * baseGrowthMultiplier),
+            fiftyPercent: currentARR * (1.5 * baseGrowthMultiplier)
         };
     }
 

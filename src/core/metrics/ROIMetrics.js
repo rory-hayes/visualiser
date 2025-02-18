@@ -54,36 +54,34 @@ export class ROIMetrics extends BaseMetrics {
 
         return {
             // Cost Metrics
-            current_monthly_cost: this.formatCurrency(monthlyCost),
-            current_annual_cost: this.formatCurrency(annualCost),
-            cost_per_member: this.formatCurrency(costPerMember),
-            cost_per_page: this.formatCurrency(costPerPage),
+            current_monthly_cost: monthlyCost,
+            current_annual_cost: annualCost,
+            cost_per_member: costPerMember,
+            cost_per_page: costPerPage,
             
             // Usage Metrics
             total_paid_seats: paidSeats,
-            seat_utilization: this.formatPercentage(utilizationRate),
-            content_efficiency: this.formatPercentage(contentEfficiency),
-            revenue_growth: this.formatPercentage(revenueGrowthRate),
+            seat_utilization: utilizationRate,
+            content_efficiency: contentEfficiency,
+            revenue_growth: revenueGrowthRate,
             
             // ROI and Savings
-            enterprise_roi: this.formatPercentage(savingsMetrics.enterpriseROI),
-            enterprise_annual_savings: this.formatCurrency(savingsMetrics.enterpriseSavings),
-            ai_productivity_boost: this.formatPercentage(savingsMetrics.aiProductivityBoost),
-            projected_savings: this.formatCurrency(savingsMetrics.projectedSavings),
+            enterprise_roi: savingsMetrics.enterpriseROI,
+            enterprise_annual_savings: savingsMetrics.enterpriseSavings,
+            ai_productivity_boost: savingsMetrics.aiProductivityBoost,
+            projected_savings: savingsMetrics.projectedSavings,
             
             // Growth Scenarios
             growth_scenarios: {
-                ten_percent: this.formatCurrency(growthScenarios.tenPercent),
-                twenty_percent: this.formatCurrency(growthScenarios.twentyPercent),
-                fifty_percent: this.formatCurrency(growthScenarios.fiftyPercent)
+                ten_percent: growthScenarios.tenPercent,
+                twenty_percent: growthScenarios.twentyPercent,
+                fifty_percent: growthScenarios.fiftyPercent
             },
             
             // Additional Insights
-            revenue_per_member: this.formatCurrency(totalMembers > 0 ? totalARR / totalMembers : 0),
-            revenue_per_page: this.formatCurrency(totalPages > 0 ? totalARR / totalPages : 0),
-            efficiency_score: this.formatPercentage(
-                (utilizationRate + contentEfficiency) / 2
-            )
+            revenue_per_member: totalMembers > 0 ? totalARR / totalMembers : 0,
+            revenue_per_page: totalPages > 0 ? totalARR / totalPages : 0,
+            efficiency_score: (utilizationRate + contentEfficiency) / 2
         };
     }
 

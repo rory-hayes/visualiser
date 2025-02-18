@@ -54,29 +54,33 @@ export class CollaborationPatterns extends BaseMetrics {
             permission_groups: permissionGroups,
             
             // Derived Metrics
-            average_teamspace_members: this.formatDecimal(averageTeamspaceMembers),
-            teamspace_distribution: teamspaceDistribution,
+            average_teamspace_members: averageTeamspaceMembers,
+            teamspace_distribution: {
+                open: openTeamspaces / totalTeamspaces,
+                closed: closedTeamspaces / totalTeamspaces,
+                private: privateTeamspaces / totalTeamspaces
+            },
             
             // Collaboration Scores
-            team_adoption_score: this.formatPercentage(teamAdoption),
-            collaboration_density: this.formatPercentage(collaborationMetrics.density),
-            cross_team_collaboration: this.formatPercentage(collaborationMetrics.crossTeam),
+            team_adoption_score: teamAdoption,
+            collaboration_density: collaborationMetrics.density,
+            cross_team_collaboration: collaborationMetrics.crossTeam,
             
             // Additional Insights
-            workspace_accessibility: this.formatPercentage(openTeamspaces / totalTeamspaces),
-            permission_complexity: this.formatPercentage(permissionGroups / totalTeamspaces),
-            guest_ratio: this.formatPercentage(totalGuests / totalMembers),
-            automation_level: this.formatPercentage((totalBots + totalIntegrations) / totalMembers)
+            workspace_accessibility: openTeamspaces / totalTeamspaces,
+            permission_complexity: permissionGroups / totalTeamspaces,
+            guest_ratio: totalGuests / totalMembers,
+            automation_level: (totalBots + totalIntegrations) / totalMembers
         };
     }
 
     calculateTeamspaceDistribution({ openTeamspaces, closedTeamspaces, privateTeamspaces, totalTeamspaces }) {
-        if (totalTeamspaces === 0) return { open: '0%', closed: '0%', private: '0%' };
+        if (totalTeamspaces === 0) return { open: 0, closed: 0, private: 0 };
 
         return {
-            open: this.formatPercentage(openTeamspaces / totalTeamspaces),
-            closed: this.formatPercentage(closedTeamspaces / totalTeamspaces),
-            private: this.formatPercentage(privateTeamspaces / totalTeamspaces)
+            open: openTeamspaces / totalTeamspaces,
+            closed: closedTeamspaces / totalTeamspaces,
+            private: privateTeamspaces / totalTeamspaces
         };
     }
 

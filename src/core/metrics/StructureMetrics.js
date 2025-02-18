@@ -65,28 +65,28 @@ export class StructureMetrics extends BaseMetrics {
             public_pages: publicPages,
             private_pages: privatePages,
             
-            // Derived Ratios (as percentages)
-            content_health_ratio: this.formatPercentage(contentHealthRatio),
-            page_health_ratio: this.formatPercentage(pageHealthRatio),
-            structured_content_ratio: this.formatPercentage(structuredContentRatio),
-            public_content_ratio: this.formatPercentage(publicContentRatio),
+            // Derived Ratios (as raw numbers)
+            content_health_ratio: contentHealthRatio,
+            page_health_ratio: pageHealthRatio,
+            structured_content_ratio: structuredContentRatio,
+            public_content_ratio: publicContentRatio,
             
             // Derived Metrics
-            average_rows_per_collection: this.formatDecimal(averageRowsPerCollection),
+            average_rows_per_collection: averageRowsPerCollection,
             
-            // Quality Scores (as percentages)
-            structure_health_score: this.formatPercentage(structureHealthScore),
-            content_organization_score: this.formatPercentage(contentOrganizationScore),
-            knowledge_structure_score: this.formatPercentage(knowledgeStructureScore),
+            // Quality Scores (as raw numbers)
+            structure_health_score: structureHealthScore,
+            content_organization_score: contentOrganizationScore,
+            knowledge_structure_score: knowledgeStructureScore,
             
             // Additional Derived Metrics
-            collection_density: this.formatPercentage(collectionsCount / totalPages),
-            view_per_collection_ratio: this.formatDecimal(collectionViews / collectionsCount),
-            database_complexity_score: this.formatPercentage(this.calculateDatabaseComplexity({
+            collection_density: collectionsCount / totalPages,
+            view_per_collection_ratio: collectionViews / collectionsCount,
+            database_complexity_score: this.calculateDatabaseComplexity({
                 tableRows,
                 collectionsCount,
                 totalPages
-            }))
+            })
         };
     }
 

@@ -11,23 +11,25 @@ export class NotionFormatter {
                     // Basic Structure Metrics
                     `Total Pages: ${metrics.total_pages || 0} | Collections Count: ${metrics.collections_count || 0}`,
                     `Collection Views: ${metrics.collection_views || 0} | Collection View Pages: ${metrics.collection_view_pages || 0}`,
-                    `Max Depth: ${metrics.max_depth || metrics.maxDepth || 0} | Average Depth: ${this.formatDecimal(metrics.avg_depth || metrics.avgDepth)}`,
-                    `Deep Pages Count: ${metrics.deep_pages_count || metrics.deepPagesCount || 0} | Root Pages: ${metrics.root_pages || metrics.rootPages || 0}`,
-                    `Orphaned Blocks: ${metrics.orphaned_blocks || metrics.orphanedBlocks || 0} | Total Table Rows: ${metrics.total_table_rows || 0}`,
+                    `Max Depth: ${metrics.max_depth || 0} | Average Depth: ${this.formatDecimal(metrics.avg_depth || 0)}`,
+                    `Deep Pages Count: ${metrics.deep_pages_count || 0} | Root Pages: ${metrics.root_pages || 0}`,
+                    `Orphaned Blocks: ${metrics.orphaned_blocks || 0} | Total Table Rows: ${metrics.total_table_rows || 0}`,
                     
                     // Navigation & Structure Quality
-                    `Navigation Depth Score: ${this.formatPercentage(metrics.nav_depth_score || metrics.navDepthScore)} | Navigation Complexity: ${this.formatPercentage(metrics.nav_complexity || metrics.navComplexity)}`,
-                    `Scatter Index: ${this.formatPercentage(metrics.scatter_index || metrics.scatterIndex)} | Percentage Unlinked: ${this.formatPercentage(metrics.percentage_unlinked || metrics.percentageUnlinked)}`,
-                    `Bottleneck Count: ${metrics.bottleneck_count || metrics.bottleneckCount || 0} | Duplicate Count: ${metrics.duplicate_count || metrics.duplicateCount || 0}`,
-                    `Unfindable Pages: ${metrics.unfindable_pages || metrics.unfindablePages || 0} | Structured Pages Ratio: ${this.formatPercentage(metrics.structured_pages_ratio || metrics.structuredPagesRatio)}`,
-                    `Content Diversity Score: ${this.formatPercentage(metrics.content_diversity_score || metrics.contentDiversityScore)} | Structure Health Score: ${this.formatPercentage(metrics.structure_health_score || metrics.structureHealthScore)}`,
-                    `Content Organization Score: ${this.formatPercentage(metrics.content_organization_score || metrics.contentOrganizationScore)} | Structure Quality Index: ${this.formatPercentage(metrics.structure_quality_index || metrics.structureQualityIndex)}`,
+                    `Navigation Depth Score: ${this.formatPercentage(metrics.nav_depth_score || 0)} | Navigation Complexity: ${this.formatPercentage(metrics.nav_complexity || 0)}`,
+                    `Scatter Index: ${this.formatPercentage(metrics.scatter_index || 0)} | Percentage Unlinked: ${this.formatPercentage(metrics.percentage_unlinked || 0)}`,
+                    `Bottleneck Count: ${metrics.bottleneck_count || 0} | Duplicate Count: ${metrics.duplicate_count || 0}`,
+                    `Unfindable Pages: ${metrics.unfindable_pages || 0} | Structured Pages Ratio: ${this.formatPercentage(metrics.structured_pages_ratio || 0)}`,
+                    
+                    // Content Quality
+                    `Content Diversity Score: ${this.formatPercentage(metrics.content_diversity_score || 0)} | Structure Health Score: ${this.formatPercentage(metrics.structure_health_score || 0)}`,
+                    `Content Organization Score: ${this.formatPercentage(metrics.content_organization_score || 0)} | Structure Quality Index: ${this.formatPercentage(metrics.structure_quality_index || 0)}`,
                     
                     // Evolution Metrics
-                    `Content Maturity Score: ${this.formatPercentage(metrics.content_maturity_score || metrics.contentMaturityScore)} | Knowledge Structure Score: ${this.formatPercentage(metrics.knowledge_structure_score || metrics.knowledgeStructureScore)}`,
-                    `Workspace Complexity Score: ${this.formatPercentage(metrics.workspace_complexity_score || metrics.workspaceComplexityScore)} | Growth Sustainability Index: ${this.formatPercentage(metrics.growth_sustainability_index || metrics.growthSustainabilityIndex)}`,
-                    `Content Evolution Rate: ${this.formatPercentage(metrics.content_evolution_rate || metrics.contentEvolutionRate)} | Structure Evolution Score: ${this.formatPercentage(metrics.structure_evolution_score || metrics.structureEvolutionScore)}`,
-                    `Adaptation Score: ${this.formatPercentage(metrics.adaptation_score || metrics.adaptationScore)} | Change Velocity: ${this.formatPercentage(metrics.change_velocity || metrics.changeVelocity)}`,
+                    `Content Maturity Score: ${this.formatPercentage(metrics.content_maturity_score || 0)} | Knowledge Structure Score: ${this.formatPercentage(metrics.knowledge_structure_score || 0)}`,
+                    `Workspace Complexity Score: ${this.formatPercentage(metrics.workspace_complexity_score || 0)} | Growth Sustainability Index: ${this.formatPercentage(metrics.growth_sustainability_index || 0)}`,
+                    `Content Evolution Rate: ${this.formatPercentage(metrics.content_evolution_rate || 0)} | Structure Evolution Score: ${this.formatPercentage(metrics.structure_evolution_score || 0)}`,
+                    `Adaptation Score: ${this.formatPercentage(metrics.adaptation_score || 0)} | Change Velocity: ${this.formatPercentage(metrics.change_velocity || 0)}`,
                     
                     // Block and Page Health
                     `Total Blocks: ${metrics.total_blocks || 0} | Alive Blocks: ${metrics.alive_blocks || 0}`,
@@ -35,90 +37,82 @@ export class NotionFormatter {
                     `Public Pages: ${metrics.public_pages || 0} | Private Pages: ${metrics.private_pages || 0}`,
                     
                     // Content Health
-                    `Content Health Ratio: ${this.formatPercentage(metrics.content_health_ratio)} | Page Health Ratio: ${this.formatPercentage(metrics.page_health_ratio)}`,
-                    `Structured Content Ratio: ${this.formatPercentage(metrics.structured_content_ratio)} | Public Content Ratio: ${this.formatPercentage(metrics.public_content_ratio)}`,
-                    `Collection Density: ${this.formatPercentage(metrics.collection_density)} | Database Complexity Score: ${this.formatPercentage(metrics.database_complexity_score)}`
+                    `Content Health Ratio: ${this.formatPercentage(metrics.content_health_ratio || 0)} | Page Health Ratio: ${this.formatPercentage(metrics.page_health_ratio || 0)}`,
+                    `Structured Content Ratio: ${this.formatPercentage(metrics.structured_content_ratio || 0)} | Public Content Ratio: ${this.formatPercentage(metrics.public_content_ratio || 0)}`,
+                    `Collection Density: ${this.formatPercentage(metrics.collection_density || 0)} | Database Complexity Score: ${this.formatPercentage(metrics.database_complexity_score || 0)}`
                 ]
             },
             {
                 title: 'Collaboration & Team Metrics',
                 metrics: [
                     // Team & Member Metrics
-                    `Total Members: ${metrics.total_members || 0} | Active Members: ${metrics.active_members || metrics.activeMembers || 0}`,
-                    `Total Guests: ${metrics.total_guests || 0} | Total Teamspaces: ${metrics.total_teamspaces || 0}`,
-                    `Average Teamspace Members: ${this.formatDecimal(metrics.average_teamspace_members || metrics.averageTeamspaceMembers)} | Permission Groups: ${metrics.permission_groups || 0}`,
+                    `Total Members: ${metrics.totalMembers || 0} | Active Members: ${metrics.activeMembers || 0}`,
+                    `Total Guests: ${metrics.totalGuests || 0} | Total Teamspaces: ${metrics.totalTeamspaces || 0}`,
+                    `Average Teamspace Members: ${this.formatDecimal(metrics.averageTeamspaceMembers || 0)} | Permission Groups: ${metrics.permission_groups || 0}`,
                     
                     // Activity Metrics
-                    `Daily Active Users: ${metrics.daily_active_users || metrics.dailyActiveUsers || 0} | Weekly Active Users: ${metrics.weekly_active_users || metrics.weeklyActiveUsers || 0}`,
-                    `Monthly Active Users: ${metrics.monthly_active_users || metrics.monthlyActiveUsers || 0} | Team Adoption Score: ${this.formatPercentage(metrics.team_adoption_score || metrics.teamAdoptionScore)}`,
-                    
-                    // Teamspace Structure
-                    `Open Teamspaces: ${metrics.open_teamspaces || 0} | Closed Teamspaces: ${metrics.closed_teamspaces || 0}`,
-                    `Private Teamspaces: ${metrics.private_teamspaces || 0} | Total Bots: ${metrics.total_bots || 0}`,
+                    `Daily Active Users: ${metrics.dailyActiveUsers || 0} | Weekly Active Users: ${metrics.weeklyActiveUsers || 0}`,
+                    `Monthly Active Users: ${metrics.monthlyActiveUsers || 0} | Team Adoption Score: ${this.formatPercentage(metrics.teamAdoptionScore || 0)}`,
                     
                     // Collaboration Metrics
-                    `Collaboration Density: ${this.formatPercentage(metrics.collaboration_density || metrics.collaborationDensity)} | Knowledge Sharing Index: ${this.formatPercentage(metrics.knowledge_sharing_index || metrics.knowledgeSharingIndex)}`,
-                    `Cross-team Collaboration Score: ${this.formatPercentage(metrics.cross_team_collaboration_score || metrics.crossTeamCollaborationScore)} | Engagement Score: ${this.formatPercentage(metrics.engagement_score || metrics.engagementScore)}`,
-                    `Collaboration Rate: ${this.formatPercentage(metrics.collaboration_rate || metrics.collaborationRate)} | Collaboration Efficiency: ${this.formatPercentage(metrics.collaboration_efficiency || metrics.collaborationEfficiency)}`,
-                    `Team Interaction Score: ${this.formatPercentage(metrics.team_interaction_score || metrics.teamInteractionScore)} | Collaboration Factor: ${this.formatPercentage(metrics.collaboration_factor || metrics.collaborationFactor)}`,
-                    
-                    // Team Composition & Permissions
-                    `Usage Factor: ${this.formatPercentage(metrics.usage_factor || metrics.usageFactor)} | Total Integrations: ${metrics.total_integrations || 0}`,
-                    `Permission Complexity: ${this.formatPercentage(metrics.permission_complexity)} | Guest Ratio: ${this.formatPercentage(metrics.guest_ratio)}`,
-                    `Automation Level: ${this.formatPercentage(metrics.automation_level)}`
+                    `Collaboration Density: ${this.formatPercentage(metrics.collaborationDensity || 0)} | Knowledge Sharing Index: ${this.formatPercentage(metrics.knowledgeSharingIndex || 0)}`,
+                    `Cross-team Collaboration Score: ${this.formatPercentage(metrics.crossTeamCollaborationScore || 0)} | Engagement Score: ${this.formatPercentage(metrics.engagementScore || 0)}`,
+                    `Collaboration Rate: ${this.formatPercentage(metrics.collaborationRate || 0)} | Collaboration Efficiency: ${this.formatPercentage(metrics.collaborationEfficiency || 0)}`,
+                    `Team Interaction Score: ${this.formatPercentage(metrics.teamInteractionScore || 0)} | Collaboration Factor: ${this.formatPercentage(metrics.collaborationFactor || 0)}`,
+                    `Usage Factor: ${this.formatPercentage(metrics.usageFactor || 0)} | Total Integrations: ${metrics.totalIntegrations || 0}`
                 ]
             },
             {
                 title: 'Growth & Projections',
                 metrics: [
                     // Growth Rates
-                    `Monthly Member Growth Rate: ${this.formatPercentage(metrics.monthly_member_growth_rate || metrics.monthlyMemberGrowthRate)} | Monthly Guest Growth Rate: ${this.formatPercentage(metrics.monthly_guest_growth_rate || metrics.monthlyGuestGrowthRate)}`,
-                    `Total Member Growth: ${this.formatPercentage(metrics.total_member_growth || metrics.totalMemberGrowth)} | Monthly Content Growth Rate: ${this.formatPercentage(metrics.monthly_content_growth_rate || metrics.monthlyContentGrowthRate)}`,
-                    `Alive Content Growth Rate: ${this.formatPercentage(metrics.alive_content_growth_rate || metrics.aliveContentGrowthRate)} | Content Retention Rate: ${this.formatPercentage(metrics.content_retention_rate || metrics.contentRetentionRate)}`,
+                    `Monthly Member Growth Rate: ${this.formatPercentage(metrics.monthly_member_growth_rate || 0)} | Monthly Guest Growth Rate: ${this.formatPercentage(metrics.monthly_guest_growth_rate || 0)}`,
+                    `Total Member Growth: ${this.formatPercentage(metrics.total_member_growth || 0)} | Monthly Content Growth Rate: ${this.formatPercentage(metrics.monthly_content_growth_rate || 0)}`,
+                    `Alive Content Growth Rate: ${this.formatPercentage(metrics.alive_content_growth_rate || 0)} | Content Retention Rate: ${this.formatPercentage(metrics.content_retention_rate || 0)}`,
                     
                     // Structure Growth
-                    `Teamspace Growth Rate: ${this.formatPercentage(metrics.teamspace_growth_rate || metrics.teamspaceGrowthRate)} | Permission Group Growth: ${this.formatPercentage(metrics.permission_group_growth || metrics.permissionGroupGrowth)}`,
+                    `Teamspace Growth Rate: ${this.formatPercentage(metrics.teamspace_growth_rate || 0)} | Permission Group Growth: ${this.formatPercentage(metrics.permission_group_growth || 0)}`,
                     
                     // Projections
-                    `Expected Members Next Year: ${Math.round(metrics.expected_members_next_year || metrics.expectedMembersNextYear || 0)} | Expected Pages Next Year: ${metrics.expected_pages_next_year || metrics.expectedPagesNextYear || 0}`,
-                    `Expected Teamspaces Next Year: ${metrics.expected_teamspaces_next_year || metrics.expectedTeamspacesNextYear || 0} | Growth Consistency: ${this.formatPercentage(metrics.growth_consistency || metrics.growthConsistency)}`,
+                    `Expected Members Next Year: ${Math.round(metrics.expected_members_next_year || 0)} | Expected Pages Next Year: ${metrics.expected_pages_next_year || 0}`,
+                    `Expected Teamspaces Next Year: ${metrics.expected_teamspaces_next_year || 0} | Growth Consistency: ${this.formatPercentage(metrics.growth_consistency || 0)}`,
                     
                     // Growth Quality
-                    `Growth Sustainability: ${this.formatPercentage(metrics.growth_sustainability || metrics.growthSustainability)} | Scaling Readiness Score: ${this.formatPercentage(metrics.scaling_readiness_score || metrics.scalingReadinessScore)}`,
-                    `Growth Efficiency: ${this.formatPercentage(metrics.growth_efficiency || metrics.growthEfficiency)} | Growth Balance Score: ${this.formatPercentage(metrics.growth_balance_score || metrics.growthBalanceScore)}`,
+                    `Growth Sustainability: ${this.formatPercentage(metrics.growth_sustainability || 0)} | Scaling Readiness Score: ${this.formatPercentage(metrics.scaling_readiness_score || 0)}`,
+                    `Growth Efficiency: ${this.formatPercentage(metrics.growth_efficiency || 0)} | Growth Balance Score: ${this.formatPercentage(metrics.growth_balance_score || 0)}`,
                     
                     // Growth Scenarios
                     `10% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.ten_percent || 0)}/year | 20% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.twenty_percent || 0)}/year`,
-                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fifty_percent || 0)}/year | Member to Content Ratio: ${this.formatDecimal(metrics.member_to_content_ratio || metrics.memberToContentRatio)}`,
-                    `Teamspace Density: ${this.formatDecimal(metrics.teamspace_density || metrics.teamspaceDensity)}`
+                    `50% Growth Scenario: ${this.formatCurrency(metrics.growth_scenarios?.fifty_percent || 0)}/year | Member to Content Ratio: ${this.formatDecimal(metrics.member_to_content_ratio || 0)}`,
+                    `Teamspace Density: ${this.formatDecimal(metrics.teamspace_density || 0)}`
                 ]
             },
             {
                 title: 'ROI & Cost Analysis',
                 metrics: [
                     // Current Costs
-                    `Current Plan Cost: ${this.formatCurrency(metrics.current_plan_cost || metrics.currentPlanCost)}/month | Annual Cost: ${this.formatCurrency(metrics.annual_cost || metrics.annualCost)}`,
+                    `Current Plan Cost: ${this.formatCurrency(metrics.current_monthly_cost || 0)}/month | Annual Cost: ${this.formatCurrency(metrics.current_annual_cost || 0)}`,
                     
                     // Enterprise Benefits
-                    `Enterprise Plan ROI: ${this.formatPercentage(metrics.enterprise_plan_roi || metrics.enterprisePlanROI)} | Enterprise Plan Annual Savings: ${this.formatCurrency(metrics.enterprise_plan_savings || metrics.enterprisePlanSavings)}`,
+                    `Enterprise Plan ROI: ${this.formatPercentage(metrics.enterprise_roi || 0)} | Enterprise Plan Annual Savings: ${this.formatCurrency(metrics.enterprise_annual_savings || 0)}`,
                     
                     // AI Benefits
-                    `Enterprise + AI ROI: ${this.formatPercentage(metrics.enterprise_ai_roi || metrics.enterpriseAIROI)} | Enterprise + AI Annual Savings: ${this.formatCurrency(metrics.enterprise_ai_savings || metrics.enterpriseAISavings)}`,
-                    `AI Productivity Boost: ${this.formatPercentage(metrics.ai_productivity_boost || metrics.aiProductivityBoost)} | Productivity Gain: ${this.formatPercentage(metrics.productivity_gain || metrics.productivityGain)}`,
+                    `Enterprise + AI ROI: ${this.formatPercentage(metrics.enterprise_ai_roi || 0)} | Enterprise + AI Annual Savings: ${this.formatCurrency(metrics.enterprise_ai_savings || 0)}`,
+                    `AI Productivity Boost: ${this.formatPercentage(metrics.ai_productivity_boost || 0)} | Productivity Gain: ${this.formatPercentage(metrics.productivity_gain || 0)}`,
                     
                     // Time & Automation
-                    `Projected Time Savings: ${this.formatDecimal(metrics.projected_time_savings?.hours_per_member || metrics.projectedTimeSavings?.hoursPerMember)} hours/member/month | Total Hours Saved: ${this.formatDecimal(metrics.projected_time_savings?.total_hours || metrics.projectedTimeSavings?.totalHours)} hours/month`,
-                    `Monetary Value of Time Saved: ${this.formatCurrency(metrics.projected_time_savings?.monetary_value || metrics.projectedTimeSavings?.monetaryValue)}/month | Automation Potential Score: ${this.formatPercentage(metrics.automation_potential?.score || metrics.automationPotential?.score)}`,
-                    `Potential Automation Savings: ${this.formatCurrency(metrics.automation_potential?.potential_savings || metrics.automationPotential?.potentialSavings)}/year`,
+                    `Projected Time Savings: ${this.formatDecimal(metrics.projected_time_savings?.hours_per_member || 0)} hours/member/month | Total Hours Saved: ${this.formatDecimal(metrics.projected_time_savings?.total_hours || 0)} hours/month`,
+                    `Monetary Value of Time Saved: ${this.formatCurrency(metrics.projected_time_savings?.monetary_value || 0)}/month | Automation Potential Score: ${this.formatPercentage(metrics.automation_potential?.score || 0)}`,
+                    `Potential Automation Savings: ${this.formatCurrency(metrics.automation_potential?.potential_savings || 0)}/year`,
                     
                     // Usage Metrics
-                    `Total Paid Seats: ${metrics.total_paid_seats || 0} | Seat Utilization: ${this.formatPercentage(metrics.seat_utilization || metrics.seatUtilization)}`,
-                    `Content Efficiency: ${this.formatPercentage(metrics.content_efficiency || metrics.contentEfficiency)} | Revenue Growth: ${this.formatPercentage(metrics.revenue_growth || metrics.revenueGrowth)}`,
+                    `Total Paid Seats: ${metrics.total_paid_seats || 0} | Seat Utilization: ${this.formatPercentage(metrics.seat_utilization || 0)}`,
+                    `Content Efficiency: ${this.formatPercentage(metrics.content_efficiency || 0)} | Revenue Growth: ${this.formatPercentage(metrics.revenue_growth || 0)}`,
                     
                     // ROI and Savings
-                    `Enterprise ROI: ${this.formatPercentage(metrics.enterprise_roi || metrics.enterpriseROI)} | Enterprise Annual Savings: ${this.formatCurrency(metrics.enterprise_annual_savings || metrics.enterpriseAnnualSavings)}`,
-                    `Projected Savings: ${this.formatCurrency(metrics.projected_savings || metrics.projectedSavings)} | Revenue per Member: ${this.formatCurrency(metrics.revenue_per_member || metrics.revenuePerMember)}`,
-                    `Revenue per Page: ${this.formatCurrency(metrics.revenue_per_page || metrics.revenuePerPage)} | Efficiency Score: ${this.formatPercentage(metrics.efficiency_score || metrics.efficiencyScore)}`
+                    `Enterprise ROI: ${this.formatPercentage(metrics.enterprise_roi || 0)} | Enterprise Annual Savings: ${this.formatCurrency(metrics.enterprise_annual_savings || 0)}`,
+                    `Projected Savings: ${this.formatCurrency(metrics.projected_savings || 0)} | Revenue per Member: ${this.formatCurrency(metrics.revenue_per_member || 0)}`,
+                    `Revenue per Page: ${this.formatCurrency(metrics.revenue_per_page || 0)} | Efficiency Score: ${this.formatPercentage(metrics.efficiency_score || 0)}`
                 ]
             }
         ];

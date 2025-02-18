@@ -11,10 +11,10 @@ export class GrowthMetrics extends BaseMetrics {
         this.validateData(dataframe_2, dataframe_3, dataframe_5);
 
         // Member Growth Metrics
-        const currentMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
-        const maxMembers = dataframe_3.MAX_NUM_MEMBERS || 0;
-        const currentGuests = dataframe_3.TOTAL_NUM_GUESTS || 0;
-        const maxGuests = dataframe_3.MAX_NUM_GUESTS || 0;
+        const currentMembers = dataframe_5[0]?.NUM_MEMBERS || 0;
+        const maxMembers = dataframe_5[0]?.MAX_MEMBERS || 0;
+        const currentGuests = dataframe_5[0]?.NUM_GUESTS || 0;
+        const maxGuests = dataframe_5[0]?.MAX_GUESTS || 0;
 
         // Content Growth Metrics
         const currentPages = dataframe_3.TOTAL_NUM_TOTAL_PAGES || 0;

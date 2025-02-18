@@ -10,13 +10,13 @@ export class UsageMetrics extends BaseMetrics {
     calculateUsageMetrics(dataframe_3, dataframe_5) {
         this.validateData([], dataframe_3, dataframe_5);
 
-        const memberActivity = this.analyzeMemberActivity(dataframe_3, dataframe_5);
+        const memberActivity = this.analyzeMemberActivity(dataframe_3, dataframe_5[0]);
         const teamspacePatterns = this.analyzeTeamspacePatterns(dataframe_3);
         const collaborationDensity = this.calculateCollaborationDensity(dataframe_3);
 
         return {
-            totalMembers: dataframe_3.TOTAL_NUM_MEMBERS || 0,
-            totalGuests: dataframe_3.TOTAL_NUM_GUESTS || 0,
+            totalMembers: dataframe_5[0]?.NUM_MEMBERS || 0,
+            totalGuests: dataframe_5[0]?.NUM_GUESTS || 0,
             activeMembers: memberActivity.activeMembers,
             dailyActiveUsers: memberActivity.dailyActive,
             weeklyActiveUsers: memberActivity.weeklyActive,
@@ -30,33 +30,18 @@ export class UsageMetrics extends BaseMetrics {
     }
 
     analyzeMemberActivity(dataframe_3, dataframe_5) {
-        const now = Date.now();
-        const dayMs = 24 * 60 * 60 * 1000;
-        
-        const interactions = dataframe_5 || [];
-        const activeMembers = new Set();
-        const dailyActive = new Set();
-        const weeklyActive = new Set();
-        const monthlyActive = new Set();
-
-        interactions.forEach(interaction => {
-            const userId = interaction.USER_ID;
-            const timestamp = new Date(interaction.LAST_INTERACTION_TIME).getTime();
-            const daysDiff = (now - timestamp) / dayMs;
-
-            if (daysDiff <= this.ACTIVE_THRESHOLD_DAYS) {
-                activeMembers.add(userId);
-                if (daysDiff <= 1) dailyActive.add(userId);
-                if (daysDiff <= 7) weeklyActive.add(userId);
-                if (daysDiff <= 30) monthlyActive.add(userId);
-            }
-        });
+        const totalMembers = dataframe_5?.NUM_MEMBERS || 0;
+        const activeMembers = dataframe_5?.ACTIVE_MEMBERS || 0;
+        const dailyActive = dataframe_5?.DAILY_ACTIVE_USERS || 0;
+        const weeklyActive = dataframe_5?.WEEKLY_ACTIVE_USERS || 0;
+        const monthlyActive = dataframe_5?.MONTHLY_ACTIVE_USERS || 0;
 
         return {
-            activeMembers: activeMembers.size,
-            dailyActive: dailyActive.size,
-            weeklyActive: weeklyActive.size,
-            monthlyActive: monthlyActive.size
+            totalMembers,
+            activeMembers,
+            dailyActive,
+            weeklyActive,
+            monthlyActive
         };
     }
 

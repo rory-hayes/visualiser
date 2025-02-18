@@ -16,10 +16,10 @@ export class ROIMetrics extends BaseMetrics {
         this.validateData([], dataframe_3, dataframe_5);
 
         // Cost and Revenue Metrics
-        const totalARR = dataframe_3.TOTAL_ARR || 0;
-        const maxARR = dataframe_3.MAX_ARR || 0;
-        const paidSeats = dataframe_3.TOTAL_PAID_SEATS || 0;
-        const maxPaidSeats = dataframe_3.MAX_PAID_SEATS || 0;
+        const totalARR = dataframe_5[0]?.ARR || 0;
+        const maxARR = dataframe_5[0]?.MAX_ARR || 0;
+        const paidSeats = dataframe_5[0]?.PAID_SEATS || 0;
+        const maxPaidSeats = dataframe_5[0]?.MAX_PAID_SEATS || 0;
 
         // Usage Metrics
         const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;

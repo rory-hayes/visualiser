@@ -23,9 +23,16 @@ export class UsageMetrics extends BaseMetrics {
             monthlyActiveUsers: memberActivity.monthlyActive,
             totalTeamspaces: teamspacePatterns.total,
             averageTeamspaceMembers: teamspacePatterns.avgMembers,
-            collaborationRate: collaborationDensity,
+            collaborationDensity: collaborationDensity,
             teamAdoptionScore: this.calculateTeamAdoptionScore(memberActivity, teamspacePatterns),
-            engagementScore: this.calculateEngagementScore(memberActivity)
+            engagementScore: this.calculateEngagementScore(memberActivity),
+            knowledgeSharingIndex: this.calculateKnowledgeSharingIndex(dataframe_3),
+            crossTeamCollaborationScore: this.calculateCrossTeamCollaboration(dataframe_3),
+            collaborationEfficiency: this.calculateCollaborationEfficiency(dataframe_3),
+            teamInteractionScore: this.calculateTeamInteractionScore(dataframe_3),
+            collaborationFactor: this.calculateCollaborationFactor(dataframe_3),
+            usageFactor: this.calculateUsageFactor(dataframe_5),
+            totalIntegrations: dataframe_3.TOTAL_NUM_INTEGRATIONS || 0
         };
     }
 

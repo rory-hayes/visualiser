@@ -198,11 +198,13 @@ export class NotionFormatter {
     }
 
     formatPercentage(value) {
+        if (value === null || value === undefined) return '0.0%';
         const num = Number(value);
         return isNaN(num) ? '0.0%' : `${(num * 100).toFixed(1)}%`;
     }
 
     formatCurrency(value) {
+        if (value === null || value === undefined) return '$0.00';
         const num = Number(value);
         return isNaN(num) ? '$0.00' : new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -210,6 +212,28 @@ export class NotionFormatter {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(num);
+    }
+
+    formatMetric(value, type = 'number') {
+        if (value === null || value === undefined) {
+            switch (type) {
+                case 'percentage': return '0.0%';
+                case 'currency': return '$0.00';
+                case 'decimal': return '0.00';
+                default: return '0';
+            }
+        }
+
+        switch (type) {
+            case 'percentage': return this.formatPercentage(value);
+            case 'currency': return this.formatCurrency(value);
+            case 'decimal': return this.formatDecimal(value);
+            default: return String(value);
+        }
+    }
+
+    createMetricLine(label1, value1, type1, label2, value2, type2) {
+        return `${label1}: ${this.formatMetric(value1, type1)} | ${label2}: ${this.formatMetric(value2, type2)}`;
     }
 
     createImage(url) {

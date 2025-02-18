@@ -55,38 +55,34 @@ export class GrowthMetrics extends BaseMetrics {
 
         return {
             // Member Growth
-            monthly_member_growth_rate: this.formatPercentage(memberGrowthRate),
-            monthly_guest_growth_rate: this.formatPercentage(guestGrowthRate),
-            total_member_growth: this.formatPercentage((currentMembers - maxMembers) / maxMembers),
+            monthly_member_growth_rate: memberGrowthRate,
+            monthly_guest_growth_rate: guestGrowthRate,
+            total_member_growth: (currentMembers - maxMembers) / maxMembers,
             
             // Content Growth
-            monthly_content_growth_rate: this.formatPercentage(pageGrowthRate),
-            alive_content_growth_rate: this.formatPercentage(alivePageGrowthRate),
-            content_retention_rate: this.formatPercentage(currentAlivePages / currentPages),
+            monthly_content_growth_rate: pageGrowthRate,
+            alive_content_growth_rate: alivePageGrowthRate,
+            content_retention_rate: currentAlivePages / currentPages,
             
             // Structure Growth
-            teamspace_growth_rate: this.formatPercentage(teamspaceGrowthRate),
-            permission_group_growth: this.formatPercentage(
-                this.calculateGrowthRate(currentPermissionGroups, maxPermissionGroups)
-            ),
+            teamspace_growth_rate: teamspaceGrowthRate,
+            permission_group_growth: this.calculateGrowthRate(currentPermissionGroups, maxPermissionGroups),
             
             // Projections
             expected_members_next_year: projections.expectedMembers,
             expected_pages_next_year: projections.expectedPages,
             expected_teamspaces_next_year: projections.expectedTeamspaces,
             
-            // Growth Quality Metrics
-            growth_consistency: this.formatPercentage(growthQuality.consistency),
-            growth_sustainability: this.formatPercentage(growthQuality.sustainability),
-            scaling_readiness_score: this.formatPercentage(growthQuality.scalingReadiness),
-            growth_efficiency: this.formatPercentage(growthQuality.efficiency),
+            // Growth Quality
+            growth_consistency: growthQuality.consistency,
+            growth_sustainability: growthQuality.sustainability,
+            scaling_readiness_score: growthQuality.scalingReadiness,
+            growth_efficiency: growthQuality.efficiency,
+            growth_balance_score: this.calculateGrowthBalance(memberGrowthRate, pageGrowthRate, teamspaceGrowthRate),
             
             // Additional Insights
-            member_to_content_ratio: this.formatDecimal(currentPages / currentMembers),
-            teamspace_density: this.formatDecimal(currentTeamspaces / currentMembers),
-            growth_balance_score: this.formatPercentage(
-                this.calculateGrowthBalance(memberGrowthRate, pageGrowthRate, teamspaceGrowthRate)
-            )
+            member_to_content_ratio: currentMembers > 0 ? currentPages / currentMembers : 0,
+            teamspace_density: currentMembers > 0 ? currentTeamspaces / currentMembers : 0
         };
     }
 

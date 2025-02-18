@@ -52,6 +52,12 @@ export class ROIMetrics extends BaseMetrics {
             paidSeats
         });
 
+        // Calculate Time and Automation Metrics
+        const timeSavings = this.calculateProjectedTimeSavings(dataframe_3, dataframe_5);
+        const automationPotential = this.calculateAutomationPotential(dataframe_3);
+        const productivityGain = this.calculateProductivityGain(dataframe_3, dataframe_5);
+        const aiBoost = this.calculateAIProductivityBoost(dataframe_3);
+
         return {
             // Cost Metrics
             current_monthly_cost: monthlyCost,
@@ -72,11 +78,12 @@ export class ROIMetrics extends BaseMetrics {
             projected_savings: savingsMetrics.projectedSavings,
             
             // Growth Scenarios
-            growth_scenarios: {
-                ten_percent: growthScenarios.tenPercent,
-                twenty_percent: growthScenarios.twentyPercent,
-                fifty_percent: growthScenarios.fiftyPercent
-            },
+            growth_scenarios: growthScenarios,
+            
+            // Time and Automation
+            projected_time_savings: timeSavings,
+            automation_potential: automationPotential,
+            productivity_gain: productivityGain,
             
             // Additional Insights
             revenue_per_member: totalMembers > 0 ? totalARR / totalMembers : 0,

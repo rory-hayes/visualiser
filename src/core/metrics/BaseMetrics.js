@@ -50,8 +50,8 @@ export class BaseMetrics {
         if (typeof dataframe_3 !== 'object' || dataframe_3 === null) {
             throw new Error('dataframe_3 must be a valid object');
         }
-        if (!Array.isArray(dataframe_5)) {
-            throw new Error('dataframe_5 must be an array');
+        if (typeof dataframe_5 !== 'object' || dataframe_5 === null) {
+            throw new Error('dataframe_5 must be either an array or an object');
         }
     }
 }

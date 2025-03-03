@@ -107,10 +107,7 @@ export class MetricsCalculator extends BaseMetrics {
     calculateBaseRevenue(dataframe_3, dataframe_5) {
         // Calculate base revenue from current members and plan costs
         const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
-        // Access PLAN_COST from the first item if it's an array, otherwise try direct access
-        const planCost = Array.isArray(dataframe_5) ? 
-            (dataframe_5[0]?.PLAN_COST || 0) : 
-            (dataframe_5?.PLAN_COST || 0);
+        const planCost = dataframe_5.PLAN_COST || 0;
         // Convert to number and round to 2 decimal places
         return Number((totalMembers * planCost * 12).toFixed(2)); // Annual revenue
     }
@@ -142,13 +139,9 @@ export class MetricsCalculator extends BaseMetrics {
             },
             dataframe_5: {
                 type: typeof dataframe_5,
-                isArray: Array.isArray(dataframe_5),
-                length: dataframe_5?.length,
-                sampleValues: Array.isArray(dataframe_5) ? {
-                    PLAN_COST: dataframe_5[0]?.PLAN_COST,
-                    INTERACTIONS: Array.isArray(dataframe_5[0]?.INTERACTIONS) ? 
-                        dataframe_5[0].INTERACTIONS.length : 'not an array'
-                } : {
+                isObject: typeof dataframe_5 === 'object',
+                keys: dataframe_5 ? Object.keys(dataframe_5) : [],
+                sampleValues: {
                     PLAN_COST: dataframe_5?.PLAN_COST,
                     INTERACTIONS: Array.isArray(dataframe_5?.INTERACTIONS) ? 
                         dataframe_5.INTERACTIONS.length : 'not an array'
@@ -175,13 +168,13 @@ export class MetricsCalculator extends BaseMetrics {
             throw new Error('dataframe_3 must be a valid object');
         }
 
-        // Validate dataframe_5 - accept either array or object format
-        if (typeof dataframe_5 !== 'object' || dataframe_5 === null) {
+        // Validate dataframe_5
+        if (!dataframe_5 || typeof dataframe_5 !== 'object') {
             console.error('Invalid dataframe_5:', {
                 received: dataframe_5,
                 type: typeof dataframe_5
             });
-            throw new Error('dataframe_5 must be either an array or an object');
+            throw new Error('dataframe_5 must be a valid object');
         }
 
         // Validate required fields
@@ -213,15 +206,14 @@ export class MetricsCalculator extends BaseMetrics {
             });
         }
 
-        // Check dataframe_5 fields - handle both array and object formats
-        const df5ToCheck = Array.isArray(dataframe_5) ? dataframe_5[0] : dataframe_5;
+        // Check dataframe_5 fields
         const missingFields5 = requiredFields.dataframe_5.filter(
-            field => !df5ToCheck?.hasOwnProperty(field)
+            field => !dataframe_5.hasOwnProperty(field)
         );
         if (missingFields5.length > 0) {
             console.error('Missing required fields in dataframe_5:', {
                 missingFields: missingFields5,
-                availableFields: Object.keys(df5ToCheck || {})
+                availableFields: Object.keys(dataframe_5)
             });
         }
 

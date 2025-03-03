@@ -139,8 +139,8 @@ export class MetricsCalculator extends BaseMetrics {
             },
             dataframe_5: {
                 type: typeof dataframe_5,
-                isObject: typeof dataframe_5 === 'object',
-                keys: dataframe_5 ? Object.keys(dataframe_5) : [],
+                isArray: Array.isArray(dataframe_5),
+                length: dataframe_5?.length,
                 sampleValues: {
                     PLAN_COST: dataframe_5?.PLAN_COST,
                     INTERACTIONS: Array.isArray(dataframe_5?.INTERACTIONS) ? 
@@ -169,12 +169,22 @@ export class MetricsCalculator extends BaseMetrics {
         }
 
         // Validate dataframe_5
-        if (!dataframe_5 || typeof dataframe_5 !== 'object') {
+        if (!Array.isArray(dataframe_5) || dataframe_5.length === 0) {
             console.error('Invalid dataframe_5:', {
                 received: dataframe_5,
-                type: typeof dataframe_5
+                type: typeof dataframe_5,
+                length: dataframe_5?.length
             });
-            throw new Error('dataframe_5 must be a valid object');
+            throw new Error('dataframe_5 must be a non-empty array');
+        }
+
+        // Additional validation for dataframe_5[0]
+        if (!dataframe_5[0] || typeof dataframe_5[0] !== 'object') {
+            console.error('Invalid dataframe_5[0]:', {
+                received: dataframe_5[0],
+                type: typeof dataframe_5[0]
+            });
+            throw new Error('dataframe_5[0] must be a valid object containing metrics');
         }
 
         // Validate required fields

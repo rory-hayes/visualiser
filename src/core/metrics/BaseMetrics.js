@@ -48,10 +48,10 @@ export class BaseMetrics {
             throw new Error('dataframe_2 must be an array');
         }
         if (typeof dataframe_3 !== 'object' || dataframe_3 === null) {
-            throw new Error('dataframe_3 must be an object');
+            throw new Error('dataframe_3 must be a valid object');
         }
-        if (dataframe_5 && !Array.isArray(dataframe_5)) {
-            throw new Error('dataframe_5 must be an array when provided');
+        if (!Array.isArray(dataframe_5)) {
+            throw new Error('dataframe_5 must be an array');
         }
     }
 }

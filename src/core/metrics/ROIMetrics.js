@@ -3,6 +3,8 @@ import { BaseMetrics } from './BaseMetrics.js';
 export class ROIMetrics extends BaseMetrics {
     constructor(notionClient = null) {
         super(notionClient);
+        
+        // Plan costs and differentials
         this.PLAN_COSTS = {
             plus: 10,
             business: 15,
@@ -10,31 +12,169 @@ export class ROIMetrics extends BaseMetrics {
             enterprise_ai: 28
         };
 
+        // Time and cost constants
+        this.TIME_VALUE_PER_HOUR = 30;
+        this.WORKING_DAYS_PER_YEAR = 249;
+        this.MINUTES_SAVED_PER_AI_ACTION = 5;
+        this.AI_ANNUAL_COST_PER_SEAT = 96; // Difference between Enterprise and Enterprise AI
+
+        // Benchmark data by company size
         this.BENCHMARK_DATA = {
             commercial: {
                 avg_arr: 400420,
                 avg_ai_usage_percent: 14.82,
-                avg_weekly_ai_actions: 1152.5,
+                avg_daily_ai_actions: 164.64, // 1152.5 weekly / 7
                 avg_lifetime_ai_actions: 14500.5
             },
             midmarket: {
                 avg_arr: 158751.62,
                 avg_ai_usage_percent: 31.34,
-                avg_weekly_ai_actions: 483.5,
+                avg_daily_ai_actions: 69.07, // 483.5 weekly / 7
                 avg_lifetime_ai_actions: 5433.25
             },
             enterprise: {
                 avg_arr: 256404.57,
                 avg_ai_usage_percent: 14.50,
-                avg_weekly_ai_actions: 187.5,
+                avg_daily_ai_actions: 26.79, // 187.5 weekly / 7
                 avg_lifetime_ai_actions: 1794.25
             }
         };
+    }
 
-        this.TIME_VALUE_PER_HOUR = 30; // Average hourly cost
-        this.HOURS_PER_MONTH = 160;
-        this.MINUTES_SAVED_PER_AI_ACTION = 5;
-        this.WORKING_DAYS_PER_YEAR = 249;
+    calculateDetailedAIROI(dataframe_3, dataframe_5) {
+        const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
+        const weeklyAiActions = dataframe_5[0]?.AI_ACTIONS_LAST_7_DAYS || 0;
+        const lifetimeAiActions = dataframe_5[0]?.LIFETIME_AI_ACTIONS || 0;
+        const activeAiUsers = dataframe_5[0]?.MONTHLY_ACTIVE_AI_USERS_PERCENT || 0;
+
+        // Calculate daily metrics
+        const dailyAiActions = weeklyAiActions / 7;
+        const category = this._determineCategory(totalMembers);
+        const benchmarks = this.BENCHMARK_DATA[category];
+
+        // Calculate time savings
+        const timeMetrics = this._calculateTimeSavings(dailyAiActions, totalMembers);
+        
+        // Calculate costs and ROI
+        const financialMetrics = this._calculateFinancialMetrics(timeMetrics, totalMembers);
+        
+        // Calculate benchmark comparisons
+        const benchmarkMetrics = this._calculateBenchmarkComparison(
+            dailyAiActions,
+            activeAiUsers,
+            lifetimeAiActions,
+            benchmarks
+        );
+
+        return {
+            inputs: {
+                total_members: totalMembers,
+                hourly_rate: this.TIME_VALUE_PER_HOUR,
+                ai_annual_cost_per_seat: this.AI_ANNUAL_COST_PER_SEAT,
+                ai_usage: {
+                    daily_ai_requests: dailyAiActions.toFixed(2),
+                    minutes_saved_per_request: this.MINUTES_SAVED_PER_AI_ACTION,
+                    active_ai_users_percent: activeAiUsers.toFixed(2)
+                }
+            },
+            time_savings: timeMetrics,
+            financial_metrics: financialMetrics,
+            benchmark_comparison: benchmarkMetrics,
+            recommendations: this._generateRecommendations(benchmarkMetrics, category)
+        };
+    }
+
+    _calculateTimeSavings(dailyAiActions, totalMembers) {
+        const hoursPerDay = (dailyAiActions * this.MINUTES_SAVED_PER_AI_ACTION) / 60;
+        
+        return {
+            hours_saved_per_day: hoursPerDay.toFixed(2),
+            hours_saved_per_member: (hoursPerDay / totalMembers).toFixed(2),
+            annual_hours_saved: (hoursPerDay * this.WORKING_DAYS_PER_YEAR).toFixed(2),
+            equation: "Daily AI actions × Minutes saved per action ÷ 60"
+        };
+    }
+
+    _calculateFinancialMetrics(timeMetrics, totalMembers) {
+        const annualValueGenerated = parseFloat(timeMetrics.annual_hours_saved) * this.TIME_VALUE_PER_HOUR;
+        const annualAICost = totalMembers * this.AI_ANNUAL_COST_PER_SEAT;
+        const netROI = annualValueGenerated - annualAICost;
+        const roiPercentage = (netROI / annualAICost) * 100;
+
+        return {
+            annual_value_generated: {
+                value: annualValueGenerated.toFixed(2),
+                equation: "Annual hours saved × Hourly rate"
+            },
+            annual_ai_cost: {
+                value: annualAICost.toFixed(2),
+                equation: "Total members × AI annual cost per seat"
+            },
+            net_roi: {
+                value: netROI.toFixed(2),
+                equation: "Annual value generated - Annual AI cost"
+            },
+            roi_percentage: {
+                value: roiPercentage.toFixed(2),
+                equation: "(Net ROI ÷ Annual AI cost) × 100"
+            }
+        };
+    }
+
+    _calculateBenchmarkComparison(dailyAiActions, activeAiUsers, lifetimeActions, benchmarks) {
+        const aiUsagePerformance = (activeAiUsers / benchmarks.avg_ai_usage_percent) * 100;
+        const aiActionsPerformance = (dailyAiActions / benchmarks.avg_daily_ai_actions) * 100;
+        const lifetimePerformance = (lifetimeActions / benchmarks.avg_lifetime_ai_actions) * 100;
+
+        return {
+            current_vs_benchmark: {
+                daily_actions: {
+                    current: dailyAiActions.toFixed(2),
+                    benchmark: benchmarks.avg_daily_ai_actions.toFixed(2),
+                    performance: aiActionsPerformance.toFixed(2)
+                },
+                active_users: {
+                    current: activeAiUsers.toFixed(2),
+                    benchmark: benchmarks.avg_ai_usage_percent.toFixed(2),
+                    performance: aiUsagePerformance.toFixed(2)
+                },
+                lifetime_actions: {
+                    current: lifetimeActions,
+                    benchmark: benchmarks.avg_lifetime_ai_actions,
+                    performance: lifetimePerformance.toFixed(2)
+                }
+            },
+            potential_improvement: {
+                daily_actions: Math.max(0, benchmarks.avg_daily_ai_actions - dailyAiActions).toFixed(2),
+                active_users: Math.max(0, benchmarks.avg_ai_usage_percent - activeAiUsers).toFixed(2)
+            }
+        };
+    }
+
+    _generateRecommendations(benchmarkMetrics, category) {
+        const recommendations = [];
+        const { current_vs_benchmark, potential_improvement } = benchmarkMetrics;
+
+        // Generate specific recommendations based on benchmark comparisons
+        if (current_vs_benchmark.active_users.performance < 80) {
+            recommendations.push({
+                type: "adoption",
+                title: "Increase AI Adoption",
+                potential: `${potential_improvement.active_users}% additional user adoption possible`,
+                impact: `Matching ${category} benchmark could increase ROI by ${((potential_improvement.active_users / 100) * current_vs_benchmark.daily_actions.current * this.MINUTES_SAVED_PER_AI_ACTION * this.TIME_VALUE_PER_HOUR * this.WORKING_DAYS_PER_YEAR).toFixed(2)}`
+            });
+        }
+
+        if (current_vs_benchmark.daily_actions.performance < 80) {
+            recommendations.push({
+                type: "usage",
+                title: "Increase AI Usage",
+                potential: `${potential_improvement.daily_actions} additional daily AI actions possible`,
+                impact: `Matching ${category} benchmark could save an additional ${((potential_improvement.daily_actions * this.MINUTES_SAVED_PER_AI_ACTION / 60) * this.WORKING_DAYS_PER_YEAR * this.TIME_VALUE_PER_HOUR).toFixed(2)} annually`
+            });
+        }
+
+        return recommendations;
     }
 
     calculateROIMetrics(dataframe_3, dataframe_5) {
@@ -339,7 +479,7 @@ export class ROIMetrics extends BaseMetrics {
         // Benchmark comparisons
         const benchmarkComparison = {
             ai_usage_performance: (activeAiUsers / benchmarks.avg_ai_usage_percent) * 100,
-            ai_actions_performance: (aiActions / benchmarks.avg_weekly_ai_actions) * 100,
+            ai_actions_performance: (aiActions / benchmarks.avg_daily_ai_actions) * 100,
             lifetime_actions_performance: (lifetimeAiActions / benchmarks.avg_lifetime_ai_actions) * 100
         };
 
@@ -365,12 +505,12 @@ export class ROIMetrics extends BaseMetrics {
             benchmark_comparison: {
                 category_averages: {
                     avg_ai_usage_percent: benchmarks.avg_ai_usage_percent,
-                    avg_weekly_ai_actions: benchmarks.avg_weekly_ai_actions,
+                    avg_daily_ai_actions: benchmarks.avg_daily_ai_actions,
                     avg_lifetime_ai_actions: benchmarks.avg_lifetime_ai_actions
                 },
                 performance_vs_benchmark: {
                     ai_usage_percent: benchmarkComparison.ai_usage_performance.toFixed(2),
-                    weekly_actions: benchmarkComparison.ai_actions_performance.toFixed(2),
+                    daily_actions: benchmarkComparison.ai_actions_performance.toFixed(2),
                     lifetime_actions: benchmarkComparison.lifetime_actions_performance.toFixed(2)
                 }
             },

@@ -44,14 +44,28 @@ export class BaseMetrics {
     }
 
     validateData(dataframe_2, dataframe_3, dataframe_5) {
-        if (!Array.isArray(dataframe_2)) {
-            throw new Error('dataframe_2 must be an array');
+        const errors = [];
+        
+        if (!dataframe_2) {
+            errors.push('dataframe_2 is null or undefined');
+        } else if (!Array.isArray(dataframe_2)) {
+            errors.push('dataframe_2 must be an array');
         }
-        if (typeof dataframe_3 !== 'object' || dataframe_3 === null) {
-            throw new Error('dataframe_3 must be an object');
+
+        if (!dataframe_3) {
+            errors.push('dataframe_3 is null or undefined');
+        } else if (typeof dataframe_3 !== 'object') {
+            errors.push('dataframe_3 must be an object');
         }
-        if (dataframe_5 && !Array.isArray(dataframe_5)) {
-            throw new Error('dataframe_5 must be an array when provided');
+
+        if (!dataframe_5) {
+            errors.push('dataframe_5 is null or undefined');
+        } else if (typeof dataframe_5 !== 'object') {
+            errors.push('dataframe_5 must be an object or array');
+        }
+
+        if (errors.length > 0) {
+            throw new Error(errors.join(', '));
         }
     }
 }

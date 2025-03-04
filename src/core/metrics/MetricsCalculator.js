@@ -107,12 +107,35 @@ export class MetricsCalculator extends BaseMetrics {
     calculateBaseRevenue(dataframe_3, dataframe_5) {
         // Calculate base revenue from current members and plan costs
         const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
-        const planCost = dataframe_5.PLAN_COST || 0;
+        // Access PLAN_COST from the first item if it's an array, otherwise try direct access
+        const planCost = Array.isArray(dataframe_5) ? 
+            (dataframe_5[0]?.PLAN_COST || 0) : 
+            (dataframe_5?.PLAN_COST || 0);
         // Convert to number and round to 2 decimal places
         return Number((totalMembers * planCost * 12).toFixed(2)); // Annual revenue
     }
 
     validateData(dataframe_2, dataframe_3, dataframe_5) {
+        // Log raw input data for debugging
+        console.log('Raw input data:', {
+            dataframe_2: {
+                value: dataframe_2,
+                type: typeof dataframe_2,
+                isArray: Array.isArray(dataframe_2),
+                length: dataframe_2?.length
+            },
+            dataframe_3: {
+                value: dataframe_3,
+                type: typeof dataframe_3
+            },
+            dataframe_5: {
+                value: dataframe_5,
+                type: typeof dataframe_5,
+                isArray: Array.isArray(dataframe_5),
+                length: dataframe_5?.length
+            }
+        });
+
         // Log detailed data structure
         console.log('Validating data structures:', {
             dataframe_2: {
@@ -139,9 +162,13 @@ export class MetricsCalculator extends BaseMetrics {
             },
             dataframe_5: {
                 type: typeof dataframe_5,
-                isObject: typeof dataframe_5 === 'object',
-                keys: dataframe_5 ? Object.keys(dataframe_5) : [],
-                sampleValues: {
+                isArray: Array.isArray(dataframe_5),
+                length: dataframe_5?.length,
+                sampleValues: Array.isArray(dataframe_5) ? {
+                    PLAN_COST: dataframe_5[0]?.PLAN_COST,
+                    INTERACTIONS: Array.isArray(dataframe_5[0]?.INTERACTIONS) ? 
+                        dataframe_5[0].INTERACTIONS.length : 'not an array'
+                } : {
                     PLAN_COST: dataframe_5?.PLAN_COST,
                     INTERACTIONS: Array.isArray(dataframe_5?.INTERACTIONS) ? 
                         dataframe_5.INTERACTIONS.length : 'not an array'
@@ -149,81 +176,108 @@ export class MetricsCalculator extends BaseMetrics {
             }
         });
 
+        // Initialize validation results
+        let validationResults = {
+            dataframe_2: false,
+            dataframe_3: false,
+            dataframe_5: false,
+            errors: []
+        };
+
         // Validate dataframe_2
-        if (!Array.isArray(dataframe_2) || dataframe_2.length === 0) {
-            console.error('Invalid dataframe_2:', {
-                received: dataframe_2,
-                type: typeof dataframe_2,
-                length: dataframe_2?.length
-            });
-            throw new Error('dataframe_2 must be a non-empty array');
+        if (!dataframe_2) {
+            validationResults.errors.push('dataframe_2 is null or undefined');
+        } else if (!Array.isArray(dataframe_2)) {
+            validationResults.errors.push('dataframe_2 must be an array');
+        } else {
+            validationResults.dataframe_2 = true;
         }
 
         // Validate dataframe_3
-        if (!dataframe_3 || typeof dataframe_3 !== 'object') {
-            console.error('Invalid dataframe_3:', {
-                received: dataframe_3,
-                type: typeof dataframe_3
-            });
-            throw new Error('dataframe_3 must be a valid object');
+        if (!dataframe_3) {
+            validationResults.errors.push('dataframe_3 is null or undefined');
+        } else if (typeof dataframe_3 !== 'object') {
+            validationResults.errors.push('dataframe_3 must be an object');
+        } else {
+            validationResults.dataframe_3 = true;
         }
 
-        // Validate dataframe_5
-        if (!dataframe_5 || typeof dataframe_5 !== 'object') {
-            console.error('Invalid dataframe_5:', {
-                received: dataframe_5,
-                type: typeof dataframe_5
-            });
-            throw new Error('dataframe_5 must be a valid object');
+        // Validate dataframe_5 - accept either array or object format
+        if (!dataframe_5) {
+            validationResults.errors.push('dataframe_5 is null or undefined');
+        } else if (typeof dataframe_5 !== 'object') {
+            validationResults.errors.push('dataframe_5 must be an object or array');
+        } else {
+            validationResults.dataframe_5 = true;
         }
 
-        // Validate required fields
+        // Log validation results
+        console.log('Validation results:', validationResults);
+
+        // If any validation failed, throw error with details
+        if (validationResults.errors.length > 0) {
+            const errorMessage = `Data validation failed: ${validationResults.errors.join(', ')}`;
+            console.error(errorMessage);
+            throw new Error(errorMessage);
+        }
+
+        // Validate required fields only if we have data
         const requiredFields = {
             dataframe_2: ['ID', 'PARENT_ID', 'SPACE_ID'],
             dataframe_3: ['NUM_PAGES', 'NUM_COLLECTIONS', 'TOTAL_NUM_MEMBERS'],
             dataframe_5: ['PLAN_COST']
         };
 
-        // Check dataframe_2 fields
-        const missingFields2 = requiredFields.dataframe_2.filter(
-            field => !dataframe_2[0]?.hasOwnProperty(field)
-        );
-        if (missingFields2.length > 0) {
-            console.error('Missing required fields in dataframe_2:', {
-                missingFields: missingFields2,
-                availableFields: Object.keys(dataframe_2[0] || {})
-            });
+        // Check dataframe_2 fields if we have data
+        if (dataframe_2?.length > 0) {
+            const missingFields2 = requiredFields.dataframe_2.filter(
+                field => !dataframe_2[0]?.hasOwnProperty(field)
+            );
+            if (missingFields2.length > 0) {
+                console.error('Missing required fields in dataframe_2:', {
+                    missingFields: missingFields2,
+                    availableFields: Object.keys(dataframe_2[0] || {})
+                });
+            }
         }
 
         // Check dataframe_3 fields
-        const missingFields3 = requiredFields.dataframe_3.filter(
-            field => !dataframe_3.hasOwnProperty(field)
-        );
-        if (missingFields3.length > 0) {
-            console.error('Missing required fields in dataframe_3:', {
-                missingFields: missingFields3,
-                availableFields: Object.keys(dataframe_3)
-            });
+        if (validationResults.dataframe_3) {
+            const missingFields3 = requiredFields.dataframe_3.filter(
+                field => !dataframe_3.hasOwnProperty(field)
+            );
+            if (missingFields3.length > 0) {
+                console.error('Missing required fields in dataframe_3:', {
+                    missingFields: missingFields3,
+                    availableFields: Object.keys(dataframe_3)
+                });
+            }
         }
 
-        // Check dataframe_5 fields
-        const missingFields5 = requiredFields.dataframe_5.filter(
-            field => !dataframe_5.hasOwnProperty(field)
-        );
-        if (missingFields5.length > 0) {
-            console.error('Missing required fields in dataframe_5:', {
-                missingFields: missingFields5,
-                availableFields: Object.keys(dataframe_5)
-            });
+        // Check dataframe_5 fields if we have data
+        if (validationResults.dataframe_5) {
+            const df5ToCheck = Array.isArray(dataframe_5) ? 
+                (dataframe_5[0] || {}) : 
+                dataframe_5;
+            
+            const missingFields5 = requiredFields.dataframe_5.filter(
+                field => !df5ToCheck?.hasOwnProperty(field)
+            );
+            if (missingFields5.length > 0) {
+                console.error('Missing required fields in dataframe_5:', {
+                    missingFields: missingFields5,
+                    availableFields: Object.keys(df5ToCheck)
+                });
+            }
         }
 
-        // Log validation success
+        // Log final validation state
         console.log('Data validation complete:', {
-            dataframe_2_valid: missingFields2.length === 0,
-            dataframe_3_valid: missingFields3.length === 0,
-            dataframe_5_valid: missingFields5.length === 0,
-            total_pages: dataframe_3.NUM_PAGES,
-            total_members: dataframe_3.TOTAL_NUM_MEMBERS
+            dataframe_2_valid: validationResults.dataframe_2,
+            dataframe_3_valid: validationResults.dataframe_3,
+            dataframe_5_valid: validationResults.dataframe_5,
+            total_pages: dataframe_3?.NUM_PAGES,
+            total_members: dataframe_3?.TOTAL_NUM_MEMBERS
         });
     }
 } 

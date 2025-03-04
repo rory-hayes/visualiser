@@ -10,8 +10,102 @@ export class NotionFormatter {
         pages: '📄',
         efficiency: '⚡',
         collaboration: '🤝',
-        automation: '⚙️'
+        automation: '⚙️',
+        structure: '🏗️',
+        navigation: '🗺️',
+        content: '📑',
+        health: '❤️',
+        database: '🗃️',
+        team: '👥',
+        activity: '📊',
+        projection: '🎯',
+        financial: '💵'
     };
+
+    PERFORMANCE_INDICATORS = {
+        HIGH: '🟢',    // >90%
+        MEDIUM: '🟡',  // 70-90%
+        LOW: '🔴',     // <70%
+        NONE: '⚪'     // No data
+    };
+
+    createMetricsBlocks(metrics) {
+        const sections = [
+            this.createSummarySection(metrics),
+            this.createStructureSection(metrics),
+            this.createCollaborationSection(metrics),
+            this.createGrowthSection(metrics),
+            this.createROISection(metrics)
+        ];
+
+        return this.createFormattedBlocks(sections);
+    }
+
+    createSummarySection(metrics) {
+        return {
+            title: '📊 Key Metrics Summary',
+            metrics: [
+                this.createMetricLine('Workspace Scale', 
+                    `${metrics.total_pages} pages, ${metrics.totalMembers} members`, 
+                    'text', '🏢'),
+                this.createMetricLine('Enterprise ROI', 
+                    metrics.enterprise_roi, 
+                    'percentage', '💰'),
+                this.createMetricLine('Efficiency Score', 
+                    metrics.efficiency_score, 
+                    'percentage', '⚡'),
+                this.createMetricLine('Growth Index', 
+                    metrics.growth_sustainability_index, 
+                    'percentage', '📈')
+            ]
+        };
+    }
+
+    createStructureSection(metrics) {
+        return {
+            title: '🏗️ Structure & Evolution Metrics',
+            subsections: [
+                {
+                    subtitle: 'Basic Structure',
+                    metrics: [
+                        this.createGroupedMetrics('📑 Pages & Collections', [
+                            this.createMetricPair('Total Pages', metrics.total_pages, 'Collections', metrics.collections_count),
+                            this.createMetricPair('Collection Views', metrics.collection_views, 'Collection View Pages', metrics.collection_view_pages),
+                            this.createMetricPair('Total Blocks', metrics.total_blocks, 'Alive Blocks', metrics.alive_blocks)
+                        ])
+                    ]
+                },
+                // ... other subsections for Navigation & Depth, Content Organization, etc.
+            ]
+        };
+    }
+
+    createGroupedMetrics(title, metricLines) {
+        return {
+            title,
+            content: metricLines.map(line => `  ${line}`).join('\n')
+        };
+    }
+
+    createMetricPair(label1, value1, label2, value2) {
+        return `${label1}: ${this.formatMetric(value1)} | ${label2}: ${this.formatMetric(value2)}`;
+    }
+
+    getPerformanceIndicator(value, thresholds = { high: 0.9, medium: 0.7 }) {
+        if (value === null || value === undefined) return this.PERFORMANCE_INDICATORS.NONE;
+        const percentage = Number(value);
+        if (isNaN(percentage)) return this.PERFORMANCE_INDICATORS.NONE;
+        
+        if (percentage >= thresholds.high) return this.PERFORMANCE_INDICATORS.HIGH;
+        if (percentage >= thresholds.medium) return this.PERFORMANCE_INDICATORS.MEDIUM;
+        return this.PERFORMANCE_INDICATORS.LOW;
+    }
+
+    createMetricWithIndicator(label, value, type = 'percentage') {
+        const formattedValue = this.formatMetric(value, type);
+        const indicator = this.getPerformanceIndicator(value);
+        return `${label}: ${formattedValue} ${indicator}`;
+    }
 
     createMetricsBlocks(metrics) {
         const sections = [
@@ -270,5 +364,41 @@ export class NotionFormatter {
             `${this.METRIC_EMOJIS.roi} Enterprise ROI: ${this.formatPercentage(metrics.enterprise_roi)}`,
             `${this.METRIC_EMOJIS.ai} AI Productivity: ${this.formatPercentage(metrics.ai_productivity_boost)}`
         ];
+    }
+
+    createFormattedBlocks(sections) {
+        const blocks = [
+            this.createHeading('Workspace Analysis Report', 1)
+        ];
+
+        sections.forEach(section => {
+            blocks.push(this.createHeading(section.title, 2));
+            
+            if (section.subsections) {
+                section.subsections.forEach(subsection => {
+                    blocks.push(this.createHeading(subsection.subtitle, 3));
+                    blocks.push(...this.createBulletedList(subsection.metrics));
+                });
+            } else {
+                blocks.push(...this.createBulletedList(section.metrics));
+            }
+            
+            blocks.push(this.createDivider());
+        });
+
+        // Add performance indicator legend
+        blocks.push(this.createPerformanceLegend());
+
+        return blocks;
+    }
+
+    createPerformanceLegend() {
+        return this.createBulletedList([
+            'Performance Indicators:',
+            '🟢 Excellent (>90%)',
+            '🟡 Good (70-90%)',
+            '🔴 Needs Attention (<70%)',
+            '⚪ No Data/Baseline'
+        ]);
     }
 } 

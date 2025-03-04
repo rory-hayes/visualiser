@@ -1,4 +1,18 @@
 export class NotionFormatter {
+    // Add emoji mapping
+    METRIC_EMOJIS = {
+        cost: '💰',
+        time: '⏱️',
+        users: '👥',
+        growth: '📈',
+        ai: '🤖',
+        roi: '💎',
+        pages: '📄',
+        efficiency: '⚡',
+        collaboration: '🤝',
+        automation: '⚙️'
+    };
+
     createMetricsBlocks(metrics) {
         const sections = [
             {
@@ -232,8 +246,8 @@ export class NotionFormatter {
         }
     }
 
-    createMetricLine(label1, value1, type1, label2, value2, type2) {
-        return `${label1}: ${this.formatMetric(value1, type1)} | ${label2}: ${this.formatMetric(value2, type2)}`;
+    createMetricLine(label, value, type, emoji) {
+        return `${emoji} ${label}: ${this.formatMetric(value, type)}`;
     }
 
     createImage(url) {
@@ -247,5 +261,14 @@ export class NotionFormatter {
                 }
             }
         };
+    }
+
+    // Example usage in ROI section
+    createROISection(metrics) {
+        return [
+            `${this.METRIC_EMOJIS.cost} Current Monthly Cost: ${this.formatCurrency(metrics.current_monthly_cost)}`,
+            `${this.METRIC_EMOJIS.roi} Enterprise ROI: ${this.formatPercentage(metrics.enterprise_roi)}`,
+            `${this.METRIC_EMOJIS.ai} AI Productivity: ${this.formatPercentage(metrics.ai_productivity_boost)}`
+        ];
     }
 } 

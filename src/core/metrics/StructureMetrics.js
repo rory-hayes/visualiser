@@ -14,6 +14,8 @@ export class StructureMetrics extends BaseMetrics {
         const collectionViews = dataframe_2[0]?.COLLECTION_VIEW_COUNT || 0;
         const collectionViewPages = dataframe_2[0]?.COLLECTION_VIEW_PAGE_COUNT || 0;
         const tableRows = dataframe_2[0]?.TABLE_ROW_COUNT || 0;
+        const formCount = dataframe_2[0]?.FORM_COUNT || 0;
+        const maxDepth = dataframe_2[0]?.MAX_DEPTH || 0;
 
         // Advanced Metrics from dataframe_3
         const totalBlocks = dataframe_3.NUM_BLOCKS || 0;
@@ -22,6 +24,18 @@ export class StructureMetrics extends BaseMetrics {
         const aliveTotalPages = dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES || 0;
         const publicPages = dataframe_3.TOTAL_NUM_PUBLIC_PAGES || 0;
         const privatePages = dataframe_3.TOTAL_NUM_PRIVATE_PAGES || 0;
+
+        // Calculate Navigation Complexity Score (using MAX_DEPTH)
+        const navigationComplexityScore = this.calculateNavigationComplexityScore(maxDepth);
+
+        // Calculate Collection Efficiency
+        const collectionEfficiency = this.calculateCollectionEfficiency(collectionViews, collectionsCount);
+
+        // Calculate Database Utilization Score
+        const databaseUtilizationScore = this.calculateDatabaseUtilizationScore(tableRows, collectionsCount);
+
+        // Calculate Form Usage Score
+        const formUsageScore = this.calculateFormUsageScore(formCount, totalPages);
 
         // Calculate derived metrics
         const contentHealthRatio = aliveBlocks / totalBlocks;
@@ -56,6 +70,8 @@ export class StructureMetrics extends BaseMetrics {
             collection_views: collectionViews,
             collection_view_pages: collectionViewPages,
             total_table_rows: tableRows,
+            form_count: formCount,
+            max_depth: maxDepth,
             
             // Block and Page Health
             total_blocks: totalBlocks,
@@ -65,7 +81,13 @@ export class StructureMetrics extends BaseMetrics {
             public_pages: publicPages,
             private_pages: privatePages,
             
-            // Derived Ratios (as raw numbers)
+            // Navigation and Structure Metrics
+            navigation_complexity_score: navigationComplexityScore,
+            collection_efficiency: collectionEfficiency,
+            database_utilization_score: databaseUtilizationScore,
+            form_usage_score: formUsageScore,
+            
+            // Derived Ratios
             content_health_ratio: contentHealthRatio,
             page_health_ratio: pageHealthRatio,
             structured_content_ratio: structuredContentRatio,
@@ -74,7 +96,7 @@ export class StructureMetrics extends BaseMetrics {
             // Derived Metrics
             average_rows_per_collection: averageRowsPerCollection,
             
-            // Quality Scores (as raw numbers)
+            // Quality Scores
             structure_health_score: structureHealthScore,
             content_organization_score: contentOrganizationScore,
             knowledge_structure_score: knowledgeStructureScore,
@@ -323,5 +345,30 @@ export class StructureMetrics extends BaseMetrics {
         const orphanedScore = 1 - (orphanedPages / totalPages);
 
         return (depthScore + deepPagesScore + orphanedScore) / 3;
+    }
+
+    calculateNavigationComplexityScore(maxDepth) {
+        const optimalDepth = 4; // As specified in requirements
+        const depthScore = Math.max(0, 1 - Math.abs(maxDepth - optimalDepth) / optimalDepth);
+        return depthScore;
+    }
+
+    calculateCollectionEfficiency(collectionViews, collectionsCount) {
+        if (collectionsCount === 0) return 0;
+        return collectionViews / collectionsCount;
+    }
+
+    calculateDatabaseUtilizationScore(tableRows, collectionsCount) {
+        if (collectionsCount === 0) return 0;
+        const avgRowsPerCollection = tableRows / collectionsCount;
+        // Normalize to 0-1 range, assuming 1000 rows per collection is optimal
+        return Math.min(avgRowsPerCollection / 1000, 1);
+    }
+
+    calculateFormUsageScore(formCount, totalPages) {
+        if (totalPages === 0) return 0;
+        // Normalize to 0-1 range, assuming 5% of pages having forms is optimal
+        const formRatio = formCount / totalPages;
+        return Math.min(formRatio / 0.05, 1);
     }
 }

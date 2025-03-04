@@ -180,117 +180,184 @@ export class ROIMetrics extends BaseMetrics {
     calculateROIMetrics(dataframe_3, dataframe_5) {
         this.validateData([], dataframe_3, dataframe_5);
 
-        // Cost and Revenue Metrics
-        const totalARR = dataframe_5[0]?.ARR || 0;
-        const maxARR = dataframe_5[0]?.MAX_ARR || 0;
-        const paidSeats = dataframe_5[0]?.PAID_SEATS || 0;
-        const maxPaidSeats = dataframe_5[0]?.MAX_PAID_SEATS || 0;
-
-        // Usage Metrics
-        const totalMembers = dataframe_3.TOTAL_NUM_MEMBERS || 0;
-        const totalGuests = dataframe_3.TOTAL_NUM_GUESTS || 0;
-        const totalPages = dataframe_3.TOTAL_NUM_TOTAL_PAGES || 0;
-        const alivePages = dataframe_3.TOTAL_NUM_ALIVE_TOTAL_PAGES || 0;
-
-        // Calculate Monthly and Annual Costs
-        const monthlyCost = totalARR / 12;
-        const annualCost = totalARR;
-        const costPerMember = totalMembers > 0 ? monthlyCost / totalMembers : 0;
-        const costPerPage = totalPages > 0 ? annualCost / totalPages : 0;
-
-        // Calculate ROI Metrics
-        const utilizationRate = paidSeats > 0 ? totalMembers / paidSeats : 0;
-        const contentEfficiency = totalPages > 0 ? alivePages / totalPages : 0;
-        const revenueGrowthRate = maxARR > 0 ? (totalARR - maxARR) / maxARR : 0;
-
-        // Calculate Savings and Projections
-        const savingsMetrics = this.calculateSavingsMetrics({
-            totalARR,
-            totalMembers,
-            utilizationRate,
-            contentEfficiency
-        });
-
-        const growthScenarios = this.calculateGrowthScenarios({
-            currentARR: totalARR,
-            totalMembers,
-            paidSeats
-        });
-
-        // Calculate Time and Automation Metrics
-        const timeSavings = this.calculateProjectedTimeSavings(dataframe_3, dataframe_5);
-        const automationPotential = this.calculateAutomationPotential(dataframe_3);
-        const productivityGain = this.calculateProductivityGain(dataframe_3, dataframe_5);
-        const aiBoost = this.calculateAIProductivityBoost(dataframe_3);
+        const workspace = dataframe_5[0] || {};
+        
+        // Financial Metrics
+        const arr = workspace.ARR || 0;
+        const paidSeats = workspace.PAID_SEATS || 0;
+        const totalMembers = workspace.NUM_MEMBERS || 0;
+        const totalGuests = workspace.NUM_GUESTS || 0;
+        
+        // Calculate Seat Utilization
+        const seatUtilization = this.calculateSeatUtilization(totalMembers, paidSeats);
+        
+        // Calculate Revenue Metrics
+        const revenueMetrics = this.calculateRevenueMetrics(arr, totalMembers, totalGuests);
+        
+        // Calculate Efficiency Metrics
+        const efficiencyMetrics = this.calculateEfficiencyMetrics(workspace);
+        
+        // Integration ROI
+        const integrationROI = this.calculateIntegrationROI(workspace);
 
         return {
-            // Cost Metrics
-            current_monthly_cost: monthlyCost,
-            current_annual_cost: annualCost,
-            cost_per_member: costPerMember,
-            cost_per_page: costPerPage,
+            // Financial Metrics
+            annual_recurring_revenue: arr,
+            revenue_per_member: revenueMetrics.perMember,
+            revenue_per_active_user: revenueMetrics.perActiveUser,
             
-            // Usage Metrics
+            // Seat Metrics
             total_paid_seats: paidSeats,
-            seat_utilization: utilizationRate,
-            content_efficiency: contentEfficiency,
-            revenue_growth: revenueGrowthRate,
+            seat_utilization_rate: seatUtilization.rate,
+            seat_efficiency_score: seatUtilization.efficiencyScore,
+            guest_seat_impact: seatUtilization.guestImpact,
             
-            // ROI and Savings
-            enterprise_roi: savingsMetrics.enterpriseROI,
-            enterprise_annual_savings: savingsMetrics.enterpriseSavings,
-            ai_productivity_boost: savingsMetrics.aiProductivityBoost,
-            projected_savings: savingsMetrics.projectedSavings,
+            // Efficiency Metrics
+            workspace_efficiency_score: efficiencyMetrics.workspaceScore,
+            content_roi_score: efficiencyMetrics.contentROI,
+            collaboration_roi: efficiencyMetrics.collaborationROI,
             
-            // Growth Scenarios
-            growth_scenarios: growthScenarios,
+            // Integration Value
+            integration_roi_score: integrationROI.score,
+            estimated_integration_value: integrationROI.estimatedValue,
             
-            // Time and Automation
-            projected_time_savings: timeSavings,
-            automation_potential: automationPotential,
-            productivity_gain: productivityGain,
-            
-            // Additional Insights
-            revenue_per_member: totalMembers > 0 ? totalARR / totalMembers : 0,
-            revenue_per_page: totalPages > 0 ? totalARR / totalPages : 0,
-            efficiency_score: (utilizationRate + contentEfficiency) / 2
+            // Composite Scores
+            overall_roi_score: this.calculateOverallROIScore({
+                seatUtilization,
+                revenueMetrics,
+                efficiencyMetrics,
+                integrationROI
+            })
         };
     }
 
-    calculateSavingsMetrics({ totalARR, totalMembers, utilizationRate, contentEfficiency }) {
-        // Enterprise ROI calculation
-        const baseEnterpriseDiscount = 0.15; // 15% base discount for enterprise
-        const utilizationBonus = Math.max(0, utilizationRate - 0.8) * 0.1; // Up to 10% additional discount
-        const efficiencyBonus = contentEfficiency * 0.05; // Up to 5% additional discount
-        
-        const totalDiscount = baseEnterpriseDiscount + utilizationBonus + efficiencyBonus;
-        const enterpriseSavings = totalARR * totalDiscount;
-        const enterpriseROI = totalDiscount;
+    calculateSeatUtilization(totalMembers, paidSeats) {
+        if (paidSeats === 0) return { rate: 0, efficiencyScore: 0, guestImpact: 0 };
 
-        // AI Productivity calculation
-        const baseAIBoost = 0.2; // 20% base productivity boost
-        const scaleBoost = Math.min(totalMembers / 1000, 0.1); // Up to 10% additional boost based on scale
-        const aiProductivityBoost = baseAIBoost + scaleBoost;
-
-        // Projected savings calculation
-        const projectedSavings = enterpriseSavings * (1 + aiProductivityBoost);
+        const utilizationRate = totalMembers / paidSeats;
+        const optimalUtilization = 0.85; // Target 85% utilization as optimal
+        const efficiencyScore = Math.min(utilizationRate / optimalUtilization, 1);
 
         return {
-            enterpriseROI,
-            enterpriseSavings,
-            aiProductivityBoost,
-            projectedSavings
+            rate: utilizationRate,
+            efficiencyScore: efficiencyScore,
+            guestImpact: Math.max(0, 1 - utilizationRate) // Impact of unused seats
         };
     }
 
-    calculateGrowthScenarios({ currentARR, totalMembers, paidSeats }) {
-        const baseGrowthMultiplier = Math.min(paidSeats / totalMembers, 2);
-        
+    calculateRevenueMetrics(arr, totalMembers, totalGuests) {
+        if (totalMembers === 0) return { perMember: 0, perActiveUser: 0 };
+
+        const revenuePerMember = arr / totalMembers;
+        const activeUsers = totalMembers + totalGuests;
+        const revenuePerActiveUser = activeUsers > 0 ? arr / activeUsers : 0;
+
         return {
-            tenPercent: currentARR * (1.1 * baseGrowthMultiplier),
-            twentyPercent: currentARR * (1.2 * baseGrowthMultiplier),
-            fiftyPercent: currentARR * (1.5 * baseGrowthMultiplier)
+            perMember: revenuePerMember,
+            perActiveUser: revenuePerActiveUser
         };
+    }
+
+    calculateEfficiencyMetrics(workspace) {
+        const totalPages = workspace.NUM_TOTAL_PAGES || 0;
+        const alivePages = workspace.NUM_ALIVE_TOTAL_PAGES || 0;
+        const totalMembers = workspace.NUM_MEMBERS || 0;
+
+        // Workspace efficiency based on content utilization
+        const contentUtilization = totalPages > 0 ? alivePages / totalPages : 0;
+        
+        // Calculate ROI scores
+        const workspaceScore = this.calculateWorkspaceEfficiencyScore(workspace);
+        const contentROI = this.calculateContentROIScore(workspace);
+        const collaborationROI = this.calculateCollaborationROIScore(workspace);
+
+        return {
+            workspaceScore,
+            contentROI,
+            collaborationROI
+        };
+    }
+
+    calculateWorkspaceEfficiencyScore(workspace) {
+        const totalMembers = workspace.NUM_MEMBERS || 0;
+        const totalPages = workspace.NUM_TOTAL_PAGES || 0;
+        const alivePages = workspace.NUM_ALIVE_TOTAL_PAGES || 0;
+
+        if (totalMembers === 0 || totalPages === 0) return 0;
+
+        const contentPerMember = totalPages / totalMembers;
+        const contentUtilization = alivePages / totalPages;
+
+        return Math.min(
+            (contentPerMember / 100) * contentUtilization, // Normalize to assume 100 pages per member is optimal
+            1
+        );
+    }
+
+    calculateContentROIScore(workspace) {
+        const totalPages = workspace.NUM_TOTAL_PAGES || 0;
+        const alivePages = workspace.NUM_ALIVE_TOTAL_PAGES || 0;
+        const publicPages = workspace.NUM_PUBLIC_PAGES || 0;
+
+        if (totalPages === 0) return 0;
+
+        const contentUtilization = alivePages / totalPages;
+        const publicContentRatio = publicPages / totalPages;
+
+        return (contentUtilization * 0.7 + publicContentRatio * 0.3);
+    }
+
+    calculateCollaborationROIScore(workspace) {
+        const totalMembers = workspace.NUM_MEMBERS || 0;
+        const permissionGroups = workspace.NUM_PERMISSION_GROUPS || 0;
+        const teamspaces = workspace.NUM_TEAMSPACES || 0;
+
+        if (totalMembers === 0) return 0;
+
+        const collaborationDensity = permissionGroups / totalMembers;
+        const teamspaceUtilization = teamspaces / totalMembers;
+
+        return Math.min(
+            (collaborationDensity * 0.6 + teamspaceUtilization * 0.4),
+            1
+        );
+    }
+
+    calculateIntegrationROI(workspace) {
+        const totalIntegrations = workspace.NUM_INTEGRATIONS || 0;
+        const totalMembers = workspace.NUM_MEMBERS || 0;
+        const arr = workspace.ARR || 0;
+
+        if (totalMembers === 0 || arr === 0) return { score: 0, estimatedValue: 0 };
+
+        // Estimate integration value based on industry standards
+        const avgIntegrationValue = arr * 0.1; // Assume integrations save 10% of ARR
+        const estimatedValue = totalIntegrations * avgIntegrationValue;
+
+        // Calculate ROI score
+        const integrationDensity = totalIntegrations / totalMembers;
+        const score = Math.min(integrationDensity / 0.2, 1); // Normalize assuming 1 integration per 5 members is optimal
+
+        return {
+            score,
+            estimatedValue
+        };
+    }
+
+    calculateOverallROIScore({ seatUtilization, revenueMetrics, efficiencyMetrics, integrationROI }) {
+        const weights = {
+            seatEfficiency: 0.3,
+            workspaceEfficiency: 0.3,
+            contentROI: 0.2,
+            integrationROI: 0.2
+        };
+
+        return (
+            seatUtilization.efficiencyScore * weights.seatEfficiency +
+            efficiencyMetrics.workspaceScore * weights.workspaceEfficiency +
+            efficiencyMetrics.contentROI * weights.contentROI +
+            integrationROI.score * weights.integrationROI
+        );
     }
 
     calculateCurrentPlanCost(dataframe_3) {
@@ -545,5 +612,15 @@ export class ROIMetrics extends BaseMetrics {
         }
 
         return insights;
+    }
+
+    formatPerformanceMetric(value, threshold = 0.7) {
+        const percentage = Number(value);
+        if (isNaN(percentage)) return '0% ⚪';
+        
+        // Add visual indicators
+        if (percentage >= 0.9) return `${this.formatPercentage(percentage)} 🟢`;
+        if (percentage >= threshold) return `${this.formatPercentage(percentage)} 🟡`;
+        return `${this.formatPercentage(percentage)} 🔴`;
     }
 }

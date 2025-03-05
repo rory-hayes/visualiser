@@ -35,10 +35,10 @@ export class NotionFormatter {
                 title: '📊 Executive Summary',
                 explanation: 'A high-level overview of your workspace\'s key performance indicators and health metrics.',
                 metrics: [
-                    this.createMetricWithIndicator('Workspace Health Score', metrics.workspace_health_score),
-                    this.createMetricWithIndicator('Overall Efficiency', metrics.efficiency_score),
-                    this.createMetricWithIndicator('ROI Score', metrics.enterprise_roi),
-                    `Total Members: ${metrics.totalMembers || 0} | Active Members: ${metrics.activeMembers || 0}`,
+                    this.createMetricWithIndicator('Workspace Health Score', metrics.workspace_efficiency_score),
+                    this.createMetricWithIndicator('Overall Efficiency', metrics.content_roi_score),
+                    this.createMetricWithIndicator('ROI Score', metrics.overall_roi_score),
+                    `Total Members: ${metrics.total_members || 0} | Active Members: ${metrics.total_members - (metrics.total_guests || 0)}`,
                     `Total Pages: ${metrics.total_pages || 0} | Active Pages: ${metrics.alive_pages_all || 0}`
                 ]
             },
@@ -47,23 +47,23 @@ export class NotionFormatter {
                 explanation: 'Analysis of your workspace\'s organization, depth, and structural health.',
                 metrics: [
                     this.createMetricWithIndicator('Structure Health Score', metrics.structure_health_score),
-                    this.createMetricWithIndicator('Navigation Depth Score', metrics.nav_depth_score),
+                    this.createMetricWithIndicator('Navigation Complexity', metrics.navigation_complexity_score),
                     this.createMetricWithIndicator('Content Organization', metrics.content_organization_score),
-                    `Max Depth: ${metrics.max_depth || 0} | Average Depth: ${this.formatDecimal(metrics.avg_depth || 0)}`,
-                    `Deep Pages: ${metrics.deep_pages_count || 0} | Root Pages: ${metrics.root_pages || 0}`,
-                    `Orphaned Content: ${metrics.orphaned_blocks || 0} | Duplicate Content: ${metrics.duplicate_count || 0}`
+                    `Max Depth: ${metrics.max_depth || 0} | Collection Views: ${metrics.collection_views || 0}`,
+                    `Collections: ${metrics.collections_count || 0} | Database Usage: ${this.formatPercentage(metrics.database_utilization_score || 0)}`,
+                    `Content Health: ${this.formatPercentage(metrics.content_health_ratio || 0)} | Page Health: ${this.formatPercentage(metrics.page_health_ratio || 0)}`
                 ]
             },
             {
                 title: '🤝 Collaboration & Team Dynamics',
                 explanation: 'Insights into how your team collaborates and utilizes the workspace.',
                 metrics: [
-                    this.createMetricWithIndicator('Team Adoption Score', metrics.teamAdoptionScore),
-                    this.createMetricWithIndicator('Collaboration Score', metrics.collaborationDensity),
-                    this.createMetricWithIndicator('Knowledge Sharing', metrics.knowledgeSharingIndex),
-                    `Daily Active Users: ${metrics.dailyActiveUsers || 0} | Weekly Active: ${metrics.weeklyActiveUsers || 0}`,
-                    `Cross-team Score: ${this.formatPercentage(metrics.crossTeamCollaborationScore || 0)}`,
-                    `Total Integrations: ${metrics.totalIntegrations || 0} | Permission Groups: ${metrics.permission_groups || 0}`
+                    this.createMetricWithIndicator('Team Adoption', metrics.team_adoption_score),
+                    this.createMetricWithIndicator('Collaboration Score', metrics.collaboration_score),
+                    this.createMetricWithIndicator('Cross-team Activity', metrics.cross_team_activity),
+                    `Total Members: ${metrics.total_members || 0} | Total Guests: ${metrics.total_guests || 0}`,
+                    `Teamspaces: ${metrics.total_teamspaces || 0} | Avg Members/Space: ${this.formatDecimal(metrics.average_members_per_teamspace || 0)}`,
+                    `Integration Score: ${this.formatPercentage(metrics.integration_adoption_score || 0)} | Bot Usage: ${this.formatPercentage(metrics.bot_utilization_score || 0)}`
                 ]
             },
             {
@@ -72,9 +72,9 @@ export class NotionFormatter {
                 metrics: [
                     this.createMetricWithIndicator('Growth Sustainability', metrics.growth_sustainability),
                     this.createMetricWithIndicator('Scaling Readiness', metrics.scaling_readiness_score),
+                    this.createMetricWithIndicator('Growth Balance', metrics.growth_balance_score),
                     `Monthly Growth: ${this.formatPercentage(metrics.monthly_content_growth_rate || 0)}`,
                     `Expected Members (Next Year): ${Math.round(metrics.expected_members_next_year || 0)}`,
-                    `Expected Pages (Next Year): ${metrics.expected_pages_next_year || 0}`,
                     `Growth Consistency: ${this.formatPercentage(metrics.growth_consistency || 0)}`
                 ]
             },
@@ -82,12 +82,12 @@ export class NotionFormatter {
                 title: '💎 ROI & Resource Utilization',
                 explanation: 'Financial impact and resource efficiency analysis.',
                 metrics: [
-                    this.createMetricWithIndicator('Enterprise ROI', metrics.enterprise_roi),
-                    this.createMetricWithIndicator('Resource Efficiency', metrics.content_efficiency),
-                    `Current Cost: ${this.formatCurrency(metrics.current_monthly_cost || 0)}/month`,
-                    `Projected Annual Savings: ${this.formatCurrency(metrics.enterprise_annual_savings || 0)}`,
-                    `Time Saved: ${this.formatDecimal(metrics.projected_time_savings?.hours_per_member || 0)} hours/member/month`,
-                    `Automation Potential: ${this.formatPercentage(metrics.automation_potential?.score || 0)}`
+                    this.createMetricWithIndicator('Overall ROI', metrics.overall_roi_score),
+                    this.createMetricWithIndicator('Content ROI', metrics.content_roi_score),
+                    this.createMetricWithIndicator('Integration ROI', metrics.integration_roi_score),
+                    `Revenue/Member: ${this.formatCurrency(metrics.revenue_per_member || 0)}`,
+                    `Seat Utilization: ${this.formatPercentage(metrics.seat_utilization_rate || 0)}`,
+                    `Integration Value: ${this.formatCurrency(metrics.estimated_integration_value || 0)}`
                 ]
             },
             {
@@ -106,31 +106,31 @@ export class NotionFormatter {
     }
 
     getStructureRecommendation(metrics) {
-        if (metrics.deep_pages_count > 20) return 'Consider restructuring deep pages to improve navigation';
-        if (metrics.duplicate_count > 10) return 'Focus on reducing content duplication';
-        if (metrics.orphaned_blocks > 50) return 'Clean up orphaned content';
+        if (metrics.content_health_ratio < 0.7) return 'Focus on improving content health and organization';
+        if (metrics.navigation_complexity_score < 0.6) return 'Simplify workspace navigation structure';
+        if (metrics.database_utilization_score < 0.5) return 'Optimize database usage and organization';
         return 'Maintain current structure while monitoring growth';
     }
 
     getCollaborationRecommendation(metrics) {
-        if (metrics.teamAdoptionScore < 0.7) return 'Implement team training to boost adoption';
-        if (metrics.collaborationDensity < 0.6) return 'Encourage cross-team collaboration';
-        if (metrics.knowledgeSharingIndex < 0.5) return 'Promote knowledge sharing practices';
+        if (metrics.team_adoption_score < 0.7) return 'Implement team training to boost adoption';
+        if (metrics.collaboration_score < 0.6) return 'Encourage cross-team collaboration';
+        if (metrics.cross_team_activity < 0.5) return 'Promote cross-team knowledge sharing';
         return 'Continue fostering team collaboration';
     }
 
     getGrowthRecommendation(metrics) {
         if (metrics.growth_sustainability < 0.6) return 'Review growth strategy for sustainability';
         if (metrics.scaling_readiness_score < 0.7) return 'Prepare infrastructure for scaling';
-        if (metrics.growth_consistency < 0.5) return 'Stabilize growth patterns';
+        if (metrics.growth_balance_score < 0.5) return 'Balance growth across different areas';
         return 'Maintain current growth trajectory';
     }
 
     getROIRecommendation(metrics) {
-        if (metrics.enterprise_roi < 0.5) return 'Optimize resource utilization';
-        if (metrics.content_efficiency < 0.6) return 'Focus on content efficiency';
-        if (metrics.automation_potential?.score > 0.8) return 'Implement automation opportunities';
-        return 'Continue monitoring ROI metrics';
+        if (metrics.overall_roi_score < 0.5) return 'Focus on improving overall workspace ROI';
+        if (metrics.content_roi_score < 0.6) return 'Optimize content utilization and value';
+        if (metrics.integration_roi_score < 0.5) return 'Enhance integration usage and efficiency';
+        return 'Continue monitoring and optimizing ROI metrics';
     }
 
     createSummarySection(metrics) {

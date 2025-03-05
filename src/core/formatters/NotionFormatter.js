@@ -133,100 +133,6 @@ export class NotionFormatter {
         return 'Continue monitoring and optimizing ROI metrics';
     }
 
-    createSummarySection(metrics) {
-        return {
-            title: '📊 Key Metrics Summary',
-            metrics: [
-                this.createMetricLine('Workspace Scale', 
-                    `${metrics.total_pages} pages, ${metrics.totalMembers} members`, 
-                    'text', '🏢'),
-                this.createMetricLine('Enterprise ROI', 
-                    metrics.enterprise_roi, 
-                    'percentage', '💰'),
-                this.createMetricLine('Efficiency Score', 
-                    metrics.efficiency_score, 
-                    'percentage', '⚡'),
-                this.createMetricLine('Growth Index', 
-                    metrics.growth_sustainability_index, 
-                    'percentage', '📈')
-            ]
-        };
-    }
-
-    createStructureSection(metrics) {
-        return {
-            title: '🏗️ Structure & Evolution Metrics',
-            subsections: [
-                {
-                    subtitle: 'Basic Structure',
-                    metrics: [
-                        this.createGroupedMetrics('📑 Pages & Collections', [
-                            this.createMetricPair('Total Pages', metrics.total_pages, 'Collections', metrics.collections_count),
-                            this.createMetricPair('Collection Views', metrics.collection_views, 'Collection View Pages', metrics.collection_view_pages),
-                            this.createMetricPair('Total Blocks', metrics.total_blocks, 'Alive Blocks', metrics.alive_blocks)
-                        ])
-                    ]
-                },
-                // ... other subsections for Navigation & Depth, Content Organization, etc.
-            ]
-        };
-    }
-
-    createGroupedMetrics(title, metricLines) {
-        return {
-            title,
-            content: metricLines.map(line => `  ${line}`).join('\n')
-        };
-    }
-
-    createMetricPair(label1, value1, label2, value2) {
-        return `${label1}: ${this.formatMetric(value1)} | ${label2}: ${this.formatMetric(value2)}`;
-    }
-
-    getPerformanceIndicator(value, thresholds = { high: 0.9, medium: 0.7 }) {
-        if (value === null || value === undefined) return this.PERFORMANCE_INDICATORS.NONE;
-        const percentage = Number(value);
-        if (isNaN(percentage)) return this.PERFORMANCE_INDICATORS.NONE;
-        
-        if (percentage >= thresholds.high) return this.PERFORMANCE_INDICATORS.HIGH;
-        if (percentage >= thresholds.medium) return this.PERFORMANCE_INDICATORS.MEDIUM;
-        return this.PERFORMANCE_INDICATORS.LOW;
-    }
-
-    createMetricWithIndicator(label, value, type = 'percentage') {
-        const formattedValue = this.formatMetric(value, type);
-        const indicator = this.getPerformanceIndicator(value);
-        return `${label}: ${formattedValue} ${indicator}`;
-    }
-
-    createMetricsBlocks(metrics) {
-        const sections = [
-            this.createSummarySection(metrics),
-            this.createStructureSection(metrics),
-            this.createCollaborationSection(metrics),
-            this.createGrowthSection(metrics),
-            this.createROISection(metrics)
-        ];
-
-        return this.createFormattedBlocks(sections);
-    }
-
-    createBlocksFromSections(sections) {
-        const blocks = [];
-
-        // Add title
-        blocks.push(this.createHeading('Workspace Analysis Report', 1));
-
-        // Add sections
-        sections.forEach(section => {
-            blocks.push(this.createHeading(section.title, 2));
-            blocks.push(...this.createBulletedList(section.metrics));
-            blocks.push(this.createDivider());
-        });
-
-        return blocks;
-    }
-
     createHeading(text, level) {
         return {
             object: 'block',
@@ -301,8 +207,20 @@ export class NotionFormatter {
         }
     }
 
-    createMetricLine(label, value, type, emoji) {
-        return `${emoji} ${label}: ${this.formatMetric(value, type)}`;
+    createMetricWithIndicator(label, value, type = 'percentage') {
+        const formattedValue = this.formatMetric(value, type);
+        const indicator = this.getPerformanceIndicator(value);
+        return `${label}: ${formattedValue} ${indicator}`;
+    }
+
+    getPerformanceIndicator(value, thresholds = { high: 0.9, medium: 0.7 }) {
+        if (value === null || value === undefined) return this.PERFORMANCE_INDICATORS.NONE;
+        const percentage = Number(value);
+        if (isNaN(percentage)) return this.PERFORMANCE_INDICATORS.NONE;
+        
+        if (percentage >= thresholds.high) return this.PERFORMANCE_INDICATORS.HIGH;
+        if (percentage >= thresholds.medium) return this.PERFORMANCE_INDICATORS.MEDIUM;
+        return this.PERFORMANCE_INDICATORS.LOW;
     }
 
     createImage(url) {
@@ -316,15 +234,6 @@ export class NotionFormatter {
                 }
             }
         };
-    }
-
-    // Example usage in ROI section
-    createROISection(metrics) {
-        return [
-            `${this.METRIC_EMOJIS.cost} Current Monthly Cost: ${this.formatCurrency(metrics.current_monthly_cost)}`,
-            `${this.METRIC_EMOJIS.roi} Enterprise ROI: ${this.formatPercentage(metrics.enterprise_roi)}`,
-            `${this.METRIC_EMOJIS.ai} AI Productivity: ${this.formatPercentage(metrics.ai_productivity_boost)}`
-        ];
     }
 
     createFormattedBlocks(sections, metrics = null) {
@@ -361,14 +270,7 @@ export class NotionFormatter {
             
             // Add metrics
             if (section.metrics && section.metrics.length > 0) {
-                if (section.subsections) {
-                    section.subsections.forEach(subsection => {
-                        blocks.push(this.createHeading(subsection.subtitle, 3));
-                        blocks.push(...this.createBulletedList(subsection.metrics));
-                    });
-                } else {
-                    blocks.push(...this.createBulletedList(section.metrics));
-                }
+                blocks.push(...this.createBulletedList(section.metrics));
             }
             
             blocks.push(this.createDivider());

@@ -272,7 +272,7 @@ export class NotionFormatter {
             if (section.metrics && section.metrics.length > 0) {
                 blocks.push(...this.createBulletedList(section.metrics));
             }
-            
+                
             blocks.push(this.createDivider());
         });
 

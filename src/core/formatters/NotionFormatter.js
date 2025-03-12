@@ -260,10 +260,15 @@ export class NotionFormatter {
             // Add section explanation if present
             if (section.explanation) {
                 blocks.push({
+                    object: 'block',
                     type: 'paragraph',
-                    text: {
-                        content: section.explanation,
-                        link: null
+                    paragraph: {
+                        rich_text: [{
+                            type: 'text',
+                            text: {
+                                content: section.explanation
+                            }
+                        }]
                     }
                 });
             }
@@ -281,10 +286,15 @@ export class NotionFormatter {
 
     createPerformanceLegend() {
         return {
+            object: 'block',
             type: 'paragraph',
-            text: {
-                content: `Performance Indicators: ${this.PERFORMANCE_INDICATORS.HIGH} Excellent (>90%) | ${this.PERFORMANCE_INDICATORS.MEDIUM} Good (70-90%) | ${this.PERFORMANCE_INDICATORS.LOW} Needs Attention (<70%) | ${this.PERFORMANCE_INDICATORS.NONE} No Data`,
-                link: null
+            paragraph: {
+                rich_text: [{
+                    type: 'text',
+                    text: {
+                        content: `Performance Indicators: ${this.PERFORMANCE_INDICATORS.HIGH} Excellent (>90%) | ${this.PERFORMANCE_INDICATORS.MEDIUM} Good (70-90%) | ${this.PERFORMANCE_INDICATORS.LOW} Needs Attention (<70%) | ${this.PERFORMANCE_INDICATORS.NONE} No Data`
+                    }
+                }]
             }
         };
     }
